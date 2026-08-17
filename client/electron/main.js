@@ -5859,6 +5859,7 @@ app.whenReady().then(() => {
   registerIPC();
   // SQLite 须早于窗口与 MCP 启动同步，避免渲染进程 IPC 与 syncToClients 竞态
   localStats.init(STATS_DIR);
+  try { require('./route-policy-runtime').init(STATS_DIR); } catch (e) { console.error('[route-policy] init failed:', e.message); }
   createWindow();
   repairClaude3pMetaIfNeeded();
   // Claude Desktop ↔ 3p 会话同步：启动一次 + 每 30s 一次（覆盖运行期间新建的会话，修复"新会话纳管后不同步"）

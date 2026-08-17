@@ -421,6 +421,7 @@ export default {
   // ── Scene routes ──
   'gateway.route.new': '+ New route',
   'gateway.route.hint': 'Define model chains per scene; trigger via llm-router-xxx',
+  'gateway.routing.strategy.adaptive': 'Adaptive',
   'gateway.routing.strategy.cost': 'Cost first',
   'gateway.routing.strategy.speed': 'Speed first',
   'gateway.routing.strategy.fallback': 'In order',
@@ -464,6 +465,7 @@ export default {
   'gateway.route.flowLabel': 'Flow strategy',
   'gateway.route.flowHint': 'No steps: pick among all candidates in Filter. With steps: pick among those models (best-overall / cheapest / fastest / round-robin)',
   'gateway.route.flowAuto': 'Best overall',
+  'gateway.route.flowAdaptive': 'Adaptive · learns as you go',
   'gateway.route.flowCost': 'Cheapest first',
   'gateway.route.flowSpeed': 'Fastest first',
   'gateway.route.flowRoundRobin': 'Round-robin',

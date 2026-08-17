@@ -13,6 +13,12 @@ scene_routes:
     icon: ✨
     model_key: llm-router-auto
     flow: auto
+  # 自适应：Thompson 采样从历史结果学出每类请求最优模型；冷启动等同综合最优，越用越准。
+  - id: strategy-adaptive
+    scene_name: 自适应
+    icon: 🧠
+    model_key: llm-router-adaptive
+    flow: adaptive
   - id: strategy-cost
     scene_name: 实惠优先
     icon: 💰

@@ -421,6 +421,7 @@ export default {
   // ── 场景路由 SceneRouteEditor ──
   'gateway.route.new': '+ 新建路由',
   'gateway.route.hint': '定义每个场景的模型路由链，通过 llm-router-xxx 触发',
+  'gateway.routing.strategy.adaptive': '自适应',
   'gateway.routing.strategy.cost': '实惠优先',
   'gateway.routing.strategy.speed': '速度优先',
   'gateway.routing.strategy.fallback': '按顺序',
@@ -464,6 +465,7 @@ export default {
   'gateway.route.flowLabel': '流转策略',
   'gateway.route.flowHint': '无步骤：在「限定」范围内的全部候选上选优；有步骤：在已选模型步骤之间选优（综合最优 / 最便宜 / 最快 / 轮询）',
   'gateway.route.flowAuto': '综合最优',
+  'gateway.route.flowAdaptive': '自适应·越用越准',
   'gateway.route.flowCost': '最便宜优先',
   'gateway.route.flowSpeed': '最快优先',
   'gateway.route.flowRoundRobin': '轮询',

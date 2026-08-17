@@ -121,6 +121,14 @@ function orderModelCandidates(strategyName, cands, ctx = {}) {
         ));
       case 'speed':         // 实测延迟低的先，无数据最后
         return stableSort(arr, (a, b) => n(a.speedMs, Infinity) - n(b.speedMs, Infinity));
+      case 'adaptive': {    // 自适应：Thompson 采样从历史结果学出每类请求最优模型；冷启动退综合最优
+        try {
+          const rp = require('./route-policy-runtime');
+          const out = rp.rankCandidates(arr, ctx.reqCtx || null);
+          if (out && out.length) return out;
+        } catch { /* 运行时不可用 → 退 auto */ }
+        return orderModelCandidates('auto', arr, ctx);
+      }
       case 'round-robin':   return orderRoundRobin(arr, ctx);
       case 'weighted':      return orderWeighted(arr);
       case 'fallback':
@@ -130,7 +138,7 @@ function orderModelCandidates(strategyName, cands, ctx = {}) {
 }
 
 /** 已注册的全局供给源排序策略名（供 UI 下拉/校验）。scene_steps 不在此列（属模型链类）。 */
-const GLOBAL_STRATEGY_NAMES = ['auto', 'cost', 'speed', 'fallback', 'round-robin', 'weighted'];
+const GLOBAL_STRATEGY_NAMES = ['auto', 'adaptive', 'cost', 'speed', 'fallback', 'round-robin', 'weighted'];
 
 module.exports = {
   ROUTING_STRATEGIES, orderCandidates, orderModelCandidates, costRank,

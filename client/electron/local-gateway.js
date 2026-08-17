@@ -3114,10 +3114,19 @@ function stratStepOf(scene) {
   return null;
 }
 
+// 自进化路由 reward 回灌（懒加载运行时，任何异常都不影响请求）
+let _routePolicyRuntime = null;
+function recordRouteReward(reqCtx, model, reward01) {
+  try {
+    if (!_routePolicyRuntime) _routePolicyRuntime = require('./route-policy-runtime');
+    _routePolicyRuntime.recordReward(reqCtx, model, reward01);
+  } catch { /* 运行时不可用不影响请求 */ }
+}
+
 // 策略路由候选：扫该模态下所有 (源,模型)，按 filters 过滤，再按 strategy 排序。
 // filters 两组正交条件：scope=来源(personal 个人源集 / community p2p) + tier=价格(free/paid)；
 // 另有 provider(锁具体源) / model(锁具体模型)。
-function buildStrategyCandidates(strategyName, filters, reqPath, skipP2P, rrKey) {
+function buildStrategyCandidates(strategyName, filters, reqPath, skipP2P, rrKey, reqCtx) {
   const modality = modalityOf(reqPath);
   let ps = null; try { ps = require('./provider-speed'); } catch {}
   const scope = filters && filters.scope;
@@ -3142,19 +3151,19 @@ function buildStrategyCandidates(strategyName, filters, reqPath, skipP2P, rrKey)
     }
   }
   if (!cands.length) return [];
-  return routingStrategies.orderModelCandidates(strategyName, cands, { rrKey });
+  return routingStrategies.orderModelCandidates(strategyName, cands, { rrKey, reqCtx });
 }
 
 // 链级流转策略：决定多个匹配条件(步)之间先走哪一步。
 // fallback（默认）= 按列出顺序；cost/speed/auto = 用「每步在该策略下的最佳候选」作代表，
 // 把代表们按该策略排序，得出步序。步内候选仍由各步自身 strategy 决定（两级组合）。
-function orderStepsByFlow(steps, flow, reqPath, skipP2P) {
+function orderStepsByFlow(steps, flow, reqPath, skipP2P, reqCtx) {
   const list = steps || [];
   if (!flow || flow === 'fallback' || list.length <= 1) return list;
   const reps = [];
   list.forEach((step, i) => {
     const cands = buildStrategyCandidates(flow, { scope: step.scope, tier: step.tier, provider: step.provider, model: step.model },
-      reqPath, skipP2P, `flow:${i}`);
+      reqPath, skipP2P, `flow:${i}`, reqCtx);
     if (cands[0]) reps.push({ ...cands[0], _stepIdx: i });
   });
   if (reps.length <= 1) return list;
@@ -3349,8 +3358,11 @@ async function route(model, reqPath, body, res, callerKey, skipP2P = false) {
   }
   if (_stratScene) {
     const stratSharer = _stratStep.sharer || requestSharer;   // 有效钉选 worker（与 stratMeta.sharer 一致）
+    // 自进化路由用的请求特征（分桶 + reward 回灌）；estimateInputTokens 即含缓存的真实上下文长度
+    const routeReqCtx = { modality: modalityOf(reqPath), model: origModel,
+      input_tokens: estimateInputTokens(body), text: extractText(body), caller: callerKey };
     const ordered = cooldown.sink(buildStrategyCandidates(
-      _stratStep.strategy, { scope: _stratStep.scope, tier: _stratStep.tier, provider: _stratStep.provider }, reqPath, skipP2P, _stratScene.id),
+      _stratStep.strategy, { scope: _stratStep.scope, tier: _stratStep.tier, provider: _stratStep.provider }, reqPath, skipP2P, _stratScene.id, routeReqCtx),
       (c) => coolKey(c.provider, c.model, stratSharer));   // 冷却中的候选下沉到末尾（fresh 先试，成功即返回，省空跑）
     if (!ordered.length) {
       const _flt = [_stratStep.scope, _stratStep.tier].filter(Boolean).join('/');
@@ -3380,6 +3392,7 @@ async function route(model, reqPath, body, res, callerKey, skipP2P = false) {
         recordStats(c.provider.id, c.model, fillMissingInputTokens(result, body), _providerTier(c.provider), callerKey, streaming, c.provider.billing_type || null, reqPath);
         reportUsage(c.provider.id, c.model, (result.input_tokens || 0) + (result.output_tokens || 0));
         cooldown.clear(coolKey(c.provider, c.model, stratSharer));   // 成功 → 源已恢复，清除冷却
+        recordRouteReward(routeReqCtx, c.model, 1);   // 自进化路由：成功 → reward 1（暖启动所有策略路由）
         return;
       } catch (err) {
         if (handleP2pFatal(c.provider, err, res, isResponses)) { lastErr = err; recordError(c.model, callerKey, lastErr, reqPath); return; }
@@ -3392,6 +3405,7 @@ async function route(model, reqPath, body, res, callerKey, skipP2P = false) {
           will_failover: !res.headersSent,
         });
         routeErrors.push({ id: c.provider.id, err }); lastErr = err;
+        recordRouteReward(routeReqCtx, c.model, 0);   // 自进化路由：失败 → reward 0（冷却被后验吸收）
         noteCooldown(c.provider, c.model, err, stratSharer);   // 硬失败(429/401/403/402)记冷却，下次请求下沉此候选
         // 源级失效跳过：仅对「单账号多模型」的直连源有效（如 openai 一个账号下多个 gpt-* 全 429）。
         // p2p 所有模型共享同一 provider.id(tokenbank-p2p) 但各是独立 worker，一个挂不代表其它挂，
@@ -3423,7 +3437,7 @@ async function route(model, reqPath, body, res, callerKey, skipP2P = false) {
     };
     let steps = await resolveSteps(scene, ruleCtx);
     // 链级流转策略：按 scene.flow 重排步序（步之间怎么走），fallback 保持原序
-    steps = orderStepsByFlow(steps, scene.flow, reqPath, skipP2P);
+    steps = orderStepsByFlow(steps, scene.flow, reqPath, skipP2P, ruleCtx);
     if (!steps.length) {   // 规则全不命中且无默认链
       lastErr = new Error(`no rule matched for ${ruleCtx.modality} request and route has no default chain`);
       fail(scene.scene_name, null, null);
@@ -3446,7 +3460,7 @@ async function route(model, reqPath, body, res, callerKey, skipP2P = false) {
         if (!stepStrat) continue;
         const stepSharer = step.sharer || null;   // 有效钉选 worker（与 sMeta.sharer 一致）
         const sOrdered = cooldown.sink(
-          buildStrategyCandidates(stepStrat, { scope: stepScope, tier: stepTier, provider: step.provider }, reqPath, skipP2P, `${scene.id}:${stepStrat}`),
+          buildStrategyCandidates(stepStrat, { scope: stepScope, tier: stepTier, provider: step.provider }, reqPath, skipP2P, `${scene.id}:${stepStrat}`, ruleCtx),
           (c) => coolKey(c.provider, c.model, stepSharer));   // 冷却候选下沉
         const sMeta = { strategy: step.strategy || null, sharer: stepSharer };
         const deadSources = new Set();
@@ -3468,6 +3482,7 @@ async function route(model, reqPath, body, res, callerKey, skipP2P = false) {
             recordProviderSpeed(c.model, c.provider, result, streaming);
             learnSlowPeers(c.model, c.provider, result, sOrdered.map(x => x.provider).filter(Boolean), stepSharer);
             cooldown.clear(coolKey(c.provider, c.model, stepSharer));   // 成功 → 清除冷却
+            recordRouteReward(ruleCtx, c.model, 1);   // 自进化路由：成功 → reward 1
             return;
           } catch (err) {
             if (handleP2pFatal(c.provider, err, res, isResponses)) { lastErr = err; recordError(c.model, callerKey, lastErr, reqPath); return; }
@@ -3480,6 +3495,7 @@ async function route(model, reqPath, body, res, callerKey, skipP2P = false) {
               will_failover: !res.headersSent,
             });
             stepErrors.push({ id: c.provider.id, err }); lastErr = err;
+            recordRouteReward(ruleCtx, c.model, 0);   // 自进化路由：失败 → reward 0
             noteCooldown(c.provider, c.model, err, stepSharer);   // 硬失败记冷却
             // 见上：p2p 各模型独立 worker，不能因一个源级失败拉黑整个 tokenbank-p2p 池
             if (isSourceLevelError(err) && !isP2pProvider(c.provider)) deadSources.add(c.provider.id);

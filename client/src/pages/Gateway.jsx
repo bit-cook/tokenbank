@@ -4276,6 +4276,7 @@ function SceneRouteEditor({ route, availableModels, network, sources, onSave, on
           <select value={flow || 'round-robin'} onChange={e => setFlow(e.target.value || 'round-robin')}
             title={t('gateway.route.flowHint')} className={ROUTE_META_SEL}>
             <option value="auto">auto · {t('gateway.route.flowAuto')}</option>
+            <option value="adaptive">adaptive · {t('gateway.route.flowAdaptive')}</option>
             <option value="cost">cost · {t('gateway.route.flowCost')}</option>
             <option value="speed">speed · {t('gateway.route.flowSpeed')}</option>
             <option value="round-robin">round-robin · {t('gateway.route.flowRoundRobin')}</option>

@@ -5,7 +5,7 @@ const TIER_ROUTE_RE = /^(free|p2p|paid):(.+)$/;
 
 // ── 分层路由 codec：strategy:scope:tier:sharer:provider:model（与 shared/route-binding.js 同步）──
 // scope=来源（personal 个人源 / community 社区），与 tier=价格（free/paid）正交、可组合。
-export const STRATEGY_NAMES = ['auto', 'cost', 'speed', 'round-robin', 'weighted', 'fallback', 'direct'];
+export const STRATEGY_NAMES = ['auto', 'adaptive', 'cost', 'speed', 'round-robin', 'weighted', 'fallback', 'direct'];
 export const SCOPE_NAMES    = ['personal', 'community'];   // 来源维度（与 tier 价格维度正交）
 export const TIER_NAMES     = ['free', 'p2p', 'paid'];     // p2p 保留兼容旧数据；新数据社区走 scope
 export const SHARER_RE      = /^s_[a-z0-9]+$/i;

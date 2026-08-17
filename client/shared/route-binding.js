@@ -8,7 +8,7 @@ const TIER_ROUTE_RE = /^(free|p2p|paid):(.+)$/;
 // 详见记忆 routing-codec-design。encode 恒按此固定顺序输出；parse「最后一段=model」+
 // 前缀按取值域分类（strategy 集 / scope 集 / tier 集 / sharer 的 s_ 前缀 / 其余=provider）。
 // scope=来源（personal 个人源 / community 社区），与 tier=价格（free/paid）正交、可组合。
-const STRATEGY_NAMES = ['auto', 'cost', 'speed', 'round-robin', 'weighted', 'fallback', 'direct'];
+const STRATEGY_NAMES = ['auto', 'adaptive', 'cost', 'speed', 'round-robin', 'weighted', 'fallback', 'direct'];
 const SCOPE_NAMES    = ['personal', 'community'];   // 来源维度（与 tier 价格维度正交）
 const TIER_NAMES     = ['free', 'p2p', 'paid'];     // p2p 保留兼容旧数据；新数据社区走 scope
 const SHARER_RE      = /^s_[a-z0-9]+$/i;   // 分享者化名句柄（服务端 user_id 带盐哈希）

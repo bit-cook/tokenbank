@@ -88,3 +88,32 @@ test('callerClassOf：收敛调用方大类', () => {
   assert.equal(callerClassOf('codex-desktop'), 'codex');
   assert.equal(callerClassOf('cursor'), 'cursor');
 });
+
+// ── 运行时（rankCandidates 冷启动/学习 + reward 回灌 + 持久化）──
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+
+test('runtime：冷启动无数据 → rankCandidates 返回 null（调用方退 auto）', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tb-rp-'));
+  const rt = require('../route-policy-runtime');
+  rt.init(dir);
+  const cands = [{ providerId: 'a', model: 'good' }, { providerId: 'b', model: 'bad' }];
+  const ctx = { modality: 'chat', input_tokens: 200000, text: '设计架构', caller: 'session-claude' };
+  assert.equal(rt.rankCandidates(cands, ctx), null);
+});
+
+test('runtime：回灌后 rankCandidates 把学到的稳模型排前，且能落盘', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tb-rp-'));
+  const rt = require('../route-policy-runtime');
+  rt.init(dir);
+  const ctx = { modality: 'chat', input_tokens: 200000, text: '设计架构', caller: 'session-claude' };
+  const cands = [{ providerId: 'a', model: 'good' }, { providerId: 'b', model: 'bad' }];
+  for (let i = 0; i < 40; i++) { rt.recordReward(ctx, 'good', 1); rt.recordReward(ctx, 'bad', 0); }
+  const out = rt.rankCandidates(cands, ctx);
+  assert.ok(out && out[0].model === 'good', 'good 应排第一');
+  rt.flush();
+  assert.ok(fs.existsSync(path.join(dir, 'route-policy.json')));
+  const j = JSON.parse(fs.readFileSync(path.join(dir, 'route-policy.json'), 'utf8'));
+  assert.ok(j.table['design|XL|text'], '桶键落盘');
+});
