@@ -5,6 +5,7 @@
 其他人只看 intro 描述。场景 persona/greeting 同理（运行时注入、不下发）。
 """
 
+import json
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -114,6 +115,50 @@ async def circle_scenes(circle_id: int, uid: int = Depends(get_current_user_id))
     scenes = await db.list_circle_scenes(circle_id)
     # 圈内场景对成员：公开视图（去 persona/greeting，运行时才注入）
     return {"scenes": [db._scene_public(s) for s in scenes]}
+
+
+async def _scene_accessible(scene: dict, uid: int) -> bool:
+    """场景可访问：官方(owner None) / 本人 / 圈内成员。"""
+    if scene.get("owner_id") is None or scene.get("owner_id") == uid:
+        return True
+    cid = scene.get("circle_id")
+    if cid:
+        return cid in (await db.get_user_circle_ids(uid))
+    return bool(scene.get("is_public"))
+
+
+@router.get("/studio/scenes/{scene_id}/view")
+async def scene_view(scene_id: int, uid: int = Depends(get_current_user_id)):
+    """场景 chat 页元数据：name/icon/intro/greeting/default_model —— **不含 persona**（运行时服务端注入）。"""
+    s = await db.get_studio_scene(scene_id)
+    if not s or not await _scene_accessible(s, uid):
+        raise HTTPException(404, "场景不存在或无权限")
+    return {"scene": {
+        "id": s["id"], "name": s.get("name", ""), "icon": s.get("icon", ""),
+        "intro": s.get("intro", ""), "greeting": s.get("greeting", ""),
+        "default_model": s.get("default_model", ""), "category": s.get("category", ""),
+    }}
+
+
+async def build_scene_system_prompt(scene: dict, uid: int) -> str:
+    """服务端组装场景系统提示：persona +（已购 always 插件的 content）。前端永不见。"""
+    parts = []
+    if scene.get("persona"):
+        parts.append(str(scene["persona"]).strip())
+    try:
+        for mid in await db.list_purchased_mod_ids(uid):
+            m = await db.get_studio_mod(mid)
+            if not m or m.get("trigger") != "always":
+                continue
+            try:
+                c = json.loads(m.get("content") or "{}")
+            except Exception:
+                c = {}
+            if isinstance(c, dict) and c.get("text"):
+                parts.append(str(c["text"]).strip())
+    except Exception:
+        pass
+    return "\n\n".join(p for p in parts if p)
 
 
 # ════════════════════════════ 用户端 · 插件 ════════════════════════════════════

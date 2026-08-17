@@ -227,6 +227,12 @@ async def circles_web_page():
     return FileResponse("static/circles.html")
 
 
+@app.get("/studio/chat")
+async def studio_scene_chat_page():
+    """社区圈场景 · 网页对话页（场景「使用」入口）"""
+    return FileResponse("static/scene-chat.html")
+
+
 @app.get("/c/{circle_id}")
 async def circle_detail_web_page(circle_id: int):
     """网页版圈子主页"""
@@ -725,6 +731,69 @@ async def web_chat(
         "guest": guest,
         "need_login_to_continue": guest,
     }
+
+
+class SceneChatBody(BaseModel):
+    messages: list
+    stream: Optional[bool] = True
+
+
+@app.post("/user/studio/scenes/{scene_id}/chat")
+async def scene_chat(scene_id: int, body: SceneChatBody, uid: int = Depends(get_current_user_id)):
+    """社区圈场景网页对话：服务端注入 persona + 已购插件 content（前端永不见），
+    走与 /api/web-chat 相同的派发/流式。"""
+    import database as db
+    import studio_router as _sr
+    scene = await db.get_studio_scene(scene_id)
+    if not scene or not await _sr._scene_accessible(scene, uid):
+        raise HTTPException(404, "场景不存在或无权限")
+    # 校验客户端消息：仅 user/assistant（system 由服务端注入，客户端不得传）
+    msgs = []
+    for i, raw in enumerate(body.messages or []):
+        if not isinstance(raw, dict):
+            raise HTTPException(400, f"messages[{i}] must be object")
+        role = raw.get("role")
+        if role not in ("user", "assistant"):
+            raise HTTPException(400, f"messages[{i}].role must be user/assistant")
+        content = raw.get("content")
+        if not isinstance(content, str) or not content.strip():
+            raise HTTPException(400, f"messages[{i}].content must be non-empty string")
+        if len(content) > 20000:
+            raise HTTPException(400, f"messages[{i}] too long")
+        msgs.append({"role": role, "content": content})
+    if not msgs or msgs[-1]["role"] != "user":
+        raise HTTPException(400, "last message must be from user")
+    if len(msgs) > 40:
+        raise HTTPException(400, "too many messages")
+
+    system = await _sr.build_scene_system_prompt(scene, uid)
+    final = ([{"role": "system", "content": system}] if system else []) + msgs
+    model = scene.get("default_model") or "auto"
+    want_stream = body.stream is not False
+    chat_body = {"model": model, "messages": final, "stream": want_stream}
+    try:
+        resp = await handle_chat(chat_body, consumer_user_id=uid, strategy="auto")
+    except DispatchError as e:
+        raise HTTPException(
+            e.status_code,
+            detail={"error": e.message, "type": getattr(e, "error_type", None)},
+        ) from e
+    if want_stream and isinstance(resp, StreamingResponse):
+        return StreamingResponse(
+            resp.body_iterator,
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+    payload = None
+    if isinstance(resp, JSONResponse):
+        try:
+            raw = resp.body
+            payload = json.loads(raw.decode("utf-8") if isinstance(raw, (bytes, bytearray)) else raw)
+        except Exception:
+            payload = None
+    elif isinstance(resp, dict):
+        payload = resp
+    return {"ok": True, "output": extract_assistant_text(payload), "model": model}
 
 
 class WebImageBody(BaseModel):

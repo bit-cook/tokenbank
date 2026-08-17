@@ -169,13 +169,13 @@ header{display:flex;align-items:center;justify-content:space-between;margin-bott
           <div v-if="studioScenes.length" class="catalog-group">
             <h3><span>{{ lang==='zh'?'场景 / 玩法':'Scenes' }}</span><span class="n">{{ studioScenes.length }}</span></h3>
             <div class="list">
-              <div v-for="s in studioScenes" :key="'sc'+s.id" class="row disabled">
+              <a v-for="s in studioScenes" :key="'sc'+s.id" class="row" :href="'/studio/chat?id='+s.id" style="text-decoration:none;color:inherit">
                 <div style="min-width:0;flex:1">
                   <div class="name" style="font-family:inherit">{{ s.icon }} {{ s.name }} <span style="font-size:10px;background:#f1ccff;color:#000;border-radius:5px;padding:1px 6px">{{lang==='zh'?'官方':'Official'}}</span></div>
                   <div class="desc">{{ s.intro || T.noDesc }}</div>
                 </div>
                 <div class="side"><b>{{ s.default_model || '—' }}</b></div>
-              </div>
+              </a>
             </div>
           </div>
 

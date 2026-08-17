@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>场景对话 · winkrun</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Serif+SC:wght@400;600&display=swap" rel="stylesheet">
+<script src="/static/vue.global.prod.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#fff;--bg-muted:#f5f2f0;--bg-subtle:#faf9f5;--text:#000;--text-muted:#7b7b7b;--text-faint:#bcbcbc;
+  --border:#e7e4e1;--accent:#f1ccff;--primary:#000;--primary-fg:#fff;--ok:#16a34a;--danger:#dc2626;
+  --radius:10px;--radius-lg:18px;--font:'Inter',-apple-system,sans-serif;--serif:'Noto Serif SC',serif;
+}
+body{font-family:var(--font);background:var(--bg-subtle);color:var(--text);font-size:14px;-webkit-font-smoothing:antialiased}
+button,input,textarea{font:inherit}
+.shell{max-width:760px;margin:0 auto;padding:16px}
+.chat{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;display:flex;flex-direction:column;height:calc(100vh - 32px)}
+.chat-head{display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid var(--border)}
+.chat-ic{width:40px;height:40px;border-radius:11px;background:linear-gradient(135deg,#f1ccff,#dbeafe);display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+.chat-title{font-weight:700;font-size:15px}
+.chat-meta{font-size:12px;color:var(--text-muted);margin-top:2px;display:flex;gap:6px;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;background:var(--bg-muted);font-size:11px;color:var(--text-muted)}
+.chip.mono{font-family:ui-monospace,monospace;font-size:10px}
+.ghost{background:transparent;border:1px solid var(--border);color:var(--text-muted);border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;text-decoration:none}
+.msgs{flex:1;overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:14px;
+  background:linear-gradient(rgba(250,249,245,.6),rgba(250,249,245,.9)),radial-gradient(circle at 20% 12%,#efeafc 0,transparent 42%),radial-gradient(circle at 85% 8%,#e8f0ff 0,transparent 38%)}
+.msg{max-width:80%;padding:11px 14px;border-radius:14px;font-size:13.5px;line-height:1.65;white-space:pre-wrap;word-break:break-word}
+.msg.a{align-self:flex-start;background:#fff;border:1px solid var(--border);border-bottom-left-radius:4px}
+.msg.u{align-self:flex-end;background:#111;color:#fff;border-bottom-right-radius:4px}
+.msg .who{font-size:11px;color:var(--text-muted);margin-bottom:4px;font-weight:600}
+.serif{font-family:var(--serif)}
+.greet{align-self:center;background:var(--accent);color:#000;font-size:12px;padding:6px 14px;border-radius:999px}
+.err{align-self:center;color:var(--danger);font-size:12px}
+.dots::after{content:'▋';animation:blink 1s steps(2) infinite}
+@keyframes blink{0%,50%{opacity:1}50.01%,100%{opacity:0}}
+.composer{display:flex;gap:10px;padding:14px 18px;border-top:1px solid var(--border)}
+.composer textarea{flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:12px;outline:none;resize:none;max-height:120px;font-family:inherit}
+.composer textarea:focus{border-color:#000}
+.btn{background:var(--primary);color:var(--primary-fg);border:1px solid var(--primary);border-radius:12px;padding:0 18px;font-size:13px;font-weight:500;cursor:pointer}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.center{display:flex;align-items:center;justify-content:center;height:calc(100vh - 32px);color:var(--text-muted)}
+.center a{color:var(--primary);font-weight:600}
+</style>
+</head>
+<body>
+<div id="app" class="shell">
+  <div v-if="fatal" class="center">{{ fatal }} · <a href="/circles">去登录</a></div>
+  <div v-else class="chat">
+    <div class="chat-head">
+      <div class="chat-ic">{{ scene.icon || '🎭' }}</div>
+      <div style="flex:1">
+        <div class="chat-title">{{ scene.name || '场景' }}</div>
+        <div class="chat-meta"><span class="chip mono">{{ scene.default_model || 'auto' }}</span><span v-if="scene.category" class="chip">{{ scene.category }}</span><span>人设已生效</span></div>
+      </div>
+      <a class="ghost" href="/circles">← 返回</a>
+    </div>
+    <div class="msgs" ref="msgsEl">
+      <div class="greet" v-if="scene.greeting">✦ {{ scene.greeting }} ✦</div>
+      <div v-for="(m,i) in messages" :key="i" class="msg" :class="m.role==='user'?'u':'a'">
+        <div v-if="m.role!=='user'" class="who">{{ scene.name || '助手' }}</div>
+        <span :class="{ serif: m.role!=='user' }">{{ m.content }}</span><span v-if="m.streaming" class="dots"></span>
+      </div>
+      <div v-if="err" class="err">{{ err }}</div>
+    </div>
+    <div class="composer">
+      <textarea v-model="draft" :placeholder="scene.greeting ? '接着写，或告诉我下一段走向…' : '开始对话…'" rows="1"
+        @keydown.enter.exact.prevent="send" @input="autogrow"></textarea>
+      <button class="btn" :disabled="busy || !draft.trim()" @click="send">{{ busy ? '…' : '发送' }}</button>
+    </div>
+  </div>
+</div>
+<script>
+const { createApp, ref, nextTick } = Vue
+createApp({
+  setup(){
+    const sceneId = new URLSearchParams(location.search).get('id')
+    const token = (()=>{ try { return localStorage.getItem('user_token')||'' } catch { return '' } })()
+    const scene = ref({}), messages = ref([]), draft = ref(''), busy = ref(false), err = ref(''), fatal = ref('')
+    const msgsEl = ref(null)
+
+    function scrollDown(){ nextTick(()=>{ const el=msgsEl.value; if(el) el.scrollTop=el.scrollHeight }) }
+    function autogrow(e){ const t=e.target; t.style.height='auto'; t.style.height=Math.min(120,t.scrollHeight)+'px' }
+
+    async function loadScene(){
+      if(!sceneId){ fatal.value='缺少场景参数'; return }
+      if(!token){ fatal.value='请先登录'; return }
+      try{
+        const r = await fetch('/user/studio/scenes/'+sceneId+'/view',{ headers:{ Authorization:'Bearer '+token } })
+        if(r.status===401){ fatal.value='请先登录'; return }
+        if(!r.ok){ fatal.value=(await r.json().catch(()=>({}))).detail || '场景加载失败'; return }
+        scene.value = (await r.json()).scene || {}
+        document.title = (scene.value.name||'场景')+' · winkrun'
+      }catch(e){ fatal.value='无法连接服务器' }
+    }
+
+    async function send(){
+      const text = draft.value.trim()
+      if(!text || busy.value) return
+      draft.value=''; err.value=''
+      messages.value.push({ role:'user', content:text })
+      const asst = { role:'assistant', content:'', streaming:true }
+      messages.value.push(asst); scrollDown(); busy.value=true
+      // 仅发 user/assistant 历史（不含 greeting、不含 system；persona 服务端注入）
+      const payload = messages.value.filter(m=>!m.streaming).map(m=>({ role:m.role, content:m.content }))
+      try{
+        const r = await fetch('/user/studio/scenes/'+sceneId+'/chat',{
+          method:'POST',
+          headers:{ 'Content-Type':'application/json', Authorization:'Bearer '+token },
+          body: JSON.stringify({ messages: payload, stream: true }),
+        })
+        if(!r.ok || !r.body){
+          const d = await r.json().catch(()=>({}))
+          asst.streaming=false; messages.value.pop()
+          err.value = (d && (d.detail?.error||d.detail)) || ('对话失败 HTTP '+r.status); busy.value=false; return
+        }
+        const reader = r.body.getReader(), dec = new TextDecoder()
+        let buf=''
+        while(true){
+          const { done, value } = await reader.read(); if(done) break
+          buf += dec.decode(value,{ stream:true })
+          let idx
+          while((idx=buf.indexOf('\n'))>=0){
+            const line = buf.slice(0,idx).trim(); buf = buf.slice(idx+1)
+            if(!line.startsWith('data:')) continue
+            const data = line.slice(5).trim()
+            if(data==='[DONE]'){ continue }
+            try{
+              const j = JSON.parse(data)
+              const delta = j.choices?.[0]?.delta?.content || j.choices?.[0]?.message?.content || ''
+              if(delta){ asst.content += delta; scrollDown() }
+            }catch{}
+          }
+        }
+        asst.streaming=false
+        if(!asst.content){ messages.value.pop(); err.value='（无回复内容）' }
+      }catch(e){ asst.streaming=false; err.value=String(e.message||e) }
+      finally{ busy.value=false; scrollDown() }
+    }
+
+    loadScene()
+    return { scene, messages, draft, busy, err, fatal, msgsEl, send, autogrow }
+  }
+}).mount('#app')
+</script>
+</body>
+</html>

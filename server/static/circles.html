@@ -307,14 +307,14 @@ a.supply-row:hover,button.supply-row:hover{border-color:var(--border);background
           <strong>{{ lang==='zh'?'场景 / 玩法':'Scenes' }}</strong>
           <div v-if="!(detail.scenes||[]).length" class="state" style="padding:16px">{{ lang==='zh'?'圈内暂无场景':'No scenes' }}</div>
           <div v-else class="supply-list">
-            <div v-for="s in detail.scenes" :key="'sc'+s.id" class="supply-row" style="cursor:default">
+            <a v-for="s in detail.scenes" :key="'sc'+s.id" class="supply-row" :href="'/studio/chat?id='+s.id">
               <span class="supply-ico model">{{ s.icon || '🎭' }}</span>
               <div class="supply-main">
                 <div class="supply-title">{{ s.name }}</div>
                 <div class="supply-desc">{{ s.intro || T.noDesc }}<span v-if="s.default_model"> · {{ s.default_model }}</span></div>
               </div>
               <span class="supply-cta">{{ lang==='zh'?'使用':'Use' }}</span>
-            </div>
+            </a>
           </div>
         </div>
 
