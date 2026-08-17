@@ -1,6 +1,7 @@
 """PostgreSQL 数据库操作层（全部异步）"""
 
 import hashlib
+import json
 import logging
 import random
 import secrets
@@ -300,6 +301,7 @@ async def init_db() -> None:
     await _migrate_user_persona()
     await _migrate_password_reset_codes()
     await _migrate_community_catalog_installs()
+    await _migrate_studio()
 
 
 async def _migrate_password_reset_codes() -> None:
@@ -348,6 +350,297 @@ async def _migrate_community_catalog_installs() -> None:
             await db.execute(
                 "INSERT OR IGNORE INTO system_config(key,value) VALUES(?,?)", (k, v)
             )
+        await db.commit()
+
+
+async def _migrate_studio() -> None:
+    """社区圈内容：场景(scene) + 插件(mod/设定)，从 coterie 原生搬入。
+    owner_id NULL = 官方/预定义（仅管理员改）；插件 content 仅作者/管理员可见（内容保护）。"""
+    async with connect() as db:
+        # 场景：开箱即用的对话玩法
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS studio_scenes (
+                id            SERIAL PRIMARY KEY,
+                owner_id      INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                circle_id     INTEGER REFERENCES circles(id) ON DELETE SET NULL,
+                is_public     INTEGER NOT NULL DEFAULT 0,
+                name          TEXT NOT NULL,
+                icon          TEXT DEFAULT '',
+                intro         TEXT DEFAULT '',
+                category      TEXT DEFAULT '',
+                default_model TEXT DEFAULT '',
+                persona       TEXT DEFAULT '',
+                greeting      TEXT DEFAULT '',
+                created_at    TIMESTAMPTZ DEFAULT NOW(),
+                updated_at    TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_studio_scene_circle ON studio_scenes(circle_id)")
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_studio_scene_owner ON studio_scenes(owner_id)")
+
+        # 插件：世界书式设定（type 固定 setting）。intro 公开、content 作者/管理员可见。
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS studio_mods (
+                id               SERIAL PRIMARY KEY,
+                owner_id         INTEGER REFERENCES users(id) ON DELETE CASCADE,
+                name             TEXT NOT NULL,
+                type             TEXT NOT NULL DEFAULT 'setting',
+                intro            TEXT DEFAULT '',
+                content          TEXT DEFAULT '{}',
+                price            INTEGER NOT NULL DEFAULT 0,
+                trigger          TEXT NOT NULL DEFAULT 'always',
+                trigger_keywords TEXT DEFAULT '',
+                created_at       TIMESTAMPTZ DEFAULT NOW()
+            )
+        """)
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_studio_mod_owner ON studio_mods(owner_id)")
+
+        # 插件分享进圈（多对多；price 可覆盖 mod.price）
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS studio_circle_mods (
+                circle_id  INTEGER NOT NULL REFERENCES circles(id) ON DELETE CASCADE,
+                mod_id     INTEGER NOT NULL REFERENCES studio_mods(id) ON DELETE CASCADE,
+                shared_by  INTEGER REFERENCES users(id),
+                price      INTEGER NOT NULL DEFAULT 0,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                PRIMARY KEY (circle_id, mod_id)
+            )
+        """)
+
+        # 购买记录：买家可用不可见
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS studio_mod_purchases (
+                id         SERIAL PRIMARY KEY,
+                user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                mod_id     INTEGER NOT NULL REFERENCES studio_mods(id) ON DELETE CASCADE,
+                price      INTEGER NOT NULL DEFAULT 0,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE(user_id, mod_id)
+            )
+        """)
+        await db.commit()
+
+
+# ── 社区圈 · 场景 CRUD ────────────────────────────────────────────────────────
+# 约定：DB 层返回完整行（含 content/persona/greeting）；由路由层决定是否投影掉私有字段。
+
+def _scene_public(row: dict) -> dict:
+    """场景公开视图：去掉 persona/greeting（运行时服务端注入，不下发）。"""
+    d = dict(row)
+    d.pop("persona", None)
+    d.pop("greeting", None)
+    return d
+
+
+async def create_studio_scene(owner_id, data: dict) -> dict:
+    async with connect() as db:
+        async with db.execute(
+            """INSERT INTO studio_scenes
+               (owner_id, circle_id, is_public, name, icon, intro, category, default_model, persona, greeting)
+               VALUES(?,?,?,?,?,?,?,?,?,?)""",
+            (owner_id, data.get("circle_id"), 1 if data.get("is_public") else 0,
+             data.get("name", ""), data.get("icon", ""), data.get("intro", ""),
+             data.get("category", ""), data.get("default_model", ""),
+             data.get("persona", ""), data.get("greeting", "")),
+        ) as cur:
+            sid = cur.lastrowid
+        await db.commit()
+        async with db.execute("SELECT * FROM studio_scenes WHERE id=?", (sid,)) as cur:
+            return dict(await cur.fetchone())
+
+
+async def update_studio_scene(scene_id: int, data: dict) -> Optional[dict]:
+    fields, params = [], []
+    for k in ("circle_id", "name", "icon", "intro", "category", "default_model", "persona", "greeting"):
+        if k in data:
+            fields.append(f"{k}=?"); params.append(data[k])
+    if "is_public" in data:
+        fields.append("is_public=?"); params.append(1 if data["is_public"] else 0)
+    if not fields:
+        return await get_studio_scene(scene_id)
+    fields.append("updated_at=NOW()")
+    params.append(scene_id)
+    async with connect() as db:
+        await db.execute(f"UPDATE studio_scenes SET {', '.join(fields)} WHERE id=?", tuple(params))
+        await db.commit()
+    return await get_studio_scene(scene_id)
+
+
+async def delete_studio_scene(scene_id: int) -> None:
+    async with connect() as db:
+        await db.execute("DELETE FROM studio_scenes WHERE id=?", (scene_id,))
+        await db.commit()
+
+
+async def get_studio_scene(scene_id: int) -> Optional[dict]:
+    async with connect() as db:
+        async with db.execute("SELECT * FROM studio_scenes WHERE id=?", (scene_id,)) as cur:
+            row = await cur.fetchone()
+            return dict(row) if row else None
+
+
+async def list_official_scenes() -> list:
+    async with connect() as db:
+        async with db.execute(
+            "SELECT * FROM studio_scenes WHERE owner_id IS NULL ORDER BY id DESC") as cur:
+            return [dict(r) async for r in cur]
+
+
+async def list_scenes_owned(owner_id: int) -> list:
+    async with connect() as db:
+        async with db.execute(
+            "SELECT * FROM studio_scenes WHERE owner_id=? ORDER BY id DESC", (owner_id,)) as cur:
+            return [dict(r) async for r in cur]
+
+
+async def list_circle_scenes(circle_id: int) -> list:
+    async with connect() as db:
+        async with db.execute(
+            "SELECT * FROM studio_scenes WHERE circle_id=? ORDER BY id DESC", (circle_id,)) as cur:
+            return [dict(r) async for r in cur]
+
+
+# ── 社区圈 · 插件 CRUD ────────────────────────────────────────────────────────
+
+def _mod_public(row: dict) -> dict:
+    """插件公开视图：去掉 content 原文（作者/管理员之外不可见）。"""
+    d = dict(row)
+    d.pop("content", None)
+    return d
+
+
+async def create_studio_mod(owner_id, data: dict) -> dict:
+    kws = data.get("trigger_keywords") or ""
+    if isinstance(kws, (list, tuple)):
+        kws = ",".join(str(x) for x in kws)
+    content = data.get("content")
+    if not isinstance(content, str):
+        content = json.dumps(content or {}, ensure_ascii=False)
+    async with connect() as db:
+        async with db.execute(
+            """INSERT INTO studio_mods
+               (owner_id, name, type, intro, content, price, trigger, trigger_keywords)
+               VALUES(?,?,?,?,?,?,?,?)""",
+            (owner_id, data.get("name", ""), data.get("type", "setting"),
+             data.get("intro", ""), content, int(data.get("price") or 0),
+             data.get("trigger", "always"), kws),
+        ) as cur:
+            mid = cur.lastrowid
+        await db.commit()
+        async with db.execute("SELECT * FROM studio_mods WHERE id=?", (mid,)) as cur:
+            return dict(await cur.fetchone())
+
+
+async def update_studio_mod(mod_id: int, data: dict) -> Optional[dict]:
+    fields, params = [], []
+    for k in ("name", "type", "intro", "trigger"):
+        if k in data:
+            fields.append(f"{k}=?"); params.append(data[k])
+    if "content" in data:
+        c = data["content"]
+        if not isinstance(c, str):
+            c = json.dumps(c or {}, ensure_ascii=False)
+        fields.append("content=?"); params.append(c)
+    if "price" in data:
+        fields.append("price=?"); params.append(int(data["price"] or 0))
+    if "trigger_keywords" in data:
+        kws = data["trigger_keywords"] or ""
+        if isinstance(kws, (list, tuple)):
+            kws = ",".join(str(x) for x in kws)
+        fields.append("trigger_keywords=?"); params.append(kws)
+    if not fields:
+        return await get_studio_mod(mod_id)
+    params.append(mod_id)
+    async with connect() as db:
+        await db.execute(f"UPDATE studio_mods SET {', '.join(fields)} WHERE id=?", tuple(params))
+        await db.commit()
+    return await get_studio_mod(mod_id)
+
+
+async def delete_studio_mod(mod_id: int) -> None:
+    async with connect() as db:
+        await db.execute("DELETE FROM studio_mods WHERE id=?", (mod_id,))
+        await db.commit()
+
+
+async def get_studio_mod(mod_id: int) -> Optional[dict]:
+    async with connect() as db:
+        async with db.execute("SELECT * FROM studio_mods WHERE id=?", (mod_id,)) as cur:
+            row = await cur.fetchone()
+            return dict(row) if row else None
+
+
+async def list_official_mods() -> list:
+    async with connect() as db:
+        async with db.execute(
+            "SELECT * FROM studio_mods WHERE owner_id IS NULL ORDER BY id DESC") as cur:
+            return [dict(r) async for r in cur]
+
+
+async def list_mods_owned(owner_id: int) -> list:
+    async with connect() as db:
+        async with db.execute(
+            "SELECT * FROM studio_mods WHERE owner_id=? ORDER BY id DESC", (owner_id,)) as cur:
+            return [dict(r) async for r in cur]
+
+
+async def share_mod_to_circle(circle_id: int, mod_id: int, shared_by: int, price: int) -> None:
+    async with connect() as db:
+        await db.execute(
+            """INSERT INTO studio_circle_mods(circle_id, mod_id, shared_by, price)
+               VALUES(?,?,?,?)
+               ON CONFLICT(circle_id, mod_id) DO UPDATE SET price=EXCLUDED.price""",
+            (circle_id, mod_id, shared_by, int(price or 0)),
+        )
+        await db.commit()
+
+
+async def unshare_mod_from_circle(circle_id: int, mod_id: int) -> None:
+    async with connect() as db:
+        await db.execute(
+            "DELETE FROM studio_circle_mods WHERE circle_id=? AND mod_id=?", (circle_id, mod_id))
+        await db.commit()
+
+
+async def list_circle_mods(circle_id: int) -> list:
+    """圈内插件：join studio_mods 带出元数据（不含 content），price 取圈内定价。"""
+    async with connect() as db:
+        async with db.execute(
+            """SELECT m.id, m.owner_id, m.name, m.type, m.intro, m.trigger, m.trigger_keywords,
+                      cm.price, cm.shared_by, u.nickname AS author
+               FROM studio_circle_mods cm
+               JOIN studio_mods m ON m.id=cm.mod_id
+               LEFT JOIN users u ON u.id=m.owner_id
+               WHERE cm.circle_id=?
+               ORDER BY cm.created_at DESC""",
+            (circle_id,),
+        ) as cur:
+            return [dict(r) async for r in cur]
+
+
+async def user_has_purchased_mod(user_id: int, mod_id: int) -> bool:
+    async with connect() as db:
+        async with db.execute(
+            "SELECT 1 FROM studio_mod_purchases WHERE user_id=? AND mod_id=?", (user_id, mod_id)) as cur:
+            return (await cur.fetchone()) is not None
+
+
+async def list_purchased_mod_ids(user_id: int) -> list[int]:
+    async with connect() as db:
+        async with db.execute(
+            "SELECT mod_id FROM studio_mod_purchases WHERE user_id=?", (user_id,)) as cur:
+            return [row[0] async for row in cur]
+
+
+async def record_mod_purchase(user_id: int, mod_id: int, price: int) -> None:
+    async with connect() as db:
+        await db.execute(
+            "INSERT OR IGNORE INTO studio_mod_purchases(user_id, mod_id, price) VALUES(?,?,?)",
+            (user_id, mod_id, int(price or 0)),
+        )
         await db.commit()
 
 

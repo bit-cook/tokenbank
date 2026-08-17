@@ -40,7 +40,7 @@ async def admin_ui():
     try:
         ver = str(int(max(
             os.path.getmtime(f"static/{f}")
-            for f in ("admin-routing-catalog.js", "admin-app-catalog.js", "admin-billing-sources.js")
+            for f in ("admin-routing-catalog.js", "admin-app-catalog.js", "admin-billing-sources.js", "admin-studio.js")
         )))
     except OSError:
         ver = str(int(time.time()))

@@ -1,0 +1,34 @@
+# 社区圈内容默认种子：官方场景 + 官方插件（owner_id NULL）。
+# 首次启动且 studio 无官方数据时由 seed_default_studio() 幂等灌入。
+# 插件 content 为设定原文（仅管理员/作者可见）；intro 为公开描述。
+
+scenes:
+  - name: 古风言情写作
+    icon: 🖋️
+    intro: 半文半白的言情叙事，自动铺陈意境与人物弧光
+    category: 创作
+    default_model: deepseek-v4-flash
+    persona: 你是资深古风言情写手，半文半白，重意境与人物弧光，忌直白。
+    greeting: 请先告诉我：男女主设定、时代背景、核心冲突，我来起第一章。
+  - name: 多语种润色
+    icon: 🌐
+    intro: 母语级润色，保留术语与语气，输出对照
+    category: 翻译
+    default_model: llm-router-adaptive
+    persona: 你是资深译审，母语级润色，保留术语与语气。
+    greeting: 贴上原文与目标语言，我来润色并给对照。
+
+mods:
+  - name: 古风用语增强
+    intro: 古风言情写作的传统文学用语词库，让行文更地道自然。含 120+ 词条与用例。
+    price: 12
+    trigger: always
+    content:
+      text: 写作时融入传统文学用语库并自然化用；行文半文半白，重意境、忌直白。
+  - name: 意境描写档
+    intro: 强化景物与情绪的通感描写
+    price: 8
+    trigger: keyword
+    trigger_keywords: 景,情,意境
+    content:
+      text: 景物与情绪通感：以景写情、情景交融的描写规则集。

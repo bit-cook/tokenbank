@@ -42,6 +42,26 @@ async def seed_default_configs() -> None:
     await reconcile_providers_with_defaults()
 
 
+async def seed_default_studio() -> None:
+    """社区圈：studio 无官方场景/插件时，从 studio.default.yaml 幂等灌入（owner_id NULL）。"""
+    path = _DEFAULTS_DIR / "studio.default.yaml"
+    if not path.is_file():
+        return
+    try:
+        doc = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except Exception:
+        return
+    # 已有官方数据则跳过（幂等，避免重复灌入 / 覆盖管理员改动）
+    if await db.list_official_scenes() or await db.list_official_mods():
+        return
+    for s in (doc.get("scenes") or []):
+        if s.get("name"):
+            await db.create_studio_scene(None, s)
+    for m in (doc.get("mods") or []):
+        if m.get("name"):
+            await db.create_studio_mod(None, m)
+
+
 def _append_missing_by_id(dst: list, src: list) -> bool:
     """把 src 中 id 不在 dst 的条目追加到 dst；有变更返回 True。"""
     if not isinstance(dst, list) or not isinstance(src, list):

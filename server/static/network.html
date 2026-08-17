@@ -89,7 +89,7 @@ header{display:flex;align-items:center;justify-content:space-between;margin-bott
       <div class="stat"><div class="k">{{ T.nodes }}</div><div class="v">{{ summary.online_workers ?? 0 }}</div></div>
       <div class="stat"><div class="k">{{ T.models }}</div><div class="v">{{ models.length }}</div></div>
       <div class="stat"><div class="k">{{ T.agents }}</div><div class="v">{{ agents.length }}</div></div>
-      <div class="stat"><div class="k">{{ T.resources }}</div><div class="v">{{ catalogResources.length }}</div></div>
+      <div class="stat"><div class="k">{{ T.resources }}</div><div class="v">{{ catalogResources.length + studioScenes.length + studioMods.length }}</div></div>
       <div class="stat"><div class="k">{{ T.circles }}</div><div class="v">{{ summary.circle_count ?? circles.length }}</div></div>
       <div class="stat"><div class="k">{{ T.tokens }}</div><div class="v">{{ fmtTok(summary.contrib_tokens) }}</div></div>
       <div class="stat"><div class="k">{{ T.users }}</div><div class="v">{{ summary.active_users ?? 0 }}</div></div>
@@ -141,7 +141,7 @@ header{display:flex;align-items:center;justify-content:space-between;margin-bott
           </div>
           <span class="meta">{{ T.catalogUseHint }}</span>
         </div>
-        <div v-if="catalogByType.length" class="catalog-grid">
+        <div v-if="catalogByType.length || studioScenes.length || studioMods.length" class="catalog-grid">
           <div v-for="g in catalogByType" :key="g.type" class="catalog-group">
             <h3>
               <span>{{ g.label }}</span>
@@ -161,6 +161,34 @@ header{display:flex;align-items:center;justify-content:space-between;margin-bott
                   <b>{{ T.sharedBy.replace('{handle}', r.sharer || '—') }}</b>
                   {{ r.user_recommended ? T.catalogUser : '' }}
                 </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 社区圈：场景 / 玩法 -->
+          <div v-if="studioScenes.length" class="catalog-group">
+            <h3><span>{{ lang==='zh'?'场景 / 玩法':'Scenes' }}</span><span class="n">{{ studioScenes.length }}</span></h3>
+            <div class="list">
+              <div v-for="s in studioScenes" :key="'sc'+s.id" class="row disabled">
+                <div style="min-width:0;flex:1">
+                  <div class="name" style="font-family:inherit">{{ s.icon }} {{ s.name }} <span style="font-size:10px;background:#f1ccff;color:#000;border-radius:5px;padding:1px 6px">{{lang==='zh'?'官方':'Official'}}</span></div>
+                  <div class="desc">{{ s.intro || T.noDesc }}</div>
+                </div>
+                <div class="side"><b>{{ s.default_model || '—' }}</b></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 社区圈：插件 / 设定 -->
+          <div v-if="studioMods.length" class="catalog-group">
+            <h3><span>{{ lang==='zh'?'插件 / 设定':'Plugins' }}</span><span class="n">{{ studioMods.length }}</span></h3>
+            <div class="list">
+              <div v-for="m in studioMods" :key="'md'+m.id" class="row disabled">
+                <div style="min-width:0;flex:1">
+                  <div class="name" style="font-family:inherit">{{ m.name }} <span style="font-size:10px;color:#9a9a9a">🔒</span></div>
+                  <div class="desc">{{ m.intro || T.noDesc }}</div>
+                </div>
+                <div class="side"><b class="mono">{{ m.price }}⚡</b></div>
               </div>
             </div>
           </div>
@@ -293,6 +321,8 @@ createApp({
     const agents = ref([])
     const circles = ref([])
     const catalogResources = ref([])
+    const studioScenes = ref([])   // 社区圈官方场景
+    const studioMods = ref([])     // 社区圈官方插件
     const circleBusyId = ref(null)
 
     function getToken() {
@@ -470,9 +500,10 @@ createApp({
         const headers = {}
         const tok = getToken()
         if (tok) headers.Authorization = 'Bearer ' + tok
-        const [netRes, catalogRes] = await Promise.all([
+        const [netRes, catalogRes, studioRes] = await Promise.all([
           fetch('/public/network', { headers }),
           fetch('/api/community-catalog'),
+          fetch('/public/studio'),
         ])
         const data = await netRes.json()
         if (!netRes.ok) throw new Error('fail')
@@ -493,6 +524,12 @@ createApp({
         } catch {
           catalogResources.value = []
         }
+        // 社区圈：官方场景 / 插件（无 content）
+        try {
+          const sd = await studioRes.json()
+          studioScenes.value = studioRes.ok && Array.isArray(sd.scenes) ? sd.scenes : []
+          studioMods.value = studioRes.ok && Array.isArray(sd.mods) ? sd.mods : []
+        } catch { studioScenes.value = []; studioMods.value = [] }
         fatal.value = ''
       } catch {
         fatal.value = lang.value === 'zh' ? '无法连接服务器' : 'Cannot reach server'
@@ -509,6 +546,7 @@ createApp({
     return {
       lang, T, toggleLang, loading, fatal, summary, models, agents, circles, catalogResources, catalogByType, circleBusyId,
       topWorkers, fmtTok, offerText, typeLabel, tryLabel, catalogTypeShort, circleStatus, onCircleClick,
+      studioScenes, studioMods,
     }
   }
 }).mount('#app')

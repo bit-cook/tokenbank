@@ -302,6 +302,41 @@ a.supply-row:hover,button.supply-row:hover{border-color:var(--border);background
           </div>
         </div>
 
+        <!-- 圈内场景 / 玩法 -->
+        <div class="card">
+          <strong>{{ lang==='zh'?'场景 / 玩法':'Scenes' }}</strong>
+          <div v-if="!(detail.scenes||[]).length" class="state" style="padding:16px">{{ lang==='zh'?'圈内暂无场景':'No scenes' }}</div>
+          <div v-else class="supply-list">
+            <div v-for="s in detail.scenes" :key="'sc'+s.id" class="supply-row" style="cursor:default">
+              <span class="supply-ico model">{{ s.icon || '🎭' }}</span>
+              <div class="supply-main">
+                <div class="supply-title">{{ s.name }}</div>
+                <div class="supply-desc">{{ s.intro || T.noDesc }}<span v-if="s.default_model"> · {{ s.default_model }}</span></div>
+              </div>
+              <span class="supply-cta">{{ lang==='zh'?'使用':'Use' }}</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 圈内插件 / 设定 -->
+        <div class="card">
+          <strong>{{ lang==='zh'?'插件 / 设定':'Plugins' }}</strong>
+          <div v-if="studioMsg" class="banner ok" style="margin-top:8px">{{ studioMsg }}</div>
+          <div v-if="!(detail.mods||[]).length" class="state" style="padding:16px">{{ lang==='zh'?'圈内暂无插件':'No plugins' }}</div>
+          <div v-else class="supply-list">
+            <div v-for="m in detail.mods" :key="'md'+m.id" class="supply-row" style="cursor:default">
+              <span class="supply-ico">📜</span>
+              <div class="supply-main">
+                <div class="supply-title">{{ m.name }} <span style="font-size:10px;color:#bcbcbc">🔒</span></div>
+                <div class="supply-desc">{{ m.intro || T.noDesc }}</div>
+              </div>
+              <span v-if="m.mine" class="supply-cta">{{ lang==='zh'?'我发布':'Mine' }}</span>
+              <span v-else-if="m.purchased" class="supply-cta" style="color:#16a34a">{{ lang==='zh'?'已购买':'Owned' }}</span>
+              <button v-else class="btn-sm" type="button" @click="buyMod(m)">{{ m.price }}⚡ {{ lang==='zh'?'购买':'Buy' }}</button>
+            </div>
+          </div>
+        </div>
+
         <div class="card" v-if="detail.circle.is_owner && joinRequests.length">
           <strong>{{ T.joinRequests }}</strong>
           <div v-for="r in joinRequests" :key="r.id" class="row" style="cursor:default;margin-top:8px">
@@ -474,7 +509,8 @@ createApp({
     const showCreate = ref(false)
     const createForm = ref({ name:'', desc:'' })
     const joinInput = ref('')
-    const detail = ref({ circle:null, posts:[], models:[], agents:[] })
+    const detail = ref({ circle:null, posts:[], models:[], agents:[], scenes:[], mods:[] })
+    const studioMsg = ref('')
     const members = ref([])
     const joinRequests = ref([])
     const showComposer = ref(false)
@@ -624,13 +660,15 @@ createApp({
       detailLoading.value=true; fatal.value=''
       detailId.value=id
       try {
-        const [{ r, data }, mem] = await Promise.all([
+        const [{ r, data }, mem, sc, md] = await Promise.all([
           api('/user/circles/'+id),
           api('/user/circles/'+id+'/members').catch(()=>({ r:{ok:false}, data:{} })),
+          api('/user/circles/'+id+'/scenes').catch(()=>({ r:{ok:false}, data:{} })),
+          api('/user/circles/'+id+'/mods').catch(()=>({ r:{ok:false}, data:{} })),
         ])
         if (!r.ok){
           fatal.value = (typeof data?.detail==='string'?data.detail:T.value.loading)
-          detail.value = { circle:null, posts:[], models:[], agents:[] }
+          detail.value = { circle:null, posts:[], models:[], agents:[], scenes:[], mods:[] }
           return
         }
         detail.value = {
@@ -638,6 +676,8 @@ createApp({
           posts: data.posts||[],
           models: data.models||[],
           agents: data.agents||[],
+          scenes: sc.r?.ok ? (sc.data.scenes||[]) : [],
+          mods: md.r?.ok ? (md.data.mods||[]) : [],
         }
         members.value = mem.r?.ok ? (mem.data.members||[]) : []
         joinRequests.value = []
@@ -648,6 +688,18 @@ createApp({
       } catch(e) {
         if (e.message!=='auth') fatal.value = String(e.message||e)
       } finally { detailLoading.value=false; syncUrl() }
+    }
+
+    async function buyMod(m){
+      studioMsg.value=''
+      if (m.mine || m.purchased) return
+      if (!confirm((lang.value==='zh'?'用 ':'Spend ')+(m.price||0)+(lang.value==='zh'?' 社区积分购买「'+m.name+'」？':' credits?'))) return
+      try {
+        const { r, data } = await api('/user/circles/'+detailId.value+'/mods/'+m.id+'/buy', { method:'POST' })
+        if (!r.ok){ studioMsg.value = (typeof data?.detail==='string'?data.detail:('HTTP '+r.status)); return }
+        studioMsg.value = lang.value==='zh'?'购买成功':'Purchased'
+        loadDetail(detailId.value)
+      } catch(e){ studioMsg.value = String(e.message||e) }
     }
 
     function goHome(){
@@ -895,6 +947,7 @@ createApp({
       browseStatus, openInvite, dissolve, leave, approveReq, rejectReq,
       createPost, startEdit, saveEdit, delPost, sendReply, delReply,
       fmtTime, authorLabel, isMine, typeLabel, modelHref, avatarColor, copy,
+      studioMsg, buyMod,
     }
   }
 }).mount('#app')

@@ -42,6 +42,7 @@ from scene_router import router as scene_router
 from provider_router import router as provider_router
 from config_router import router as config_router
 from circle_router import router as circle_router
+from studio_router import router as studio_router, admin_router as studio_admin_router
 from worker_pool import (
     pool, WorkerConnection, worker_model_names, default_ttft_ms, worker_sharer,
     normalize_agent_cards, owner_label_from_user, shared_agent_display_name, bare_agent_name,
@@ -73,8 +74,9 @@ _bearer = HTTPBearer(auto_error=False)
 async def lifespan(app: FastAPI):
     await db.init_db()
     logger.info("Database ready")
-    from config_seed import seed_default_configs
+    from config_seed import seed_default_configs, seed_default_studio
     await seed_default_configs()
+    await seed_default_studio()
     logger.info("Default config seeded (if empty)")
     from admin_router import _sync_virtual_pool
     await _sync_virtual_pool()
@@ -182,6 +184,8 @@ app.include_router(scene_router, prefix="/user")
 app.include_router(provider_router, prefix="/user")   # 个人供给源 /user/providers + /user/oauth/claude/*
 app.include_router(config_router, prefix="/api")   # GET /api/config/tools|routes (user JWT)
 app.include_router(circle_router, prefix="/user")
+app.include_router(studio_router, prefix="/user")          # 社区圈 场景/插件（用户端）
+app.include_router(studio_admin_router, prefix="/admin")   # 社区圈 预定义（管理员）
                                                     # PUT/DELETE /api/config/tools|routes (admin)
 app.include_router(device_router, tags=["device"])
 
@@ -269,6 +273,15 @@ async def public_community_catalog():
     """公开接口：社区推荐目录(mcp/prompts/skills/assistants)"""
     import community_catalog as cc
     return await cc.community_catalog_payload()
+
+
+@app.get("/public/studio")
+async def public_studio():
+    """公开接口：社区圈官方场景 + 插件（无 content；社区页「可用资源」用）"""
+    import database as db
+    scenes = [db._scene_public(s) for s in await db.list_official_scenes()]
+    mods = [db._mod_public(m) for m in await db.list_official_mods()]
+    return {"scenes": scenes, "mods": mods}
 
 
 @app.get("/api/rates")

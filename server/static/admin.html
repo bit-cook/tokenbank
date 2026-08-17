@@ -986,8 +986,16 @@ select.form-input{cursor:pointer}
       </div>
     </div>
 
-    <!-- 社区推荐管理：完整目录展示 + 用户推荐 + 积分额度 -->
+    <!-- 社区推荐管理：完整目录展示 + 用户推荐 + 积分额度 + 社区圈场景/插件 -->
     <div v-show="activeTab === 'community'" class="tab-content">
+      <div style="display:flex;gap:6px;margin-bottom:14px;border-bottom:1px solid #e7e4e1;padding-bottom:10px;flex-wrap:wrap">
+        <button class="btn-sm" :style="communitySub==='catalog'?'background:#111;color:#fff;border-color:#111':''" @click="communitySub='catalog'">{{ lang==='zh'?'推荐资源':'Catalog' }}</button>
+        <button class="btn-sm" :style="communitySub==='scenes'?'background:#111;color:#fff;border-color:#111':''" @click="communitySub='scenes'">{{ lang==='zh'?'预定义场景':'Scenes' }}</button>
+        <button class="btn-sm" :style="communitySub==='mods'?'background:#111;color:#fff;border-color:#111':''" @click="communitySub='mods'">{{ lang==='zh'?'预定义插件':'Plugins' }}</button>
+      </div>
+
+      <!-- ═══ 推荐资源（原有） ═══ -->
+      <div v-show="communitySub==='catalog'">
       <div class="toolbar">
         <span style="font-size:15px;font-weight:600">{{ lang==='zh' ? '社区推荐资源' : 'Community Catalog' }}</span>
         <div class="toolbar-right" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
@@ -1063,6 +1071,89 @@ select.form-input{cursor:pointer}
             </tr>
           </tbody>
         </table>
+      </div>
+      </div><!-- /catalog -->
+
+      <!-- ═══ 预定义场景（官方，owner 为空） ═══ -->
+      <div v-show="communitySub==='scenes'">
+        <div class="toolbar">
+          <span style="font-size:15px;font-weight:600">{{ lang==='zh'?'预定义场景（官方）':'Predefined Scenes' }}</span>
+          <button class="btn-sm" @click="openScene(null)">＋ {{ lang==='zh'?'新建场景':'New scene' }}</button>
+        </div>
+        <p style="font-size:12px;color:#7b7b7b;margin-bottom:12px;line-height:1.6">{{ lang==='zh'?'官方场景，用户端只读消费；persona / 开场白由服务端注入、用户不可见。':'Official scenes; read-only for users, persona/greeting injected server-side.' }}</p>
+        <div class="panel" style="padding:0;overflow:hidden">
+          <table>
+            <thead><tr><th>{{lang==='zh'?'场景':'Scene'}}</th><th>{{lang==='zh'?'简介':'Intro'}}</th><th>{{lang==='zh'?'默认模型':'Model'}}</th><th style="text-align:right">{{lang==='zh'?'操作':'Actions'}}</th></tr></thead>
+            <tbody>
+              <tr v-if="!stScenes.length"><td colspan="4" style="color:#bcbcbc;font-size:13px;padding:16px">{{lang==='zh'?'暂无场景':'No scenes'}}</td></tr>
+              <tr v-for="s in stScenes" :key="s.id">
+                <td><span style="font-size:16px;margin-right:6px">{{s.icon}}</span>{{s.name}}</td>
+                <td style="font-size:12px;color:#555;max-width:280px">{{s.intro||'—'}}</td>
+                <td class="mono" style="font-size:11px">{{s.default_model||'—'}}</td>
+                <td style="white-space:nowrap;text-align:right"><button class="btn-xs" @click="openScene(s)">{{lang==='zh'?'编辑':'Edit'}}</button> <button class="btn-xs btn-danger" @click="delScene(s)">{{lang==='zh'?'删除':'Delete'}}</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- ═══ 预定义插件（官方） ═══ -->
+      <div v-show="communitySub==='mods'">
+        <div class="toolbar">
+          <span style="font-size:15px;font-weight:600">{{ lang==='zh'?'预定义插件（官方）':'Predefined Plugins' }}</span>
+          <button class="btn-sm" @click="openMod(null)">＋ {{ lang==='zh'?'新建插件':'New plugin' }}</button>
+        </div>
+        <p style="font-size:12px;color:#7b7b7b;margin-bottom:12px;line-height:1.6">{{ lang==='zh'?'官方插件（设定）。描述公开；内容原文仅管理员/作者可见，买家购买后经服务端注入使用、看不到原文。按社区积分定价。':'Official plugins; intro public, content admin-only, buyers use-not-see, priced in credits.' }}</p>
+        <div v-if="stModMsg" style="margin-bottom:8px;font-size:12px" :style="stModMsg.startsWith('已')||stModMsg==='Shelved'?'color:#16a34a':'color:#dc2626'">{{stModMsg}}</div>
+        <div class="panel" style="padding:0;overflow:hidden">
+          <table>
+            <thead><tr><th>{{lang==='zh'?'插件':'Plugin'}}</th><th>{{lang==='zh'?'描述（公开）':'Intro'}}</th><th>{{lang==='zh'?'价格':'Price'}}</th><th style="text-align:right">{{lang==='zh'?'操作':'Actions'}}</th></tr></thead>
+            <tbody>
+              <tr v-if="!stMods.length"><td colspan="4" style="color:#bcbcbc;font-size:13px;padding:16px">{{lang==='zh'?'暂无插件':'No plugins'}}</td></tr>
+              <tr v-for="m in stMods" :key="m.id">
+                <td>{{m.name}} <span style="font-size:10px;color:#9a9a9a">🔒{{lang==='zh'?'内容加密':'locked'}}</span></td>
+                <td style="font-size:12px;color:#555;max-width:280px">{{m.intro||'—'}}</td>
+                <td class="mono" style="font-size:12px">{{m.price}}⚡</td>
+                <td style="white-space:nowrap;text-align:right"><button class="btn-xs" @click="openMod(m)">{{lang==='zh'?'编辑':'Edit'}}</button> <button class="btn-xs btn-danger" @click="delMod(m)">{{lang==='zh'?'删除':'Delete'}}</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 场景编辑弹层 -->
+      <div v-if="stSceneOpen" style="position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:1000" @click.self="stSceneOpen=false">
+        <div style="background:#fff;border-radius:14px;padding:20px;width:min(560px,92vw);max-height:88vh;overflow:auto">
+          <h3 style="font-size:15px;font-weight:700;margin-bottom:14px">{{ stSceneForm.id ? (lang==='zh'?'编辑场景':'Edit scene') : (lang==='zh'?'新建场景':'New scene') }} <span style="font-size:10px;background:#f1ccff;color:#000;border-radius:5px;padding:1px 6px">{{lang==='zh'?'官方':'Official'}}</span></h3>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div><label style="font-size:11px;color:#7b7b7b">{{lang==='zh'?'名字':'Name'}}</label><input v-model="stSceneForm.name" class="form-input form-input-md" style="width:100%"></div>
+            <div><label style="font-size:11px;color:#7b7b7b">{{lang==='zh'?'图标 / 分类':'Icon / Category'}}</label><div style="display:flex;gap:6px"><input v-model="stSceneForm.icon" class="form-input form-input-md" style="width:60px"><input v-model="stSceneForm.category" class="form-input form-input-md" style="flex:1"></div></div>
+          </div>
+          <div style="margin-top:10px"><label style="font-size:11px;color:#7b7b7b">{{lang==='zh'?'简介（公开）':'Intro'}}</label><input v-model="stSceneForm.intro" class="form-input form-input-md" style="width:100%"></div>
+          <div style="margin-top:10px"><label style="font-size:11px;color:#7b7b7b">{{lang==='zh'?'默认模型 / 路由':'Default model'}}</label><input v-model="stSceneForm.default_model" class="form-input form-input-md" style="width:100%" placeholder="deepseek-v4-flash / llm-router-adaptive"></div>
+          <div style="margin-top:10px"><label style="font-size:11px;color:#7b7b7b">{{lang==='zh'?'人设 / 系统提示 🔒（用户不可见）':'Persona 🔒'}}</label><textarea v-model="stSceneForm.persona" rows="2" class="form-input form-input-md" style="width:100%"></textarea></div>
+          <div style="margin-top:10px"><label style="font-size:11px;color:#7b7b7b">{{lang==='zh'?'开场白（打开自动发）':'Greeting'}}</label><textarea v-model="stSceneForm.greeting" rows="2" class="form-input form-input-md" style="width:100%"></textarea></div>
+          <div v-if="stSceneMsg" style="color:#dc2626;font-size:12px;margin-top:8px">{{stSceneMsg}}</div>
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button class="btn-sm" @click="stSceneOpen=false">{{lang==='zh'?'取消':'Cancel'}}</button><button class="btn btn-indigo" @click="saveScene">{{lang==='zh'?'保存':'Save'}}</button></div>
+        </div>
+      </div>
+
+      <!-- 插件编辑弹层 -->
+      <div v-if="stModOpen" style="position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;z-index:1000" @click.self="stModOpen=false">
+        <div style="background:#fff;border-radius:14px;padding:20px;width:min(560px,92vw);max-height:88vh;overflow:auto">
+          <h3 style="font-size:15px;font-weight:700;margin-bottom:14px">{{ stModForm.id ? (lang==='zh'?'编辑插件':'Edit plugin') : (lang==='zh'?'新建插件':'New plugin') }} <span style="font-size:10px;background:#f1ccff;color:#000;border-radius:5px;padding:1px 6px">{{lang==='zh'?'官方':'Official'}}</span></h3>
+          <div><label style="font-size:11px;color:#7b7b7b">{{lang==='zh'?'名字':'Name'}}</label><input v-model="stModForm.name" class="form-input form-input-md" style="width:100%"></div>
+          <div style="margin-top:10px"><label style="font-size:11px;color:#2563eb">{{lang==='zh'?'描述（所有人可见）':'Intro (public)'}}</label><textarea v-model="stModForm.intro" rows="2" class="form-input form-input-md" style="width:100%" :placeholder="lang==='zh'?'概括价值，别写具体内容':''"></textarea></div>
+          <div style="margin-top:10px"><label style="font-size:11px;color:#000;font-weight:600">🔒 {{lang==='zh'?'内容 / 设定原文（仅管理员/作者可见，买家可用不可见）':'Content 🔒 (admin-only)'}}</label><textarea v-model="stModForm.contentText" rows="4" class="form-input form-input-md" style="width:100%"></textarea></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
+            <div><label style="font-size:11px;color:#7b7b7b">{{lang==='zh'?'定价（社区积分）':'Price'}}</label><input v-model.number="stModForm.price" type="number" min="0" class="form-input form-input-md" style="width:100%"></div>
+            <div><label style="font-size:11px;color:#7b7b7b">{{lang==='zh'?'触发':'Trigger'}}</label><select v-model="stModForm.trigger" class="form-input form-input-md" style="width:100%"><option value="always">{{lang==='zh'?'总是生效':'Always'}}</option><option value="keyword">{{lang==='zh'?'关键词':'Keyword'}}</option></select></div>
+          </div>
+          <div v-if="stModForm.trigger==='keyword'" style="margin-top:10px"><label style="font-size:11px;color:#7b7b7b">{{lang==='zh'?'关键词（逗号分隔）':'Keywords'}}</label><input v-model="stModForm.trigger_keywords" class="form-input form-input-md" style="width:100%"></div>
+          <div style="margin-top:10px" v-if="stModForm.id"><label style="font-size:11px;color:#7b7b7b">{{lang==='zh'?'上架到圈子（逗号分隔圈子 ID）':'Shelve to circles (ids)'}}</label><div style="display:flex;gap:6px"><input v-model="stShelfIds" class="form-input form-input-md" style="flex:1" placeholder="1,2,3"><button class="btn-sm" @click="shelfMod(stModForm)">{{lang==='zh'?'上架':'Shelve'}}</button></div></div>
+          <div v-if="stModMsg" style="font-size:12px;margin-top:8px" :style="stModMsg.startsWith('已')||stModMsg==='Shelved'?'color:#16a34a':'color:#dc2626'">{{stModMsg}}</div>
+          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px"><button class="btn-sm" @click="stModOpen=false">{{lang==='zh'?'取消':'Cancel'}}</button><button class="btn btn-indigo" @click="saveMod">{{lang==='zh'?'保存':'Save'}}</button></div>
+        </div>
       </div>
     </div>
 
@@ -1165,6 +1256,7 @@ select.form-input{cursor:pointer}
 <script src="/static/admin-billing-sources.js?v={{JS_VER}}"></script>
 <script src="/static/admin-app-catalog.js?v={{JS_VER}}"></script>
 <script src="/static/admin-routing-catalog.js?v={{JS_VER}}"></script>
+<script src="/static/admin-studio.js?v={{JS_VER}}"></script>
 <script>
 const { createApp, ref, computed, onMounted, onUnmounted, nextTick, reactive } = Vue
 
@@ -1914,6 +2006,10 @@ createApp({
     const routingCatalogAdmin = initRoutingCatalogAdmin(api, lang, ref)
     const { fetchRoutingCatalog } = routingCatalogAdmin
 
+    /* ── Studio (社区圈 预定义场景/插件) ── */
+    const studioAdmin = initStudioAdmin(api, lang, ref)
+    const { fetchStudioAll } = studioAdmin
+
     function fetchForTab(k) {
       if (k === 'models') fetchModels()
       if (k === 'users')  fetchUsers()
@@ -1924,7 +2020,7 @@ createApp({
       if (k === 'billing') fetchBillingSources()
       if (k === 'apps') fetchAppCatalog()
       if (k === 'routes') fetchRoutingCatalog()
-      if (k === 'community') fetchCommunityCatalog()
+      if (k === 'community') { fetchCommunityCatalog(); fetchStudioAll() }
     }
     function switchTab(k) {
       activeTab.value = k
@@ -1965,6 +2061,7 @@ createApp({
       ...billingAdmin,
       ...appCatalogAdmin,
       ...routingCatalogAdmin,
+      ...studioAdmin,
       ccItems, ccCounts, ccTypeFilter, ccQuery, ccTypeTabs, ccFilteredItems,
       ccPricing, ccPricingSaving, ccMsg,
       ccCountFor, ccTypeLabel,
