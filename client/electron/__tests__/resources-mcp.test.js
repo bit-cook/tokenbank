@@ -96,6 +96,7 @@ function mockRm() {
 test('TOOLS 含能力总览与资源/目录/网关/提示词别名', () => {
   const names = mcp.TOOLS.map(t => t.name).sort();
   assert.deepEqual(names, [
+    'tb_call_mcp',
     'tb_capabilities',
     'tb_get_prompt',
     'tb_get_resource',
@@ -115,6 +116,8 @@ test('tb_capabilities 描述分域体系与点将工作流', async () => {
   assert.ok(text.includes('tb_list_resources'));
   assert.ok(text.includes('推荐工作流'));
   assert.ok(text.includes('assistant') || text.includes('智能体') || text.includes('点将'));
+  assert.ok(text.includes('中转 MCP'));
+  assert.ok(text.includes('tb_call_mcp'));
 });
 
 test('tb_list_resources 可按 type 过滤', async () => {
@@ -295,3 +298,89 @@ test('initialize 返回 tokenbank-resources', () => {
   }
   assert.equal(JSON.parse(sent[0]).result.serverInfo.name, 'tokenbank-resources');
 });
+
+const PIPEWORX = [{
+  id: 'mcp-pipeworx',
+  name: 'pipeworx',
+  display_name: 'Pipeworx',
+  description: '实时数据',
+  tools: ['ask_pipeworx', 'discover_tools'],
+  prefix: 'pipeworx',
+}];
+
+test('tb_capabilities 列出当前应用已中转的 MCP', async () => {
+  mcp.setRelayedMcpLister(() => PIPEWORX);
+  try {
+    const r = await mcp.handleToolCall('tb_capabilities', {});
+    const text = r.content[0].text;
+    assert.ok(text.includes('Pipeworx'));
+    assert.ok(text.includes('ask_pipeworx'));
+    assert.ok(text.includes('tb_call_mcp'));
+  } finally {
+    mcp.setRelayedMcpLister(null);
+  }
+});
+
+test('tb_list_resources type=mcp 列出中转 MCP', async () => {
+  mcp.setResourceManager(mockRm());
+  mcp.setRelayedMcpLister(() => PIPEWORX);
+  try {
+    const all = await mcp.handleToolCall('tb_list_resources', {});
+    assert.ok(all.content[0].text.includes('[mcp] pipeworx'));
+    assert.ok(all.content[0].text.includes('ask_pipeworx'));
+
+    const only = await mcp.handleToolCall('tb_list_resources', { type: 'mcp' });
+    assert.ok(only.content[0].text.includes('pipeworx'));
+    assert.ok(only.content[0].text.includes('ask_pipeworx'));
+    assert.ok(!only.content[0].text.includes('[skill]'));
+  } finally {
+    mcp.setRelayedMcpLister(null);
+    mcp.setResourceManager(null);
+  }
+});
+
+test('tb_get_resource type=mcp 返回调用方式', async () => {
+  mcp.setRelayedMcpLister(() => PIPEWORX);
+  try {
+    const r = await mcp.handleToolCall('tb_get_resource', { type: 'mcp', name: 'Pipeworx' });
+    assert.equal(r.isError, false);
+    assert.ok(r.content[0].text.includes('ask_pipeworx'));
+    assert.ok(r.content[0].text.includes('tb_call_mcp'));
+  } finally {
+    mcp.setRelayedMcpLister(null);
+  }
+});
+
+test('tb_call_mcp 经网关调用中转工具', async () => {
+  mcp.setRelayedMcpLister(() => PIPEWORX);
+  mcp.setRelayRpc(async (method, params) => {
+    assert.equal(method, 'tools/call');
+    assert.equal(params.name, 'pipeworx__ask_pipeworx');
+    assert.equal(params.arguments.question, 'US unemployment rate last month');
+    return { content: [{ type: 'text', text: '4.2%' }] };
+  });
+  try {
+    const r = await mcp.handleToolCall('tb_call_mcp', {
+      server: 'Pipeworx',
+      tool: 'ask_pipeworx',
+      arguments: { question: 'US unemployment rate last month' },
+    });
+    assert.equal(r.isError, false);
+    assert.equal(r.content[0].text, '4.2%');
+  } finally {
+    mcp.setRelayedMcpLister(null);
+    mcp.setRelayRpc(null);
+  }
+});
+
+test('tb_call_mcp 未中转时给出提示', async () => {
+  mcp.setRelayedMcpLister(() => PIPEWORX);
+  try {
+    const r = await mcp.handleToolCall('tb_call_mcp', { server: 'unknown-mcp', tool: 'foo' });
+    assert.equal(r.isError, true);
+    assert.ok(r.content[0].text.includes('未中转'));
+  } finally {
+    mcp.setRelayedMcpLister(null);
+  }
+});
+

@@ -311,12 +311,26 @@ export default function McpProvidersTab() {
     saveMcpAgentTab('');
   }, [agentTab, gatewayApps, gatewayApiApps]);
 
-  /** 可加入网关代理：已启用、stdio、非 Bridge */
+  /** 可加入网关代理：已启用、非 Bridge；stdio 或远程 URL */
   function canRouteViaGateway(s) {
     if (!s || s.status !== 'active') return false;
     if (s.id === 'tokenbank-agent-bridge') return false;
-    if (isMcpUrlServer(s)) return false;
+    if (isMcpUrlServer(s)) return true;
     return !!s.command;
+  }
+
+  /** 磁盘上已有投射（含客户端自配扫描到的安装），需保留「投射」入口以便取消 */
+  function serverHasDiskProjection(s) {
+    if (!s) return false;
+    if (Array.isArray(s.sync_clients) && s.sync_clients.length > 0) return true;
+    return (s.clientTargets || []).some((c) => c.installed);
+  }
+
+  /** 内置可随时投射；第三方默认走中转，仅已写盘时显示投射（取消勾选） */
+  function canShowProjectButton(s) {
+    if (!s || s.status !== 'active' || s.id === 'tokenbank-agent-bridge') return false;
+    if (s.builtin) return true;
+    return serverHasDiskProjection(s);
   }
 
   /** Token Bank 内置 MCP（可进「通用」中转档；不含 Bridge） */
@@ -565,7 +579,7 @@ export default function McpProvidersTab() {
           <div className="flex items-center gap-1 shrink-0 ml-auto">
             {(() => {
               const isGeneric = profileId === 'api';
-              // 通用档：一键只绑内置；API 应用：空档时一键绑全部可中转 stdio
+              // 通用档只绑内置；API 应用空档时一键绑全部可中转 MCP（含第三方）
               const bindIds = isGeneric
                 ? servers.filter((s) => canRouteViaGateway(s) && isTbBuiltinRelayMcp(s)
                   && !isGatewayBoundToProfile(s, 'api')).map((s) => s.id)
@@ -640,6 +654,16 @@ export default function McpProvidersTab() {
   const selectedSyncableIds = selectedServerIds.filter(id =>
     syncSelectableServers.some(s => s.id === id),
   );
+  // 批量投射：内置，或第三方已有写盘（便于批量取消）；批量中转：内置 + 第三方
+  const selectedProjectableIds = selectedSyncableIds.filter((id) => {
+    const s = servers.find((x) => x.id === id);
+    return canShowProjectButton(s);
+  });
+  const selectedRelayableIds = selectedSyncableIds.filter((id) => {
+    const s = servers.find((x) => x.id === id);
+    if (!s || s.id === 'tokenbank-agent-bridge') return false;
+    return s.builtin ? isTbBuiltinRelayMcp(s) : canRouteViaGateway(s);
+  });
   const allSyncSelectableChecked = syncSelectableServers.length > 0
     && syncSelectableServers.every(s => selectedServerIds.includes(s.id));
 
@@ -804,15 +828,17 @@ export default function McpProvidersTab() {
         ? [clientIds]
         : syncWritableAgents.map(t => t.id);
     const singleId = installMenuServerId;
-    const serverIds = singleId ? [singleId] : selectedSyncableIds;
+    const syncDoProject = syncMenuMode === 'project';
+    const syncDoRelay = syncMenuMode === 'relay';
+    const serverIds = singleId
+      ? [singleId]
+      : (syncDoRelay ? selectedRelayableIds : selectedProjectableIds);
     if (!serverIds.length) {
       alert(singleId ? t('providers.mcp.cannotInstall') : t('providers.mcp.selectMcpFirst'));
       return;
     }
 
     const apiIds = ids.filter((id) => gatewayApiApps.some((a) => a.id === id));
-    const syncDoProject = syncMenuMode === 'project';
-    const syncDoRelay = syncMenuMode === 'relay';
     // 投射：筛选用 id → 写盘 syncClientId（跳过暂不支持写盘的项）
     const agentIds = syncDoProject
       ? [...new Set(
@@ -1103,34 +1129,34 @@ export default function McpProvidersTab() {
   function renderSyncDropdown() {
     return (
       <>
+        {selectedProjectableIds.length > 0 && (
         <button
           ref={syncProjectBtnRef}
           type="button"
           onClick={() => openSyncMenu('project', syncProjectBtnRef.current)}
-          disabled={!!busy || !syncWritableAgents.some((t) => t.projectable) || selectedSyncableIds.length === 0}
+          disabled={!!busy || !syncWritableAgents.some((t) => t.projectable)}
           className="text-xs px-3 py-1.5 rounded-lg border border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-900/30 whitespace-nowrap disabled:opacity-40 inline-flex items-center gap-1"
         >
           {busy === 'sync' && syncMenuMode === 'project' ? t('providers.mcp.installing') : (
-            selectedSyncableIds.length
-              ? t('providers.mcp.installToAgentN', { n: selectedSyncableIds.length })
-              : t('providers.mcp.installToAgent')
+            t('providers.mcp.installToAgentN', { n: selectedProjectableIds.length })
           )}
           <span className="text-[10px] opacity-70">▾</span>
         </button>
+        )}
+        {selectedRelayableIds.length > 0 && (
         <button
           ref={syncRelayBtnRef}
           type="button"
           onClick={() => openSyncMenu('relay', syncRelayBtnRef.current)}
-          disabled={!!busy || (syncWritableAgents.length === 0 && gatewayApiApps.length === 0) || selectedSyncableIds.length === 0}
+          disabled={!!busy || (syncWritableAgents.length === 0 && gatewayApiApps.length === 0)}
           className="text-xs px-3 py-1.5 rounded-lg border border-sky-200 dark:border-sky-800 text-sky-700 dark:text-sky-300 hover:bg-sky-50 dark:hover:bg-sky-900/30 whitespace-nowrap disabled:opacity-40 inline-flex items-center gap-1"
         >
           {busy === 'sync' && syncMenuMode === 'relay' ? t('providers.mcp.relaying') : (
-            selectedSyncableIds.length
-              ? t('providers.mcp.installRelayN', { n: selectedSyncableIds.length })
-              : t('providers.mcp.installRelay')
+            t('providers.mcp.installRelayN', { n: selectedRelayableIds.length })
           )}
           <span className="text-[10px] opacity-70">▾</span>
         </button>
+        )}
       </>
     );
   }
@@ -1841,6 +1867,7 @@ export default function McpProvidersTab() {
           <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
             {canSelect && (
               <>
+                {canShowProjectButton(s) && (
                 <button
                   type="button"
                   data-row-install-btn
@@ -1850,6 +1877,8 @@ export default function McpProvidersTab() {
                 >
                   {busy === s.id && syncMenuMode === 'project' ? t('providers.mcp.installing') : t('providers.mcp.installToAgent')}
                 </button>
+                )}
+                {(s.builtin ? isTbBuiltinRelayMcp(s) : canRouteViaGateway(s)) && (
                 <button
                   type="button"
                   data-row-install-btn
@@ -1859,6 +1888,7 @@ export default function McpProvidersTab() {
                 >
                   {busy === s.id && syncMenuMode === 'relay' ? t('providers.mcp.relaying') : t('providers.mcp.installRelay')}
                 </button>
+                )}
               </>
             )}
             {!s.builtin && (

@@ -11,6 +11,7 @@ const {
   GATEWAY_ENDPOINTS,
   gatewayBaseUrl,
   formatCapabilitiesOverview,
+  formatRelayedMcpSection,
 } = require('./tb-capabilities');
 const { resolveAuthorityDir } = require('./resource-canonical');
 const { parseAssistantConfig } = require('./resource-assistant');
@@ -23,23 +24,23 @@ const TOOLS = [
   {
     name: 'tb_capabilities',
     description:
-      'Token Bank 能力体系总览：有哪些内置 MCP、工具、推荐工作流。'
-      + '不确定能做什么、该用哪个工具时，先调本工具。',
+      'Token Bank 能力体系总览：有哪些内置 MCP、工具、推荐工作流，以及当前应用已中转的第三方 MCP（如 Pipeworx）。'
+      + '不确定能做什么、该用哪个工具时，先调本工具。MCP 是资源：tb_list_resources(type=mcp) 列出，tb_call_mcp 调用。',
     inputSchema: { type: 'object', properties: {} },
   },
   {
     name: 'tb_list_resources',
     description:
       '列出 Token Bank 已纳管的资源。assistant=可点智能体（仅投射给当前 Agent 的可见）；'
-      + 'skill/prompt=兵器。点将前用 type=assistant 查智能体列表。'
-      + '取提示词正文请用本 MCP 的 tb_get_prompt（也可用 tokenbank-prompts），勿臆造工具名。',
+      + 'skill/prompt=兵器；mcp=已中转到当前 Agent 的第三方 MCP（如 Pipeworx）。'
+      + '点将前用 type=assistant；取 MCP 详情用 tb_get_resource(type=mcp)，调用用 tb_call_mcp。',
     inputSchema: {
       type: 'object',
       properties: {
         type: {
           type: 'string',
-          description: '资源类型：skill | assistant | prompt | all（默认 all）',
-          enum: ['skill', 'assistant', 'prompt', 'all'],
+          description: '资源类型：skill | assistant | prompt | mcp | all（默认 all）',
+          enum: ['skill', 'assistant', 'prompt', 'mcp', 'all'],
         },
         query: {
           type: 'string',
@@ -53,14 +54,15 @@ const TOOLS = [
     description:
       '取回资源详情。type=assistant 时为点将：返回该智能体出战全文（soul+绑定兵器），'
       + '请在当前会话按正文执行；仅编排场景才用 tb_dispatch_agent。'
-      + 'skill 返回正文；prompt 返回全文（投射门控，等同 tb_get_prompt）。',
+      +       'skill 返回正文；prompt 返回全文（投射门控，等同 tb_get_prompt）；'
+      + 'mcp 返回已中转 MCP 的工具列表与调用方式。',
     inputSchema: {
       type: 'object',
       properties: {
         type: {
           type: 'string',
-          description: '资源类型：skill | assistant | prompt（按名查找时建议提供）',
-          enum: ['skill', 'assistant', 'prompt'],
+          description: '资源类型：skill | assistant | prompt | mcp（按名查找时建议提供）',
+          enum: ['skill', 'assistant', 'prompt', 'mcp'],
         },
         name: {
           type: 'string',
@@ -119,18 +121,147 @@ const TOOLS = [
       + '模型列表请用 tb_list_models；此处只说明端点与用途。',
     inputSchema: { type: 'object', properties: {} },
   },
+  {
+    name: 'tb_call_mcp',
+    description:
+      '调用当前 Agent 已中转的第三方 MCP 工具。先 tb_list_resources(type=mcp) 或 tb_get_resource(type=mcp) 确认。'
+      + '用户说 Using Pipeworx / 用某某 MCP 时用本工具。server 填 MCP 名（pipeworx），tool 填原始工具名（ask_pipeworx）。',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        server: {
+          type: 'string',
+          description: 'MCP 名称 / 显示名 / id，如 pipeworx、Pipeworx、mcp-pipeworx',
+        },
+        tool: {
+          type: 'string',
+          description: '该 MCP 的原始工具名，如 ask_pipeworx；或网关前缀名 pipeworx__ask_pipeworx',
+        },
+        arguments: {
+          type: 'object',
+          description: '传给该工具的参数对象',
+        },
+        args: {
+          type: 'object',
+          description: 'arguments 的别名',
+        },
+      },
+      required: ['server', 'tool'],
+    },
+  },
 ];
 
 /** 可注入：单测 mock resource-manager */
 let _resourceManager = null;
+/** 可注入：单测 mock 中转 MCP 列表 */
+let _relayedMcpLister = null;
+/** 可注入：单测 mock 网关 JSON-RPC */
+let _relayRpc = null;
 
 function setResourceManager(rm) {
   _resourceManager = rm || null;
 }
 
+function setRelayedMcpLister(fn) {
+  _relayedMcpLister = typeof fn === 'function' ? fn : null;
+}
+
+function setRelayRpc(fn) {
+  _relayRpc = typeof fn === 'function' ? fn : null;
+}
+
 function getResourceManager() {
   if (_resourceManager) return _resourceManager;
   return require('./resource-manager');
+}
+
+function listRelayedMcpsSafe() {
+  try {
+    if (_relayedMcpLister) return _relayedMcpLister(clientId()) || [];
+    return require('./mcp-manager').listRelayedMcpsForClient(clientId()) || [];
+  } catch {
+    return [];
+  }
+}
+
+function mcpResourceRows() {
+  return listRelayedMcpsSafe().map((s) => ({
+    type: 'mcp',
+    id: s.id,
+    name: s.name,
+    display_name: s.display_name,
+    description: s.description,
+    tools: s.tools,
+    prefix: s.prefix,
+  }));
+}
+
+function resolveRelayedMcpSafe(ref) {
+  try {
+    if (_relayedMcpLister) {
+      const raw = String(ref || '').trim().toLowerCase();
+      const list = _relayedMcpLister(clientId()) || [];
+      return list.find((s) => s.id?.toLowerCase() === raw
+        || s.name?.toLowerCase() === raw
+        || String(s.display_name || '').toLowerCase() === raw
+        || s.prefix?.toLowerCase() === raw) || null;
+    }
+    return require('./mcp-manager').resolveRelayedMcpForClient(clientId(), ref);
+  } catch {
+    return null;
+  }
+}
+
+function relayGatewayTarget(cid) {
+  const { getGatewayEndpoint } = require('./mcp-gateway-server');
+  const ep = getGatewayEndpoint();
+  if (!ep?.url || !ep?.token) return null;
+  const base = String(ep.url).replace(/\/mcp\/?$/, '');
+  const path = cid ? `/mcp/${cid}` : '/mcp';
+  return { url: `${base}${path}`, token: ep.token };
+}
+
+async function relayRpc(method, params) {
+  if (_relayRpc) return _relayRpc(method, params, clientId());
+  const cid = clientId();
+  const gw = relayGatewayTarget(cid);
+  if (!gw) throw new Error('内置中转尚未就绪，请确认 Token Bank 正在运行');
+  const res = await fetch(gw.url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json, text/event-stream',
+      Authorization: `Bearer ${gw.token}`,
+    },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params: params || {} }),
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(`中转 HTTP ${res.status}: ${text.slice(0, 240)}`);
+  let msg;
+  try { msg = JSON.parse(text); } catch {
+    throw new Error(`中转响应无法解析: ${text.slice(0, 240)}`);
+  }
+  if (msg.error) throw new Error(msg.error.message || JSON.stringify(msg.error));
+  return msg.result;
+}
+
+function asToolResult(raw) {
+  if (raw && Array.isArray(raw.content)) {
+    return { ...raw, isError: !!raw.isError };
+  }
+  if (typeof raw === 'string') return textResult(raw);
+  if (raw == null) return textResult('(无返回)');
+  return textResult(typeof raw === 'object' ? JSON.stringify(raw, null, 2) : String(raw));
+}
+
+function parseToolArgs(args) {
+  const raw = args?.arguments !== undefined ? args.arguments : args?.args;
+  if (raw == null) return {};
+  if (typeof raw === 'string') {
+    try { return JSON.parse(raw); } catch { return { input: raw }; }
+  }
+  if (typeof raw === 'object' && !Array.isArray(raw)) return raw;
+  return {};
 }
 
 function send(msg) {
@@ -178,6 +309,10 @@ function findManagedResource(rm, type, ref) {
     const hit = list.find(matchName);
     if (hit) return hit;
   }
+  if (!type || type === 'mcp') {
+    const mcp = resolveRelayedMcpSafe(raw);
+    if (mcp) return { ...mcp, type: 'mcp' };
+  }
   return null;
 }
 
@@ -187,7 +322,10 @@ function formatResourceLine(r) {
   const proj = Array.isArray(r.projections) && r.projections.length
     ? ` [投射→${r.projections.map(p => p.agentId || p.agent_id).filter(Boolean).join(',')}]`
     : '';
-  return `- [${r.type}] ${r.name}${disp}${desc}${proj}`;
+  const tools = r.type === 'mcp' && Array.isArray(r.tools) && r.tools.length
+    ? ` [tools: ${r.tools.join(', ')}]`
+    : '';
+  return `- [${r.type}] ${r.name}${disp}${desc}${proj}${tools}`;
 }
 
 function formatResourceDetail(r) {
@@ -219,6 +357,20 @@ function formatResourceDetail(r) {
       hint: '点将请用 mode=activate（默认）取全文并在当前会话执行；仅编排才 tb_dispatch_agent',
     }, null, 2);
   }
+  if (r.type === 'mcp') {
+    const tools = (r.tools || []).filter(Boolean);
+    const example = tools[0] || 'tool_name';
+    return JSON.stringify({
+      type: 'mcp',
+      id: r.id,
+      name: r.name,
+      display_name: r.display_name,
+      description: r.description,
+      tools,
+      prefix: r.prefix,
+      hint: `经 Token Bank 中转；调用 tb_call_mcp(server="${r.name}", tool="${example}", arguments={...})`,
+    }, null, 2);
+  }
   // prompt 元数据（全文由 handleToolCall 走 resolvePromptForClient）
   return JSON.stringify({
     type: 'prompt',
@@ -235,7 +387,10 @@ async function handleToolCall(name, args = {}) {
     const domainLines = CAPABILITY_DOMAINS.map(
       d => `- ${d.id}: ${d.mcp} → ${d.tools.join(', ')}`,
     ).join('\n');
-    return textResult(`${formatCapabilitiesOverview()}\n\n## 域速查\n${domainLines}`);
+    const relayed = listRelayedMcpsSafe();
+    return textResult(
+      `${formatCapabilitiesOverview()}\n\n${formatRelayedMcpSection(relayed)}\n\n## 域速查\n${domainLines}`,
+    );
   }
 
   if (name === 'tb_list_gateway') {
@@ -246,6 +401,32 @@ async function handleToolCall(name, args = {}) {
     return textResult(
       `网关 base: ${base}\n模型请用 tb_list_models；鉴权用本机 Agent/应用已配置的 API Key。\n${lines.join('\n')}`,
     );
+  }
+
+  if (name === 'tb_call_mcp') {
+    const serverRef = String(args.server || args.mcp || '').trim();
+    const tool = String(args.tool || args.name || '').trim();
+    if (!serverRef || !tool) {
+      return textResult('请提供 server（MCP 名，如 pipeworx）和 tool（如 ask_pipeworx）', true);
+    }
+    const hit = resolveRelayedMcpSafe(serverRef);
+    if (!hit) {
+      const names = listRelayedMcpsSafe().map((s) => s.display_name || s.name).join('、') || '无';
+      return textResult(
+        `当前应用未中转 MCP: ${serverRef}。已中转: ${names}。请用户在 Token Bank 对该应用勾选「中转」，或先 tb_list_resources(type=mcp)。`,
+        true,
+      );
+    }
+    const prefixed = tool.includes('__') ? tool : `${hit.prefix}__${tool}`;
+    try {
+      const result = await relayRpc('tools/call', {
+        name: prefixed,
+        arguments: parseToolArgs(args),
+      });
+      return asToolResult(result);
+    } catch (e) {
+      return textResult(`调用中转 MCP ${hit.display_name || hit.name}.${tool} 失败: ${e.message}`, true);
+    }
   }
 
   const rm = getResourceManager();
@@ -263,40 +444,49 @@ async function handleToolCall(name, args = {}) {
       const query = String(args.query || '').trim().toLowerCase();
       let rows = [];
 
-      // 三类资源均按投射门控:仅列出投射给当前 Agent 的资源(与 prompt/assistant 一致)
+      // 投射门控资源 + 当前应用已中转的 MCP
       if (type === 'assistant') {
         rows = (rm.listAssistantsForClient(cid) || []).map((r) => ({ ...r, type: 'assistant' }));
       } else if (type === 'skill') {
         rows = (rm.listSkillsForClient(cid) || []).map((r) => ({ ...r, type: 'skill' }));
       } else if (type === 'prompt') {
         rows = (rm.listPromptsForClient(cid) || []).map((r) => ({ ...r, type: 'prompt' }));
+      } else if (type === 'mcp') {
+        rows = mcpResourceRows();
       } else {
         const skills = (rm.listSkillsForClient(cid) || []).map((r) => ({ ...r, type: 'skill' }));
         const prompts = (rm.listPromptsForClient(cid) || []).map((r) => ({ ...r, type: 'prompt' }));
         const assistants = (rm.listAssistantsForClient(cid) || []).map((r) => ({ ...r, type: 'assistant' }));
-        rows = [...assistants, ...skills, ...prompts];
+        rows = [...assistants, ...skills, ...prompts, ...mcpResourceRows()];
       }
 
       if (query) {
         rows = rows.filter((r) => {
-          const blob = `${r.name || ''} ${r.display_name || ''} ${r.description || ''}`.toLowerCase();
+          const blob = `${r.name || ''} ${r.display_name || ''} ${r.description || ''} ${(r.tools || []).join(' ')}`.toLowerCase();
           return blob.includes(query);
         });
       }
 
       if (!rows.length) {
+        if (type === 'mcp') {
+          return textResult(
+            '（当前 Agent 暂无已中转的 MCP。用户点名 Pipeworx 等服务时，请提示到 Token Bank「MCP」页对该应用勾选「中转」。）',
+          );
+        }
         const label = type === 'assistant' ? '智能体' : (type !== 'all' ? type : '资源');
         return textResult(
           `（当前 Agent 暂无已投射的${label}；请先在 Token Bank 投射/启用到本 Agent，或用 tb_list_catalog 查看社区目录）`,
         );
       }
-      const counts = { skill: 0, assistant: 0, prompt: 0 };
+      const counts = { skill: 0, assistant: 0, prompt: 0, mcp: 0 };
       for (const r of rows) {
         if (counts[r.type] != null) counts[r.type] += 1;
       }
       const summary = type === 'assistant'
         ? `可点智能体 ${rows.length} 个（已投射给当前 Agent）`
-        : `已纳管 ${rows.length} 项：skill=${counts.skill} assistant=${counts.assistant} prompt=${counts.prompt}`;
+        : type === 'mcp'
+          ? `已中转 MCP ${rows.length} 个（当前 Agent 可用；调用用 tb_call_mcp）`
+          : `已纳管 ${rows.length} 项：skill=${counts.skill} assistant=${counts.assistant} prompt=${counts.prompt} mcp=${counts.mcp}`;
       const lines = rows.map(formatResourceLine);
       return textResult(`${summary}\n${lines.join('\n')}`);
     } catch (e) {
@@ -310,6 +500,16 @@ async function handleToolCall(name, args = {}) {
     const type = args.type ? String(args.type).toLowerCase() : '';
     const mode = String(args.mode || 'activate').toLowerCase();
     try {
+      if (type === 'mcp') {
+        const hit = resolveRelayedMcpSafe(ref);
+        if (!hit) {
+          return textResult(
+            `未找到或未中转给当前 Agent 的 MCP: ${ref}。可先 tb_list_resources(type=mcp)。`,
+            true,
+          );
+        }
+        return textResult(formatResourceDetail({ ...hit, type: 'mcp' }));
+      }
       // 显式点将，或命中 assistant 资源时走投射门控 + 出战全文
       if (type === 'assistant' && typeof rm.resolveAssistantForClient === 'function') {
         const resolved = rm.resolveAssistantForClient(ref, cid);
@@ -489,6 +689,8 @@ module.exports = {
   handleToolCall,
   handleMessage,
   setResourceManager,
+  setRelayedMcpLister,
+  setRelayRpc,
   findManagedResource,
   formatResourceDetail,
 };

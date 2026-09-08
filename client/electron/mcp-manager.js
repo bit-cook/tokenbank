@@ -62,6 +62,14 @@ function isTokenbankBuiltinRelayId(serverId) {
     || serverId === BUILTIN_MODELS_ID
     || serverId === BUILTIN_RESOURCES_ID;
 }
+
+/** 与网关聚合工具名前缀一致（name → pipeworx__ask_pipeworx） */
+function mcpToolPrefix(name) {
+  return String(name || 'mcp')
+    .replace(/[^a-zA-Z0-9_-]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 48) || 'mcp';
+}
 /** 默认即开发模式（含 Agent 桥 + 已纳管工具 MCP），不再做多 Profile 选择 */
 const DEVELOPMENT_PROFILE_ID = 'development';
 const DEFAULT_PROFILE_ID = DEVELOPMENT_PROFILE_ID;
@@ -466,8 +474,8 @@ class MCPManager {
     const prev = this._parseJson(row?.metadata, {});
     const meta = JSON.stringify({
       ...prev,
-      description: '内置资源发现：能力总览 / 资源 / tb_get_prompt / 目录 / 网关',
-      tools: ['tb_capabilities', 'tb_list_resources', 'tb_get_resource', 'tb_get_prompt', 'tb_list_prompts', 'tb_list_catalog', 'tb_list_gateway'],
+      description: '内置资源发现：能力总览 / 资源 / 中转 MCP / tb_get_prompt / 目录 / 网关',
+      tools: ['tb_capabilities', 'tb_list_resources', 'tb_get_resource', 'tb_get_prompt', 'tb_list_prompts', 'tb_list_catalog', 'tb_list_gateway', 'tb_call_mcp'],
     });
     if (!row) {
       db.prepare(`
@@ -601,6 +609,9 @@ class MCPManager {
     const now = Date.now();
     const args = [...(item.args || [])];
     const env = { ...(item.env || {}) };
+    const headers = {
+      ...(item.metadata?.headers && typeof item.metadata.headers === 'object' ? item.metadata.headers : {}),
+    };
 
     for (const field of item.configFields || []) {
       const val = String(config[field.key] ?? field.defaultValue ?? '').trim();
@@ -610,6 +621,9 @@ class MCPManager {
       if (field.envKey && val) {
         env[field.envKey] = val;
       }
+      if (field.headerKey && val) {
+        headers[field.headerKey] = val;
+      }
       if (field.required && !val) {
         throw new Error(`请填写: ${field.label}`);
       }
@@ -617,43 +631,63 @@ class MCPManager {
 
     const command = item.command === 'npx'
       ? (shim?.resolveRealCommand?.('npx') || 'npx')
-      : item.command;
+      : (item.command || '');
+    // 远程 HTTP/SSE 目录项（如 Pipeworx）写入 url，由内置网关中转
+    const url = item.url && String(item.url).trim() ? String(item.url).trim() : null;
+    const type = item.type || (url ? 'http' : 'stdio');
+    if ((type === 'sse' || type === 'http') && !url) {
+      throw new Error('URL 模式需填写 url');
+    }
+    const metadataObj = { ...item.metadata, catalogId: item.catalogId };
+    if (Object.keys(headers).length) metadataObj.headers = headers;
 
-    const existing = db.prepare('SELECT id FROM mcp_servers WHERE id = ?').get(item.id);
+    const existing = db.prepare('SELECT id, metadata FROM mcp_servers WHERE id = ?').get(item.id);
+    if (existing) {
+      const prevMeta = this._parseJson(existing.metadata, {});
+      // 重装目录项时保留用户投射/中转勾选与已填 headers
+      if (Array.isArray(prevMeta.sync_clients)) metadataObj.sync_clients = prevMeta.sync_clients;
+      if (Array.isArray(prevMeta.gateway_clients)) metadataObj.gateway_clients = prevMeta.gateway_clients;
+      if (prevMeta.gateway_routed != null) metadataObj.gateway_routed = prevMeta.gateway_routed;
+      if (!Object.keys(headers).length && prevMeta.headers) metadataObj.headers = prevMeta.headers;
+    }
+    const metadata = JSON.stringify(metadataObj);
     if (existing) {
       db.prepare(`
         UPDATE mcp_servers
-        SET command = ?, args = ?, env = ?, status = 'active', metadata = ?, updated_at = ?
+        SET type = ?, command = ?, args = ?, url = ?, env = ?, status = 'active', metadata = ?, updated_at = ?
         WHERE id = ?
       `).run(
+        type,
         command,
         JSON.stringify(args),
+        url,
         JSON.stringify(env),
-        JSON.stringify({ ...item.metadata, catalogId: item.catalogId }),
+        metadata,
         now,
         item.id,
       );
     } else {
       db.prepare(`
         INSERT INTO mcp_servers
-        (id, name, display_name, type, command, args, env, builtin, status, metadata, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 0, 'active', ?, ?, ?)
+        (id, name, display_name, type, command, args, url, env, builtin, status, metadata, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 'active', ?, ?, ?)
       `).run(
         item.id,
         item.name,
         item.display_name,
-        item.type,
+        type,
         command,
         JSON.stringify(args),
+        url,
         JSON.stringify(env),
-        JSON.stringify({ ...item.metadata, catalogId: item.catalogId }),
+        metadata,
         now,
         now,
       );
     }
 
     this._linkServerToProfile(DEVELOPMENT_PROFILE_ID, item.id);
-    const sync = this._autoSyncClients();
+    const sync = this._defaultRelayToManagedApps(item.id) || this._autoSyncClients();
     return { success: true, server: this.getServer(item.id), sync };
   }
 
@@ -812,6 +846,9 @@ class MCPManager {
         } else {
           sync = { success: true, results: [], skipped: true };
         }
+      } else if (!existing) {
+        // 新建自定义 MCP：默认中转到全部已纳管应用
+        sync = this._defaultRelayToManagedApps(id) || this._autoSyncClients();
       } else {
         sync = this._autoSyncClients();
       }
@@ -917,19 +954,16 @@ class MCPManager {
     return isAllowedGatewayClientId(id);
   }
 
-  /** 经内置 MCP 网关代理的服务器列表（active + 已绑定应用 + stdio） */
+  /** 经内置 MCP 网关代理的服务器列表（active + 已绑定应用；stdio 或远程 HTTP） */
   listGatewayRoutedServers() {
     this.init();
-    return this.listManagedServers().filter((s) => (
-      s
-      && s.status === 'active'
-      && !!s.gateway_routed
-      && s.id !== BUILTIN_BRIDGE_ID
-      && !s.url
-      && s.type !== 'sse'
-      && s.type !== 'http'
-      && !!s.command
-    ));
+    return this.listManagedServers().filter((s) => {
+      if (!s || s.status !== 'active' || !s.gateway_routed) return false;
+      if (s.id === BUILTIN_BRIDGE_ID) return false;
+      const isUrl = !!(s.url) || s.type === 'http' || s.type === 'sse';
+      if (isUrl) return !!String(s.url || '').trim();
+      return !!s.command;
+    });
   }
 
   /**
@@ -947,9 +981,10 @@ class MCPManager {
     const row = db.prepare('SELECT id, type, command, url, metadata FROM mcp_servers WHERE id = ?').get(serverId);
     if (!row) throw new Error('Server not found');
 
-    // 中转仅支持 stdio
-    if (row.url || row.type === 'sse' || row.type === 'http' || !row.command) {
-      throw new Error('仅 stdio 型 MCP 可加入内置中转');
+    // 中转：stdio 需 command；远程 HTTP/SSE 需 url。通用档仍仅内置 MCP。
+    const isUrl = !!(String(row.url || '').trim()) || row.type === 'sse' || row.type === 'http';
+    if (!isUrl && !row.command) {
+      throw new Error('仅 stdio 或 URL 型 MCP 可加入内置中转');
     }
 
     const metadata = this._parseJson(row.metadata, {});
@@ -1288,6 +1323,114 @@ class MCPManager {
     }
   }
 
+  /** 已纳管应用中可中转的 client id（含 Trae / API 应用，不含通用档 api） */
+  _listManagedRelayClientIds() {
+    const { listManagedAppTargetIds, isAllowedGatewayClientId } = require('./mcp-gateway-targets');
+    const { resolveMcpSyncClientId } = require('./mcp-agent-targets');
+    const ids = [];
+    const seen = new Set();
+    const add = (id) => {
+      const s = String(id || '').trim();
+      if (!s || s === 'api' || seen.has(s) || !isAllowedGatewayClientId(s)) return;
+      seen.add(s);
+      ids.push(s);
+    };
+    let managed = new Set();
+    try { managed = listManagedAppTargetIds(); } catch (e) {
+      console.warn('[mcp-manager] listManagedAppTargetIds failed:', e.message);
+    }
+    for (const raw of managed) {
+      const mapped = resolveMcpSyncClientId(raw);
+      add(mapped || raw);
+    }
+    return ids;
+  }
+
+  /**
+   * 目录/自定义纳管后：默认中转到全部已纳管应用（含不能写盘的 API / Trae）。
+   * 已有 gateway_clients（含用户清空的 []）不覆盖。
+   */
+  _defaultRelayToManagedApps(serverId) {
+    if (!serverId || serverId === BUILTIN_BRIDGE_ID) return null;
+    if (isTokenbankBuiltinRelayId(serverId)) return null;
+    const db = this._getDb();
+    const row = db.prepare('SELECT id, builtin, metadata FROM mcp_servers WHERE id = ?').get(serverId);
+    if (!row || row.builtin) return null;
+    const meta = this._parseJson(row.metadata, {});
+    if (Array.isArray(meta.gateway_clients)) return null;
+    const clientIds = this._listManagedRelayClientIds();
+    if (!clientIds.length) return this._autoSyncClients();
+    return this.setServerGatewayRouted(serverId, true, clientIds);
+  }
+
+  /** 中转绑定是否覆盖该应用（含 claude-desktop ↔ claude-code 别名） */
+  _clientMatchesRelay(gatewayClients, clientId) {
+    const clients = Array.isArray(gatewayClients) ? gatewayClients : [];
+    if (!clients.length) return false;
+    const cid = String(clientId || '').trim();
+    if (!cid) return true;
+    const { expandMcpClientMatchIds } = require('./mcp-agent-targets');
+    const want = new Set([cid, ...expandMcpClientMatchIds(cid)]);
+    return clients.some((id) => want.has(id)
+      || expandMcpClientMatchIds(id).some((x) => want.has(x)));
+  }
+
+  _summarizeRelayedServer(s) {
+    let tools = Array.isArray(s.metadata?.tools) ? s.metadata.tools.filter(Boolean) : [];
+    if (!tools.length) {
+      try {
+        const catalogId = s.metadata?.catalogId;
+        if (catalogId) {
+          const it = getCatalogItem(catalogId);
+          tools = (it?.metadata?.tools || []).filter(Boolean);
+        }
+      } catch { /* ignore */ }
+    }
+    const name = s.name || s.id;
+    return {
+      id: s.id,
+      name,
+      display_name: s.display_name || name,
+      description: s.metadata?.description || '',
+      tools,
+      prefix: mcpToolPrefix(name),
+    };
+  }
+
+  /**
+   * 当前应用已中转的第三方 MCP（不含内置 prompts/models/resources/Bridge）。
+   * 供 tb_capabilities / tb_list_resources(type=mcp)：Agent 工具列表里看不到这些服务时据此发现。
+   */
+  listRelayedMcpsForClient(clientId) {
+    this.init();
+    const db = this._getDb();
+    const rows = db.prepare(`
+      SELECT id, name, display_name, type, command, args, url, env, builtin, status, metadata
+      FROM mcp_servers WHERE status = 'active'
+    `).all().map((row) => this._formatServerRow(row));
+    const out = [];
+    for (const s of rows) {
+      if (!s || s.id === BUILTIN_BRIDGE_ID || isTokenbankBuiltinRelayId(s.id)) continue;
+      if (!this._clientMatchesRelay(s.gateway_clients, clientId)) continue;
+      out.push(this._summarizeRelayedServer(s));
+    }
+    return out;
+  }
+
+  /** 按 id / name / 显示名 / 前缀解析当前应用的中转 MCP */
+  resolveRelayedMcpForClient(clientId, ref) {
+    const raw = String(ref || '').trim().toLowerCase();
+    if (!raw) return null;
+    const list = this.listRelayedMcpsForClient(clientId);
+    const exact = list.find((s) => s.id.toLowerCase() === raw
+      || s.name.toLowerCase() === raw
+      || String(s.display_name || '').toLowerCase() === raw
+      || s.prefix.toLowerCase() === raw);
+    if (exact) return exact;
+    return list.find((s) => s.name.toLowerCase().includes(raw)
+      || String(s.display_name || '').toLowerCase().includes(raw)) || null;
+  }
+
   /** Token Bank 数据库中已纳管的 MCP（不含客户端自配） */
   listManagedServers() {
     this.init();
@@ -1306,7 +1449,7 @@ class MCPManager {
 
   /**
    * 将 Agent 上扫描到的 MCP 纳管进 Token Bank（不改动该 Agent 原配置、不自动同步到其他 Agent）
-   * 纳管后可在「已纳管」页选择投射到其他应用
+   * 纳管后可在「已纳管」页选择中转到其他应用
    */
   importFromAgent({ clientId, clientKey, originAgents }) {
     this.init();
