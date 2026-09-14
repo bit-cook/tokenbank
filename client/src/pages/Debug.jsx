@@ -4,6 +4,7 @@ import { useLocation } from 'react-router-dom';
 import { getConfig, getLocalConfig, getGateway } from '../api/adapter';
 import { loadGatewayAvailableModels, resolveGatewayModelType, resolveLocalGatewayBase } from '../api/gatewayModels';
 import { encodeTierModelRoute } from '../lib/route-binding';
+import { usableSceneRoutes } from '../components/RouteSelect';
 import {
   agentSessionKey,
   getStoreSession,
@@ -41,6 +42,7 @@ import {
   canResumeInterruptedSession,
   buildInterruptedContinuePrompt,
   normalizeWorkingDir,
+  workingDirBasename,
   hasOpenToolCalls,
   closePendingToolSteps,
 } from '../lib/debug-agent-store';
@@ -63,22 +65,18 @@ import LlmSessionHistoryPanel from '../components/LlmSessionHistoryPanel';
 import LocalFilePreviewHost from '../components/LocalFilePreview';
 import { StreamMarkdownContent } from '../components/RichMediaContent';
 import { openLocalPath } from '../lib/local-path';
-import { saveAgentSessionSnapshot, saveLlmSessionSnapshot, listAgentSessionSnapshots, findAgentSessionForContinue } from '../lib/debug-session-history';
+import { saveAgentSessionSnapshot, saveLlmSessionSnapshot, listAgentSessionSnapshots, listLlmSessionSnapshots, findAgentSessionForContinue } from '../lib/debug-session-history';
+import {
+  B64_OMITTED, persistImageList, resolveImageList, serializeImageSrc, isImageRef,
+  collectImageRefIds, deleteUnreferencedImageIds,
+} from '../lib/debug-image-store';
+import { useResolvedImageSrc } from '../components/ResolvedDebugImage';
 
 /** 下拉 value：同 id 跨层时用 tier:id，避免 HTML option 重复 value 选中错位 */
 function modelSelectValue(m) {
   if (!m) return '';
   const id = m.name || m.id || '';
   return m.tier ? encodeTierModelRoute(m.tier, id) : id;
-}
-
-/** 场景路由是否可选用（与 RouteSelect 口径一致：有策略/步骤且步骤模型在可用列表或为策略步） */
-function usableSceneRoutes(routes, availableModels) {
-  const avail = new Set((availableModels || []).map(m => m.id || m.name));
-  return (routes || []).filter(r =>
-    r.strategy || r.flow
-    || (r.steps || []).some(s => s.strategy || s.scope || s.tier || s.provider || s.sharer || avail.has(s.model || s.label))
-  );
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -282,8 +280,6 @@ function buildImageUrl(base) {
 const ATTACH_MAX_COUNT = 4;
 const ATTACH_MAX_BYTES = 5 * 1024 * 1024;
 const ATTACH_ACCEPT = 'image/jpeg,image/png,image/gif,image/webp';
-/** 持久化时过大 base64 的占位（提前定义，供多模态组装过滤） */
-const B64_OMITTED = '__b64_omitted__';
 
 /** File → data URL（供 image_url 使用） */
 function fileToDataUrl(file) {
@@ -634,18 +630,53 @@ function readComposerTextH() {
   return COMPOSER_H_MIN;
 }
 
-/** 持久化前清洗：去掉流式态；图片 base64 过大则仅存占位符 */
+/** 持久化前清洗：去掉流式态；裸 base64 丢掉，tbimg/http 保留 */
 function serializeDebugMessage(msg) {
   const base = { ...msg, streaming: false, generating: false };
   if (!Array.isArray(base.images)) return base;
   return {
     ...base,
-    images: base.images.map(src => {
-      if (!src || src === B64_OMITTED) return B64_OMITTED;
-      if (String(src).startsWith('http')) return src;
-      return B64_OMITTED;
-    }),
+    images: base.images.map(serializeImageSrc),
   };
+}
+
+function PersistableGenImage({ src, t, onPreview }) {
+  const url = useResolvedImageSrc(src);
+  if (url === undefined) {
+    return <div className="h-36 w-full max-w-xs rounded-lg bg-zinc-100 dark:bg-zinc-800 animate-pulse" />;
+  }
+  if (!url) {
+    return <p className="px-2 pb-1 text-xs text-zinc-400 dark:text-zinc-500">{t('debug.imageNotRestored')}</p>;
+  }
+  return (
+    <div className="relative group">
+      <img src={url} alt="" className="rounded-xl max-w-full cursor-zoom-in" onClick={() => onPreview(url)} />
+      <div className="absolute bottom-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button onClick={async () => { try { const b = await (await fetch(url)).blob(); await navigator.clipboard.write([new ClipboardItem({ [b.type]: b })]); } catch {} }}
+          className="px-2 py-1 text-xs bg-black/60 hover:bg-black/80 text-white rounded-lg backdrop-blur-sm">{t('debug.copy')}</button>
+        <button onClick={() => { const a = document.createElement('a'); a.href = url; a.download = `gen-${Date.now()}.png`; a.click(); }}
+          className="px-2 py-1 text-xs bg-black/60 hover:bg-black/80 text-white rounded-lg backdrop-blur-sm">{t('debug.saveImage')}</button>
+      </div>
+    </div>
+  );
+}
+
+function PersistableThumb({ src, omittedLabel, onPreview }) {
+  const url = useResolvedImageSrc(src);
+  if (!src || src === B64_OMITTED || url === '') {
+    return <span className="text-[11px] opacity-80 px-1.5 py-1 rounded bg-white/15">{omittedLabel}</span>;
+  }
+  if (url === undefined) {
+    return <div className="h-16 w-16 rounded-lg bg-white/15 animate-pulse" />;
+  }
+  return (
+    <img
+      src={url}
+      alt=""
+      className="h-16 w-16 object-cover rounded-lg cursor-zoom-in border border-white/20"
+      onClick={() => onPreview(url)}
+    />
+  );
 }
 
 function loadDebugPanel() {
@@ -731,6 +762,16 @@ function saveAgentWorkingDir(dir) {
     if (dir) localStorage.setItem(AGENT_WORKING_DIR_KEY, dir);
     else localStorage.removeItem(AGENT_WORKING_DIR_KEY);
   } catch {}
+}
+
+/** 空会话才用上次目录当种子；已有轮次的会话尊重其自身绑定 */
+function seedEmptySessionWorkingDir(key) {
+  if (!key) return;
+  const sess = getStoreSession(key);
+  if (normalizeWorkingDir(sess.sessionWorkingDir)) return;
+  if (sess.conversationTurns?.length || sess.cliSessionId) return;
+  const last = loadAgentWorkingDir();
+  if (last) patchStoreSession(key, { sessionWorkingDir: last });
 }
 
 function loadDebugMode() {
@@ -859,15 +900,12 @@ export default function Debug() {
       executing: false,
       delegations: {},
       agentPrompt: '',
+      // 目录跟这条历史走，不写进全局以免污染其它会话
       sessionWorkingDir: snapshot.sessionWorkingDir || getStoreSession(execKey).sessionWorkingDir || '',
       cliSessionId: snapshot.cliSessionId || null,
       historyThreadId: threadId,
       skipHistoryRecover: Date.now(),
     });
-    if (snapshot.sessionWorkingDir) {
-      setAgentWorkingDir(snapshot.sessionWorkingDir);
-      saveAgentWorkingDir(snapshot.sessionWorkingDir);
-    }
     syncSessionToState(execKey);
   }
 
@@ -1052,11 +1090,8 @@ export default function Debug() {
     if (sess.skipHistoryRecover && Date.now() - sess.skipHistoryRecover < 120_000) return;
 
     try {
-      const savedDir = (() => {
-        try { return localStorage.getItem('tokenbank.debug.agentWorkingDir') || ''; } catch { return ''; }
-      })();
       const local = findAgentSessionForContinue(syncKey, {
-        workingDir: sess.sessionWorkingDir || savedDir,
+        workingDir: sess.sessionWorkingDir || loadAgentWorkingDir(),
         cliSessionId: sess.cliSessionId,
       }) || listAgentSessionSnapshots(syncKey)[0];
       if (local?.conversationTurns?.length) {
@@ -1082,10 +1117,6 @@ export default function Debug() {
           executing: false,
           delegations: {},
         });
-        if (local.sessionWorkingDir) {
-          setAgentWorkingDir(local.sessionWorkingDir);
-          saveAgentWorkingDir(local.sessionWorkingDir);
-        }
         syncSessionToStateRef.current?.(syncKey);
         return;
       }
@@ -1119,6 +1150,7 @@ export default function Debug() {
       if (agent && selectedAgent?.id !== savedId) {
         setSelectedAgent(agent);
         selectedAgentRef.current = agent;
+        seedEmptySessionWorkingDir(savedId);
         syncSessionToState(savedId);
         recoverSessionHistory(savedId);
       }
@@ -1150,6 +1182,8 @@ export default function Debug() {
     setExecuting(!!saved.executing);
     setDelegations(saved.delegations || {});
     setConversationTurns(saved.conversationTurns || []);
+    // 作曲栏展示当前会话目录，勿用全局 lastDefault 覆盖
+    setAgentWorkingDir(saved.sessionWorkingDir || '');
   }
   syncSessionToStateRef.current = syncSessionToState;
 
@@ -1331,11 +1365,8 @@ export default function Debug() {
   useEffect(() => {
     if (location.pathname !== '/debug') return;
     const key = agentSessionKey(selectedAgent);
-    // 恢复全局工作目录（切换菜单后可能未同步到 React state）
-    const savedDir = loadAgentWorkingDir();
-    if (savedDir && savedDir !== agentWorkingDir) {
-      setAgentWorkingDir(savedDir);
-    }
+    // 空会话才用上次目录当种子；已有会话尊重其自身绑定
+    seedEmptySessionWorkingDir(key);
     syncSessionToState(key);
     recoverActiveTasks(key);
     syncDelegatedMirrorToAgentTab(key, agentsRef.current);
@@ -1394,12 +1425,14 @@ export default function Debug() {
       executing,
       delegations,
       conversationTurns,
+      sessionWorkingDir: normalizeWorkingDir(agentWorkingDir) || getStoreSession(prevKey).sessionWorkingDir,
     });
 
     const key = agentSessionKey(agent);
     setStoreSelectedAgentId(agent?.id ?? null);
     selectedAgentRef.current = agent;
     setSelectedAgent(agent);
+    seedEmptySessionWorkingDir(key);
     syncSessionToState(key);
     setDirError('');
     syncDelegatedMirrorToAgentTab(key, agentsRef.current);
@@ -1995,10 +2028,6 @@ export default function Debug() {
       alert(t('debug.agent.notInstalled', { name: activeAgent.name }));
       return;
     }
-    if (!agentWorkingDir.trim()) {
-      setDirError(t('debug.agent.needWorkingDir'));
-      return;
-    }
     // 聚合入口：主 Agent 须支持 MCP 编排（Claude Code / Codex）
     const orchestratorAgents = new Set(['claude-code', 'codex']);
     if (isHubMode && mainAgent && !orchestratorAgents.has(mainAgent.id)) {
@@ -2006,13 +2035,21 @@ export default function Debug() {
       return;
     }
 
+    const execKey = agentSessionKey(selectedAgent);
+    const workDir = normalizeWorkingDir(
+      getStoreSession(execKey).sessionWorkingDir || agentWorkingDir.trim(),
+    );
+    if (!workDir) {
+      setDirError(t('debug.agent.needWorkingDir'));
+      return;
+    }
+
     setDirError('');
     // 气泡展示原文；附图单独存 currentUserImages 缩略图渲染
     const displayPrompt = text || (attachPayload.length ? t('debug.agent.imageOnlyPrompt') : '');
-    const displayImages = attachPayload.map(p => p.dataUrl).filter(Boolean);
+    let displayImages = attachPayload.map(p => p.dataUrl).filter(Boolean);
+    try { displayImages = await persistImageList(displayImages); } catch { /* 落盘失败仍用内存图 */ }
     setAgentPrompt(prompt);
-    const execKey = agentSessionKey(selectedAgent);
-    const workDir = normalizeWorkingDir(agentWorkingDir.trim());
     let sess = getStoreSession(execKey);
 
     // 内存轮次空但非「新会话」：从本地历史回填，避免跟一嘴就拆成新历史条
@@ -2120,13 +2157,24 @@ export default function Debug() {
 
   async function pickWorkingDir() {
     if (!window.electronAPI?.agent?.pickWorkingDir) return;
+    if (executing || taskCanStop) return;
     try {
       const result = await window.electronAPI.agent.pickWorkingDir(
         agentWorkingDir.trim() ? { defaultPath: agentWorkingDir.trim() } : {},
       );
       if (result.success && result.path) {
-        setAgentWorkingDir(result.path);
-        saveAgentWorkingDir(result.path);
+        const execKey = agentSessionKey(selectedAgent);
+        const path = normalizeWorkingDir(result.path);
+        const sess = getStoreSession(execKey);
+        const prev = normalizeWorkingDir(sess.sessionWorkingDir);
+        const hadTurns = !!(sess.conversationTurns?.length || sess.cliSessionId);
+        // 绑到当前会话；已有对话换目录则丢掉 CLI resume，避免 --resume 到错误 cwd
+        patchSession(execKey, {
+          sessionWorkingDir: path,
+          ...(hadTurns && prev && prev !== path ? { cliSessionId: null } : {}),
+        });
+        setAgentWorkingDir(path);
+        saveAgentWorkingDir(path); // 仅作新会话种子
         setDirError('');
       }
     } catch (error) {
@@ -2206,20 +2254,23 @@ export default function Debug() {
     }
   }
 
-  /** 清空当前标签页对话，便于开启新任务 */
+  /** 清空当前标签页对话，便于开启新任务（目录继承当前会话，类似 Cursor 同工程开新 chat） */
   function startNewAgentSession() {
     const execKey = agentSessionKey(selectedAgent);
+    const keepDir = normalizeWorkingDir(
+      getStoreSession(execKey).sessionWorkingDir || agentWorkingDir || loadAgentWorkingDir(),
+    );
     const doClear = () => {
-      // cancel 已归档进行中轮次；再落盘，避免中断后续跑只剩「继续」成新会话
       persistCurrentSessionHistory(execKey);
       clearSessionTaskState(execKey);
+      if (keepDir) patchStoreSession(execKey, { sessionWorkingDir: keepDir });
       syncSessionToState(execKey);
     };
     if (executing || taskCanStop) {
       cancelAgent().then(() => {
-        // cancel 异步归档后再清，保证历史含中断轮
         persistCurrentSessionHistory(execKey);
         clearSessionTaskState(execKey);
+        if (keepDir) patchStoreSession(execKey, { sessionWorkingDir: keepDir });
         syncSessionToState(execKey);
       });
       return;
@@ -2383,6 +2434,13 @@ export default function Debug() {
 
   function handleClearChat() {
     if (!window.confirm(t('debug.clearConfirm'))) return;
+    const doomed = collectImageRefIds(conversation);
+    const otherLane = panel[imageMode ? 'chat' : 'image']?.conversation;
+    const keep = collectImageRefIds(
+      otherLane,
+      listLlmSessionSnapshots().map((it) => it.conversation),
+    );
+    deleteUnreferencedImageIds(doomed, keep).catch(() => {});
     // 只清空当前模式车道，保留另一模式的聊天记录
     // 同步清空 systemPrompt：编辑 UI 已移除，残留会成不可见脏数据（如旧菜谱模版）
     setPanel({ conversation: [], input: '', selectedPromptId: '', systemPrompt: '', showSystem: false });
@@ -2470,11 +2528,19 @@ export default function Debug() {
         baseUrl: effectiveBase, token, model, prompt: imagePrompt,
         ratio: imageRatio || undefined, resolution: imageResolution || undefined, t,
         onDone: ({ images, totalMs }) => {
-          patchActiveConversation((next) => {
-            next[idx] = { ...next[idx], images, generating: false, timing: { totalMs } };
-            return next;
+          persistImageList(images).then((stored) => {
+            patchActiveConversation((next) => {
+              next[idx] = { ...next[idx], images: stored, generating: false, timing: { totalMs } };
+              return next;
+            });
+            setSending(false);
+          }).catch(() => {
+            patchActiveConversation((next) => {
+              next[idx] = { ...next[idx], images, generating: false, timing: { totalMs } };
+              return next;
+            });
+            setSending(false);
           });
-          setSending(false);
         },
         onError: msg => {
           patchActiveConversation((next) => {
@@ -2490,18 +2556,23 @@ export default function Debug() {
     const apiMessages = [];
     if (systemPrompt.trim()) apiMessages.push({ role: 'system', content: systemPrompt.trim() });
     // 跳过空/失败的 assistant，避免上游报 messages.content 为空；历史用户附图一并带上
-    conversation.forEach(m => {
+    for (const m of conversation) {
       if (m.role === 'user') {
-        const histImgs = Array.isArray(m.images) ? m.images.filter(u => u && u !== B64_OMITTED) : [];
+        const raw = Array.isArray(m.images) ? m.images.filter(u => u && u !== B64_OMITTED) : [];
+        let histImgs = raw;
+        try { histImgs = await resolveImageList(raw); } catch { /* 用原列表 */ }
+        histImgs = (histImgs || []).filter(u => u && u !== B64_OMITTED && !isImageRef(u));
         apiMessages.push({ role: 'user', content: buildMultimodalContent(m.content, histImgs) });
       } else if (m.role === 'assistant' && !m.error && String(m.content || '').trim()) {
         apiMessages.push({ role: 'assistant', content: m.content });
       }
-    });
+    }
     apiMessages.push({ role: 'user', content: buildMultimodalContent(text, attachUrls) });
 
-    const userMsg = attachUrls.length
-      ? { role: 'user', content: text, images: attachUrls }
+    let storedAttach = attachUrls;
+    try { storedAttach = await persistImageList(attachUrls); } catch { /* 展示内存图 */ }
+    const userMsg = storedAttach.length
+      ? { role: 'user', content: text, images: storedAttach }
       : { role: 'user', content: text };
     const assistantIdx = conversation.length + 1;
     setPanel({ input: '', conversation: [...conversation, userMsg, { role: 'assistant', content: '', streaming: true }] });
@@ -2758,7 +2829,7 @@ export default function Debug() {
 
         <div className="flex flex-col flex-1 min-w-0 min-h-0 tb-chat-well rounded-br-[var(--tb-radius-shell)] overflow-hidden">
       {/* ── Message list / Agent UI（井底略深，衬出气泡对比）── */}
-      <div className="flex-1 overflow-y-auto px-4 pt-3 pb-4 space-y-4 min-h-0">
+      <div className="flex-1 overflow-y-auto px-4 pt-3 pb-4 space-y-4 min-h-0 tb-scroll-layer">
         {mode === 'llm' ? (
           /* LLM Mode: Chat messages */
           <>
@@ -2788,20 +2859,9 @@ export default function Debug() {
                     if (displayImages.length > 0) {
                       return (
                     <div className="space-y-2 p-2">
-                      {displayImages.map((src, j) => {
-                        const imgSrc = src.startsWith('data:') || src.startsWith('http') ? src : `data:image/png;base64,${src}`;
-                        return (
-                          <div key={j} className="relative group">
-                            <img src={imgSrc} alt={`gen-${j}`} className="rounded-xl max-w-full cursor-zoom-in" onClick={() => setLightbox(imgSrc)} />
-                            <div className="absolute bottom-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button onClick={async () => { try { const b = await (await fetch(imgSrc)).blob(); await navigator.clipboard.write([new ClipboardItem({ [b.type]: b })]); } catch {} }}
-                                className="px-2 py-1 text-xs bg-black/60 hover:bg-black/80 text-white rounded-lg backdrop-blur-sm">{t('debug.copy')}</button>
-                              <button onClick={() => { const a = document.createElement('a'); a.href = imgSrc; a.download = `gen-${Date.now()}.png`; a.click(); }}
-                                className="px-2 py-1 text-xs bg-black/60 hover:bg-black/80 text-white rounded-lg backdrop-blur-sm">{t('debug.saveImage')}</button>
-                            </div>
-                          </div>
-                        );
-                      })}
+                      {displayImages.map((src, j) => (
+                        <PersistableGenImage key={j} src={src} t={t} onPreview={setLightbox} />
+                      ))}
                       {hasOmitted && (
                         <p className="px-2 pb-1 text-xs text-zinc-400 dark:text-zinc-500">{t('debug.imageNotRestored')}</p>
                       )}
@@ -2852,25 +2912,14 @@ export default function Debug() {
                       {/* 用户附图缩略图（持久化后可能为占位） */}
                       {Array.isArray(msg.images) && msg.images.length > 0 && (
                         <div className="flex flex-wrap gap-1.5 mb-1.5">
-                          {msg.images.map((src, j) => {
-                            if (!src || src === B64_OMITTED) {
-                              return (
-                                <span key={j} className="text-[11px] opacity-80 px-1.5 py-1 rounded bg-white/15">
-                                  {t('debug.imageNotRestored')}
-                                </span>
-                              );
-                            }
-                            const imgSrc = src.startsWith('data:') || src.startsWith('http') ? src : `data:image/png;base64,${src}`;
-                            return (
-                              <img
-                                key={j}
-                                src={imgSrc}
-                                alt={`attach-${j}`}
-                                className="h-16 w-16 object-cover rounded-lg cursor-zoom-in border border-white/20"
-                                onClick={() => setLightbox(imgSrc)}
-                              />
-                            );
-                          })}
+                          {msg.images.map((src, j) => (
+                            <PersistableThumb
+                              key={j}
+                              src={src}
+                              omittedLabel={t('debug.imageNotRestored')}
+                              onPreview={setLightbox}
+                            />
+                          ))}
                         </div>
                       )}
                       {msg.content || null}
@@ -3103,7 +3152,8 @@ export default function Debug() {
               <button
                 type="button"
                 onClick={pickWorkingDir}
-                disabled={!activeAgent}
+                disabled={!activeAgent || executing || taskCanStop}
+                title={t('debug.agent.pickDirHint')}
                 className={ghostBtn}
               >
                 {t('debug.agent.pickDir')}
@@ -3117,10 +3167,13 @@ export default function Debug() {
                 <button
                   type="button"
                   onClick={() => openLocalPath(agentWorkingDir)}
-                  title={t('debug.preview.clickHint')}
+                  title={t('debug.agent.sessionDirTitle', { dir: agentWorkingDir })}
                   className="flex-1 min-w-0 truncate text-xs font-mono text-left text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
                 >
-                  {agentWorkingDir}
+                  <span className="font-sans font-medium text-zinc-700 dark:text-zinc-200">
+                    {workingDirBasename(agentWorkingDir)}
+                  </span>
+                  <span className="text-zinc-400 dark:text-zinc-500 ml-1.5">{agentWorkingDir}</span>
                 </button>
               ) : (
                 <span className="flex-1 min-w-0 truncate text-xs font-mono text-zinc-400 dark:text-zinc-500">

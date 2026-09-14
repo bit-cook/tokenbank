@@ -49,7 +49,13 @@ const SCAN_CUSTOM_DIR_KEY = 'tokenbank.resources.scanCustomDir';
 const APP_FILTER_KEY = 'tokenbank.resources.appFilter';
 const IDLE_DAYS_KEY = 'tokenbank.resources.idleDays';
 const LAYER_FILTER_KEY = 'tokenbank.resources.layerFilter';
+const LIST_SORT_KEY = 'tokenbank.resources.listSort';
 const DEFAULT_IDLE_DAYS = 60;
+const LIST_SORT_OPTIONS = [
+  { id: 'time', labelKey: 'resources.sort.time' },
+  { id: 'name', labelKey: 'resources.sort.name' },
+  { id: 'usage', labelKey: 'resources.sort.usage' },
+];
 
 function readIdleDays() {
   try {
@@ -144,6 +150,18 @@ function saveAppFilter(agentId) {
   try { localStorage.setItem(APP_FILTER_KEY, agentId || ''); } catch {}
 }
 
+function readListSort() {
+  try {
+    const v = localStorage.getItem(LIST_SORT_KEY);
+    if (v === 'time' || v === 'name' || v === 'usage') return v;
+  } catch { /* ignore */ }
+  return 'usage';
+}
+
+function saveListSort(sort) {
+  try { localStorage.setItem(LIST_SORT_KEY, sort || 'usage'); } catch {}
+}
+
 function typeBadge(type, t) {
   const map = {
     prompt: t('resources.type.prompt'),
@@ -186,6 +204,31 @@ function sourceLabel(source, t) {
   return source;
 }
 
+function resourceKind(item) {
+  let kind = String(item?.type || 'skill').trim().toLowerCase();
+  if (kind === 'agent') kind = 'assistant';
+  return kind;
+}
+
+/** 本机资产是否已由用户推送到社区（本地标记，或目录里的用户推荐条目） */
+function isPushedToCommunity(item, catalog) {
+  if (!item) return false;
+  const meta = item.metadata && typeof item.metadata === 'object' ? item.metadata : {};
+  if (meta.community_recommended) return true;
+  const ownId = String(meta.community_catalog_id || '').trim();
+  const name = String(item.name || '').trim().toLowerCase();
+  const type = resourceKind(item);
+  return (catalog || []).some((c) => {
+    if (resourceKind(c) !== type) return false;
+    const cid = String(c.catalogId || c.catalog_id || '').trim();
+    const cm = c.metadata && typeof c.metadata === 'object' ? c.metadata : {};
+    const isUserRec = !!(cm.user_recommended || cid.startsWith('user-'));
+    if (!isUserRec) return false;
+    if (ownId && cid && ownId === cid) return true;
+    return !!name && String(c.name || '').trim().toLowerCase() === name;
+  });
+}
+
 /** 提示词模版用途：文本对话 / 图像生成（存 metadata.promptKind） */
 function promptKindOf(resource) {
   return resource?.metadata?.promptKind === 'image' ? 'image' : 'text';
@@ -225,6 +268,7 @@ const EMPTY_EDITOR = {
   parameters: null,
   assistantExtra: {},
   skillQuery: '',
+  promptQuery: '',
 };
 
 /** 是否 Windows 前端环境（路径用反斜杠） */
@@ -439,6 +483,7 @@ export default function Resources() {
   const [autoTagging, setAutoTagging] = useState(false);
   const [scanExpanded, setScanExpanded] = useState(false);
   const [appFilter, setAppFilter] = useState(readAppFilter);
+  const [listSort, setListSort] = useState(readListSort);
   /** Skill 闲置清理 */
   const [cleanupOpen, setCleanupOpen] = useState(false);
   const [idleLoading, setIdleLoading] = useState(false);
@@ -885,6 +930,11 @@ export default function Resources() {
     saveAppFilter(agentId);
   }
 
+  function changeListSort(sort) {
+    setListSort(sort);
+    saveListSort(sort);
+  }
+
   function updateCustomScanDirs(dirs) {
     const next = [...new Set((dirs || []).map(d => String(d || '').trim()).filter(Boolean))];
     setCustomScanDirs(next);
@@ -1107,7 +1157,10 @@ export default function Resources() {
       }
     }
     const busyKey = `rec-${managed?.id || resourceLike?.resourceId || name}`;
-    if (!window.confirm(t('resources.recommendConfirm', { name }))) return;
+    const alreadyPushed = isPushedToCommunity(managed || resourceLike, catalog);
+    if (!window.confirm(alreadyPushed
+      ? t('resources.recommendAgainConfirm', { name })
+      : t('resources.recommendConfirm', { name }))) return;
     setBusy(busyKey);
     setError('');
     setMsg('');
@@ -1146,6 +1199,27 @@ export default function Resources() {
         try {
           await window.electronAPI.resource.upsertCommunitySkill?.({ item: data.item });
         } catch { /* ignore */ }
+      }
+      // 本机打上「已推送」，刷新后仍能识别
+      const catalogId = String(data?.item?.catalog_id || data?.item?.catalogId || '').trim();
+      if (managed?.id && window.electronAPI?.resource?.saveResource) {
+        try {
+          const saved = await window.electronAPI.resource.saveResource({
+            id: managed.id,
+            type: rtype,
+            name: managed.name || name,
+            display_name: managed.display_name || name,
+            description: managed.description || description,
+            content: managed.content || content,
+            metadata: {
+              ...(managed.metadata || {}),
+              community_recommended: true,
+              community_catalog_id: catalogId || undefined,
+              community_recommended_at: Date.now(),
+            },
+          });
+          if (saved?.success && saved.resource) upsertResourceLocally(saved.resource);
+        } catch { /* 标记失败不阻断推荐结果 */ }
       }
       try {
         await window.electronAPI.resource.syncCommunityCatalog?.();
@@ -1767,6 +1841,7 @@ export default function Resources() {
       parameters: null,
       assistantExtra: {},
       skillQuery: '',
+      promptQuery: '',
     };
     if ((resource.type || '') === 'assistant') {
       const parsed = parseAssistantEditorContent(resource.content || '');
@@ -1783,7 +1858,7 @@ export default function Resources() {
     setEditorOpen(true);
   }
 
-  /** 自然语言 → 填充智能体表单（名称/人设/建议绑定的 skill） */
+  /** 自然语言 → 填充智能体表单（名称/人设/建议绑定的 skill 与提示词） */
   async function generateAssistantNl() {
     const brief = String(editorForm.nlBrief || '').trim();
     if (brief.length < 4) {
@@ -1800,7 +1875,14 @@ export default function Resources() {
           display_name: r.display_name || r.name,
           description: r.description || '',
         }));
-      const gen = await generateAssistantFromNl(brief, skillCandidates);
+      const promptCandidates = (resources || [])
+        .filter((r) => r.type === 'prompt')
+        .map((r) => ({
+          name: r.name,
+          display_name: r.display_name || r.name,
+          description: r.description || '',
+        }));
+      const gen = await generateAssistantFromNl(brief, skillCandidates, promptCandidates);
       setEditorForm((prev) => ({
         ...prev,
         // 已有 id 时不改英文标识，避免冲突
@@ -1809,6 +1891,7 @@ export default function Resources() {
         description: gen.description || prev.description,
         soul: gen.soul,
         skills: gen.skills || [],
+        prompts: gen.prompts || [],
         tagsText: (gen.tags || []).join(', ') || prev.tagsText,
       }));
       setMsg(t('resources.assistantNlOk'));
@@ -1833,6 +1916,16 @@ export default function Resources() {
     });
   }
 
+  function toggleEditorPrompt(promptName) {
+    const name = String(promptName || '').trim();
+    if (!name) return;
+    setEditorForm((prev) => {
+      const cur = Array.isArray(prev.prompts) ? prev.prompts : [];
+      const next = cur.includes(name) ? cur.filter((s) => s !== name) : [...cur, name];
+      return { ...prev, prompts: next };
+    });
+  }
+
   async function saveEditor() {
     const name = String(editorForm.name || '').trim();
     if (!name) {
@@ -1847,7 +1940,7 @@ export default function Resources() {
       }
       metadata.tags = parseTagsInput(editorForm.tagsText);
       let content = editorForm.content || '';
-      // 智能体：用人设 + 勾选 skill 拼 JSON（保留 runtime_agent / prompts 等）
+      // 智能体：用人设 + 勾选 skill / prompt 拼 JSON
       if (editorForm.type === 'assistant') {
         const soul = String(editorForm.soul || '').trim();
         if (!soul) {
@@ -2284,6 +2377,32 @@ export default function Resources() {
     );
   }
 
+  /** 本机列表排序：时间 / 字母 / 用量 */
+  function renderListSort() {
+    return (
+      <div
+        className="tb-glass-chip inline-flex rounded-lg p-0.5 gap-0.5"
+        role="group"
+        aria-label={t('resources.sort.label')}
+      >
+        {LIST_SORT_OPTIONS.map((opt) => (
+          <button
+            key={opt.id}
+            type="button"
+            onClick={() => changeListSort(opt.id)}
+            className={`tb-press text-xs px-2.5 py-1 rounded-md transition-colors ${
+              listSort === opt.id
+                ? 'bg-white/80 dark:bg-white/10 text-zinc-900 dark:text-zinc-100 font-semibold'
+                : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-100'
+            }`}
+          >
+            {t(opt.labelKey)}
+          </button>
+        ))}
+      </div>
+    );
+  }
+
   /** 用途筛选条：零散 tag 已聚合成 SkillHub 一级用途 */
   function purposeLabel(slug) {
     if (slug === PURPOSE_OTHER) return t('resources.tagFilterOther');
@@ -2463,9 +2582,15 @@ export default function Resources() {
               disabled={!!busy && busy !== `rec-${item.resourceId}` && busy !== item.resourceId}
               onClick={() => handleRecommendToCommunity(item)}
               className={ASSET_BTN_GHOST}
-              title={t('resources.recommendHint')}
+              title={isPushedToCommunity(item, catalog) || isPushedToCommunity(resourcesById.get(item.resourceId), catalog)
+                ? t('resources.pushedCommunityHint')
+                : t('resources.recommendHint')}
             >
-              {busy === `rec-${item.resourceId}` ? t('resources.busy') : t('resources.recommendCommunity')}
+              {busy === `rec-${item.resourceId}`
+                ? t('resources.busy')
+                : (isPushedToCommunity(item, catalog) || isPushedToCommunity(resourcesById.get(item.resourceId), catalog)
+                  ? t('resources.pushedCommunity')
+                  : t('resources.recommendCommunity'))}
             </button>
             <button
               type="button"
@@ -2721,9 +2846,15 @@ export default function Resources() {
                 className={ASSET_BTN_GHOST}
                 disabled={!!busy && busy !== `rec-${resource.id}`}
                 onClick={() => handleRecommendToCommunity(resource)}
-                title={t('resources.recommendHint')}
+                title={isPushedToCommunity(resource, catalog)
+                  ? t('resources.pushedCommunityHint')
+                  : t('resources.recommendHint')}
               >
-                {busy === `rec-${resource.id}` ? t('resources.busy') : t('resources.recommendCommunity')}
+                {busy === `rec-${resource.id}`
+                  ? t('resources.busy')
+                  : (isPushedToCommunity(resource, catalog)
+                    ? t('resources.pushedCommunity')
+                    : t('resources.recommendCommunity'))}
               </button>
             )}
             <button
@@ -2764,19 +2895,16 @@ export default function Resources() {
   /**
    * 「本机」Tab 列表：按类型筛选分流。
    * 技能→扫描行(discovered);提示词/助手→managed 行。
-   * 默认按用量排序：命中次数 → 最近使用 → 纳管时间。
+   * 排序：时间 / 字母 / 用量（默认用量）。
    */
   function renderLocalList() {
     const showSkills = !typeFilter || typeFilter === 'skill';
-    const byManagedAt = (a, b) => {
-      const ta = Number(a.created_at || a.createdAt || 0);
-      const tb = Number(b.created_at || b.createdAt || 0);
-      if (tb !== ta) return tb - ta;
-      return String(a.name || a.display_name || '').localeCompare(String(b.name || b.display_name || ''), 'zh-CN');
-    };
+    const nameOf = (item) => String(item?.display_name || item?.name || '').trim();
+    const byName = (a, b) => nameOf(a).localeCompare(nameOf(b), 'zh-CN', { sensitivity: 'base' });
+    const linkedOf = (item) => (item?.resourceId ? resourcesById.get(item.resourceId) : null);
     // 用量：优先行自身，Skill 扫描行回退到已纳管资源
     const usageOf = (item) => {
-      const linked = item?.resourceId ? resourcesById.get(item.resourceId) : null;
+      const linked = linkedOf(item);
       const useCount = Math.max(
         0,
         Number(item?.use_count ?? linked?.use_count ?? 0) || 0,
@@ -2787,13 +2915,33 @@ export default function Resources() {
       );
       return { useCount, lastUsed };
     };
+    const timeOf = (item) => {
+      const linked = linkedOf(item);
+      const lastUsed = Number(item?.last_used_at ?? linked?.last_used_at ?? 0) || 0;
+      const created = Number(
+        item?.created_at
+        ?? item?.createdAt
+        ?? item?.updated_at
+        ?? item?.mtimeMs
+        ?? item?.mtime
+        ?? linked?.created_at
+        ?? linked?.updated_at
+        ?? 0,
+      ) || 0;
+      return Math.max(lastUsed, created);
+    };
+    const byTime = (a, b) => {
+      const d = timeOf(b) - timeOf(a);
+      return d !== 0 ? d : byName(a, b);
+    };
     const byUsage = (a, b) => {
       const ua = usageOf(a);
       const ub = usageOf(b);
       if (ub.useCount !== ua.useCount) return ub.useCount - ua.useCount;
       if (ub.lastUsed !== ua.lastUsed) return ub.lastUsed - ua.lastUsed;
-      return byManagedAt(a, b);
+      return byTime(a, b);
     };
+    const cmp = listSort === 'name' ? byName : listSort === 'time' ? byTime : byUsage;
     // Hit-or-Exit：与分层计数同源；Skill 扫描行回退到已纳管资源再判定
     const matchLayer = (item) => {
       if (!layerFilter) return true;
@@ -2816,8 +2964,7 @@ export default function Resources() {
         // Prompt / 智能体：按已投射到的 Agent 筛选
         return (r.projections || []).some(p => p.agentId === effectiveAppFilter);
       })
-      .slice()
-      .sort(byUsage);
+      .slice();
     // 技能优先磁盘扫描行；扫描为空时回退已纳管 skill（避免分层有数、列表空白）
     const useDiscoveredSkills = showSkills && discovered.length > 0;
     const skillBase = !showSkills
@@ -2829,7 +2976,7 @@ export default function Resources() {
           .filter(r => matchTag(r) && matchQuery(r))
           .filter(r => !effectiveAppFilter
             || (r.projections || []).some(p => p.agentId === effectiveAppFilter));
-    const skillRows = skillBase.filter(matchLayer).slice().sort(byUsage);
+    const skillRows = skillBase.filter(matchLayer);
 
     if (managedRows.length + skillRows.length === 0) {
       // 有本机 skill / 资源,但被来源应用筛选过滤空了
@@ -2889,21 +3036,42 @@ export default function Resources() {
     return (
       <div className="space-y-3">
         {showAppFilterBar && renderAppFilter()}
-        {showSkills && scanStats && (
-          <p className="text-[11px] text-zinc-400">
-            {t('resources.syncSummary', { n: scanStats.totalOnDisk })}
-            {effectiveAppFilter && (
-              <span className="ml-2 opacity-80">
-                {t('resources.discoveredFilteredCount', { n: skillRows.length })}
-              </span>
-            )}
-          </p>
-        )}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          {showSkills && scanStats ? (
+            <p className="text-[11px] text-zinc-400">
+              {t('resources.syncSummary', { n: scanStats.totalOnDisk })}
+              {effectiveAppFilter && (
+                <span className="ml-2 opacity-80">
+                  {t('resources.discoveredFilteredCount', { n: skillRows.length })}
+                </span>
+              )}
+            </p>
+          ) : <span />}
+          {renderListSort()}
+        </div>
         <div className="space-y-3">
-          {managedRows.map(r => renderResourceRow(r))}
-          {skillRows.map(item => (
-            useDiscoveredSkills ? renderDiscoveredRow(item) : renderResourceRow(item)
-          ))}
+          {[
+            ...managedRows.map((item) => ({
+              key: `r-${item.id}`,
+              kind: 'resource',
+              item,
+            })),
+            ...skillRows.map((item) => ({
+              key: useDiscoveredSkills
+                ? `d-${item.path || item.resourceId || item.name}`
+                : `r-${item.id}`,
+              kind: useDiscoveredSkills ? 'discovered' : 'resource',
+              item,
+            })),
+          ]
+            .sort((a, b) => cmp(a.item, b.item))
+            .map((row) => (
+              <React.Fragment key={row.key}>
+                {row.kind === 'discovered'
+                  ? renderDiscoveredRow(row.item)
+                  : renderResourceRow(row.item)}
+              </React.Fragment>
+            ))}
         </div>
       </div>
     );
@@ -3656,7 +3824,6 @@ export default function Resources() {
       {editorOpen && createPortal(
         <div
           className="electron-no-drag fixed inset-0 z-[9998] flex items-center justify-center p-4 bg-black/40"
-          onClick={() => { if (busy !== 'editor' && busy !== 'assistant-nl') setEditorOpen(false); }}
         >
           <div
             className="w-full max-w-lg max-h-[90vh] overflow-y-auto rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-xl"
@@ -3841,6 +4008,67 @@ export default function Resources() {
                       })()}
                     </div>
                     <p className="text-[10px] text-zinc-400">{t('resources.assistantSkillsHint')}</p>
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs text-zinc-500">{t('resources.assistantPrompts')}</span>
+                      <span className="text-[10px] text-zinc-400">
+                        {t('resources.assistantPromptsPicked', { n: (editorForm.prompts || []).length })}
+                      </span>
+                    </div>
+                    <input
+                      value={editorForm.promptQuery || ''}
+                      onChange={e => setEditorForm(prev => ({ ...prev, promptQuery: e.target.value }))}
+                      placeholder={t('resources.assistantPromptsSearch')}
+                      className="w-full text-xs px-2 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-950"
+                    />
+                    <div className="max-h-40 overflow-y-auto rounded-lg border border-zinc-200 dark:border-zinc-700 divide-y divide-zinc-100 dark:divide-zinc-800">
+                      {(() => {
+                        const q = String(editorForm.promptQuery || '').trim().toLowerCase();
+                        const list = (resources || [])
+                          .filter((r) => r.type === 'prompt')
+                          .filter((r) => {
+                            if (!q) return true;
+                            const hay = `${r.name} ${r.display_name || ''} ${r.description || ''}`.toLowerCase();
+                            return hay.includes(q);
+                          })
+                          .slice(0, 120);
+                        if (!list.length) {
+                          return (
+                            <p className="px-2.5 py-3 text-[11px] text-zinc-400">{t('resources.assistantPromptsEmpty')}</p>
+                          );
+                        }
+                        const picked = new Set(editorForm.prompts || []);
+                        return list.map((pr) => (
+                          <label
+                            key={pr.id || pr.name}
+                            className="flex items-start gap-2 px-2.5 py-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 cursor-pointer"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={picked.has(pr.name)}
+                              onChange={() => toggleEditorPrompt(pr.name)}
+                              className="mt-0.5 shrink-0"
+                            />
+                            <span className="min-w-0 flex-1">
+                              <span className="flex items-center gap-1.5 min-w-0">
+                                <span className="block text-xs text-zinc-800 dark:text-zinc-200 truncate">
+                                  {pr.display_name || pr.name}
+                                </span>
+                                <span className="shrink-0 text-[10px] px-1 py-px rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-500">
+                                  {t(promptKindOf(pr) === 'image' ? 'resources.promptKind.image' : 'resources.promptKind.text')}
+                                </span>
+                              </span>
+                              <span className="block text-[10px] font-mono text-zinc-400 truncate">{pr.name}</span>
+                              {pr.description ? (
+                                <span className="block text-[10px] text-zinc-400 line-clamp-1">{pr.description}</span>
+                              ) : null}
+                            </span>
+                          </label>
+                        ));
+                      })()}
+                    </div>
+                    <p className="text-[10px] text-zinc-400">{t('resources.assistantPromptsHint')}</p>
                   </div>
                 </>
               ) : (

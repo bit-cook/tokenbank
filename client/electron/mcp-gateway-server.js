@@ -1,5 +1,5 @@
 // mcp-gateway-server.js
-// 内置中转 MCP：按应用聚合已绑定的纳管 stdio MCP，对外暴露 HTTP 入口，
+// 内置中转 MCP：按应用聚合已绑定的纳管 MCP（stdio + 远程 HTTP），对外暴露 HTTP 入口，
 // 供无法直接写盘投射、或希望简化配置的应用一条配置接入。
 'use strict';
 
@@ -325,14 +325,188 @@ class StdioBackend {
   }
 }
 
+function isUrlMcpRow(row) {
+  if (!row) return false;
+  if (String(row.url || '').trim()) return true;
+  const typ = String(row.type || '').toLowerCase();
+  return typ === 'http' || typ === 'sse';
+}
+
+/** 解析 MCP Streamable HTTP 响应：JSON 或 SSE data: */
+function parseMcpHttpBody(text) {
+  const s = String(text || '').trim();
+  if (!s) return {};
+  if (s.startsWith('{') || s.startsWith('[')) {
+    const msg = JSON.parse(s);
+    if (msg && typeof msg === 'object' && !Array.isArray(msg) && msg.error) {
+      throw new Error(msg.error.message || JSON.stringify(msg.error));
+    }
+    return msg?.result !== undefined ? msg.result : msg;
+  }
+  let last = null;
+  for (const line of s.split(/\r?\n/)) {
+    const t = line.trim();
+    if (!t.startsWith('data:')) continue;
+    const payload = t.slice(5).trim();
+    if (!payload || payload === '[DONE]') continue;
+    try { last = JSON.parse(payload); } catch { /* ignore */ }
+  }
+  if (!last) throw new Error('empty MCP HTTP response');
+  if (last.error) throw new Error(last.error.message || JSON.stringify(last.error));
+  return last.result !== undefined ? last.result : last;
+}
+
+/** 远程 HTTP/SSE MCP：按需 initialize，复用 session */
+class HttpBackend {
+  constructor(serverRow) {
+    this.id = serverRow.id;
+    this.name = serverRow.name || serverRow.id;
+    this.prefix = safePrefix(this.name);
+    this.row = serverRow;
+    this.sessionId = null;
+    this.nextId = 1;
+    this.toolsCache = null;
+    this.ready = null;
+  }
+
+  _endpoint() {
+    return String(this.row.url || '').trim();
+  }
+
+  _headers() {
+    const h = {
+      'Content-Type': 'application/json',
+      Accept: 'application/json, text/event-stream',
+    };
+    const extra = (this.row.metadata && this.row.metadata.headers) || this.row.headers;
+    if (extra && typeof extra === 'object' && !Array.isArray(extra)) {
+      for (const [k, v] of Object.entries(extra)) {
+        if (v == null || v === '') continue;
+        h[k] = String(v);
+      }
+    }
+    if (this.sessionId) h['Mcp-Session-Id'] = this.sessionId;
+    return h;
+  }
+
+  async _post(payload, timeoutMs) {
+    const url = this._endpoint();
+    if (!url) throw new Error(`MCP ${this.name} 缺少 url`);
+    const ac = new AbortController();
+    const timer = setTimeout(() => ac.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: this._headers(),
+        body: JSON.stringify(payload),
+        signal: ac.signal,
+      });
+      const sid = res.headers.get('mcp-session-id');
+      if (sid) this.sessionId = sid;
+      const text = await res.text();
+      if (!res.ok) {
+        throw new Error(`MCP ${this.name} HTTP ${res.status}: ${text.slice(0, 240)}`);
+      }
+      return parseMcpHttpBody(text);
+    } catch (e) {
+      if (e && e.name === 'AbortError') throw new Error(`MCP ${this.name} timeout`);
+      throw e;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async ensure() {
+    if (this.ready) return this.ready;
+    this.ready = this._start();
+    try {
+      await this.ready;
+    } catch (e) {
+      this.ready = null;
+      throw e;
+    }
+    return this.ready;
+  }
+
+  async _start() {
+    await this._post({
+      jsonrpc: '2.0',
+      id: this.nextId++,
+      method: 'initialize',
+      params: {
+        protocolVersion: '2024-11-05',
+        capabilities: {},
+        clientInfo: { name: 'tokenbank-mcp-gateway', version: '0.5.4' },
+      },
+    }, 30000);
+    try {
+      await this._post({
+        jsonrpc: '2.0',
+        method: 'notifications/initialized',
+        params: {},
+      }, 10000);
+    } catch { /* 部分网关不接受无 id 通知 */ }
+    const listed = await this._post({
+      jsonrpc: '2.0',
+      id: this.nextId++,
+      method: 'tools/list',
+      params: {},
+    }, 30000);
+    this.toolsCache = Array.isArray(listed?.tools) ? listed.tools : [];
+  }
+
+  async listTools() {
+    await this.ensure();
+    if (!this.toolsCache) {
+      const listed = await this._post({
+        jsonrpc: '2.0',
+        id: this.nextId++,
+        method: 'tools/list',
+        params: {},
+      }, 30000);
+      this.toolsCache = Array.isArray(listed?.tools) ? listed.tools : [];
+    }
+    return this.toolsCache.map((tool) => ({
+      ...tool,
+      name: `${this.prefix}__${tool.name}`,
+      description: `[${this.row.display_name || this.name}] ${tool.description || tool.name}`,
+      _backendId: this.id,
+      _rawName: tool.name,
+    }));
+  }
+
+  async callTool(rawName, args) {
+    await this.ensure();
+    return this._post({
+      jsonrpc: '2.0',
+      id: this.nextId++,
+      method: 'tools/call',
+      params: { name: rawName, arguments: args || {} },
+    }, 120000);
+  }
+
+  stop() {
+    this.sessionId = null;
+    this.ready = null;
+    this.toolsCache = null;
+  }
+}
+
+function makeBackend(row) {
+  return isUrlMcpRow(row) ? new HttpBackend(row) : new StdioBackend(row);
+}
+
 function syncBackends() {
   const rows = (typeof getRoutedServers === 'function' ? getRoutedServers() : []) || [];
   const want = new Map();
   for (const row of rows) {
     if (!row?.id || row.status !== 'active') continue;
-    // 首期仅代理 stdio；URL 型后续可加
-    if (row.url || row.type === 'sse' || row.type === 'http') continue;
-    if (!row.command) continue;
+    // stdio 需 command；远程 HTTP/SSE 需 url
+    if (isUrlMcpRow(row)) {
+      if (!String(row.url || '').trim()) continue;
+    } else if (!row.command) {
+      continue;
+    }
     want.set(row.id, row);
   }
   routedRows = want;
@@ -348,14 +522,16 @@ function syncBackends() {
     if (isBuiltinRelayId(id)) continue; // 内置走 per-cid 惰性创建
     const existing = backends.get(id);
     if (!existing) {
-      backends.set(id, new StdioBackend(row));
+      backends.set(id, makeBackend(row));
     } else {
-      // 更新元数据（command 变更时下次 ensure 会用新 row——简单起见重建）
+      const sameKind = isUrlMcpRow(existing.row) === isUrlMcpRow(row);
       const sameCmd = existing.row.command === row.command
-        && JSON.stringify(existing.row.args) === JSON.stringify(row.args);
-      if (!sameCmd) {
+        && JSON.stringify(existing.row.args) === JSON.stringify(row.args)
+        && String(existing.row.url || '') === String(row.url || '')
+        && JSON.stringify(existing.row.metadata?.headers || {}) === JSON.stringify(row.metadata?.headers || {});
+      if (!sameKind || !sameCmd) {
         existing.stop();
-        backends.set(id, new StdioBackend(row));
+        backends.set(id, makeBackend(row));
       } else {
         existing.row = row;
         existing.name = row.name || row.id;

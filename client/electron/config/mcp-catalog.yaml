@@ -107,6 +107,7 @@ items:
     - tb_list_prompts
     - tb_list_catalog
     - tb_list_gateway
+    - tb_call_mcp
     tags:
     - 内置
     - 资源
@@ -387,6 +388,38 @@ items:
     - 文档
     - Context7
   config_fields: []
+  always_installed: false
+- catalog_id: pipeworx
+  id: mcp-pipeworx
+  name: pipeworx
+  display_name: Pipeworx
+  description: 1500+ 实时数据源（SEC/FDA/Fed 等），答案带出处与抓取时间；可填 API Key 提升额度
+  type: http
+  url: https://gateway.pipeworx.io/mcp
+  command: ''
+  args: []
+  env: {}
+  metadata:
+    category: web
+    categoryGroup: web
+    icon: 📡
+    homepage: https://pipeworx.io/
+    tools:
+    - ask_pipeworx
+    - discover_tools
+    - resolve_entity
+    - entity_profile
+    - recent_changes
+    tags:
+    - 实时数据
+    - 搜索
+  config_fields:
+  - key: pipeworxApiKey
+    label: Pipeworx API Key（可选）
+    type: secret
+    header_key: X-API-Key
+    placeholder: pwx_… 留空则匿名使用
+    required: false
   always_installed: false
 - catalog_id: postgres
   id: mcp-postgres

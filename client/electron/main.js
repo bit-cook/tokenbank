@@ -28,23 +28,48 @@ const deviceIdentity = require('../shared/device-identity');
 const detectTools = require('./detect-tools');
 const agentLinker = require('./agent-linker');
 const cursorHooks = require('./cursor-hooks');
-const { syncSessionTelemetry } = require('./session-telemetry-sync');
+const sessionOffthread = require('./session-offthread');
 const trayPopover = require('./tray-popover');
 const { brandIconForApp } = require('./brand-icons');
 
-/** 会话补录节流：用量页频繁打开时不重复全量扫描 */
+/** 会话补录：派到 worker，不阻塞主线程（托盘刷新 / 打开盘点时曾会假死） */
 let _lastSessionTelemetrySync = 0;
 const SESSION_TELEMETRY_SYNC_MS = 20_000;
-function maybeSyncSessionTelemetry(localStats) {
+function notifyTelemetryImported(r) {
+  if (!r || r.skipped) return;
+  const n = (r.hookImported || 0) + (r.sessionImported || 0) + (r.skillRecorded || 0) + (r.toolsRecorded || 0);
+  if (n <= 0) return;
+  try { require('./session-manager').invalidateSessionsCache(); } catch {}
+  try {
+    mainWindow?.webContents?.send('apps:changed');
+    mainWindow?.webContents?.send('localStats:changed');
+  } catch {}
+}
+function scheduleSessionTelemetry(opts = {}) {
+  const force = !!(opts && opts.force);
   const now = Date.now();
-  if (now - _lastSessionTelemetrySync < SESSION_TELEMETRY_SYNC_MS) return;
+  if (!force && _lastSessionTelemetrySync && (now - _lastSessionTelemetrySync) < SESSION_TELEMETRY_SYNC_MS) {
+    return Promise.resolve({ skipped: true });
+  }
   _lastSessionTelemetrySync = now;
-  try { syncSessionTelemetry(localStats); } catch {}
+  return sessionOffthread.runTelemetry({ statsDir: STATS_DIR, force })
+    .then((r) => { notifyTelemetryImported(r); return r; })
+    .catch((e) => {
+      console.error('[session-telemetry]', e && e.message);
+      return { error: e && e.message };
+    });
+}
+function maybeSyncSessionTelemetry() {
+  scheduleSessionTelemetry();
 }
 // device-reporter is used by the CLI only; desktop registration is handled
 // by useDeviceReporter in the renderer (which has access to the JWT).
 
 const isDev = !app.isPackaged;
+// 打包后 Finder/Dock 启动 cwd 常是 Contents/MacOS；Agent 子进程 getcwd 会 Operation not permitted
+if (app.isPackaged) {
+  try { process.chdir(os.homedir()); } catch { /* ignore */ }
+}
 // 与 vite.config.js server.port 保持一致；可用环境变量覆盖
 const VITE_URL = process.env.VITE_DEV_SERVER_URL || 'http://localhost:5173';
 // macOS 菜单栏显示名（dev 下系统设置里通常显示 Electron）
@@ -1291,9 +1316,8 @@ function lookupModelTtft(modelId) {
 function ttftBucket(ms) {
   const v = Number(ms);
   if (!Number.isFinite(v) || v <= 0) return 'unknown';
-  if (v > 2500) return 'slow';
-  if (v < 800) return 'fast';
-  return 'medium';
+  if (v > 4000) return 'slow';
+  return 'fast';
 }
 
 function formatTtftLabel(lang, ttftMs) {
@@ -1551,7 +1575,7 @@ function refreshTray() {
   // 同步 session import，保证与 modal 数据一致；每 60s 最多跑一次
   const now = Date.now();
   if (now - _lastTrayImportTs > 60000) {
-    try { syncSessionTelemetry(localStats); } catch {}
+    try { scheduleSessionTelemetry(); } catch {}
     _lastTrayImportTs = now;
   }
   const gw = gateway.getStatus?.() || {};
@@ -1899,13 +1923,6 @@ async function checkForUpdatesAndWait(timeoutMs = 60000) {
 }
 
 function setupAutoUpdater() {
-  // Mac App Store 版本不支持自动更新,仅通过 App Store 更新
-  const isMAS = process.mas || (process.platform === 'darwin' && process.execPath.includes('App Store'));
-  if (isMAS) {
-    console.info('[updater] Mac App Store build detected, auto-update disabled');
-    return;
-  }
-
   autoUpdater.autoDownload = true;
   // macOS：MacUpdater 在 autoInstallOnAppQuit=true 时会在下载后预取 Squirrel；
   // 预取失败时 UI 已显示「就绪」，但 quitAndInstall 不会再次 checkForUpdates → 立即重启无反应。
@@ -3200,7 +3217,7 @@ function registerIPC() {
   ipcMain.handle('localStats:query', (_e, days) => {
     const d = Math.max(1, Math.min(365, parseInt(days, 10) || 1));
     // 打开盘点页时先补录 Skill/工具（WorkBuddy trace 等），避免「会话有 Skill、盘点却是 0」
-    try { syncSessionTelemetry(localStats); } catch {}
+    try { scheduleSessionTelemetry(); } catch {}
     const data = localStats.queryDashboard(d);
     // 按应用聚合（合并网关实时 + 会话补录），供「应用用量分布」按应用分组、判定网关/订阅/混合徽章
     try {
@@ -3275,7 +3292,7 @@ function registerIPC() {
     }
   });
   // 手动触发会话文件补录（扫 ~/.claude、~/.codex、~/.gemini），返回各来源计数
-  ipcMain.handle('sessionImport:run', () => syncSessionTelemetry(localStats, { force: true }));
+  ipcMain.handle('sessionImport:run', () => scheduleSessionTelemetry({ force: true }));
   // 探测本机 AI 工具/本地服务，返回是否已接入网关的清单
   ipcMain.handle('detectTools:scan', async () => {
     const r = await detectTools.scan();
@@ -5072,9 +5089,25 @@ function registerIPC() {
   });
 
   ipcMain.handle('apps:delete', (_e, id) => {
-    const apps = getApps().filter(a => a.id !== id);
-    saveApps(apps);
+    const apps = getApps();
+    const doomed = apps.find(a => a.id === id);
+    const remaining = apps.filter(a => a.id !== id);
+    saveApps(remaining);
     try { syncGatewayFromConfig(readLocalConfig()); } catch {}
+    // 删除应用后同步解除 MCP 写盘投射、中转、资源投射，避免 MCP 页仍显示已删的「New app」
+    const leftoverIds = [id];
+    const agentId = doomed?.agent_id || doomed?.preset_id;
+    if (agentId && !remaining.some(a => a.agent_id === agentId || a.preset_id === agentId)) {
+      leftoverIds.push(agentId);
+    }
+    for (const cid of leftoverIds) {
+      try { require('./mcp-manager').unbindClient(cid); } catch (e) {
+        console.warn('[apps:delete] mcp unbind:', e.message);
+      }
+      try { require('./resource-manager').unprojectAllForClient(cid); } catch (e) {
+        console.warn('[apps:delete] resource unproject:', e.message);
+      }
+    }
     return { ok: true };
   });
 
@@ -5394,7 +5427,7 @@ function registerIPC() {
 
   ipcMain.handle('apps:detail', (_e, { app, days } = {}) => {
     // 打开明细时强制增量补录，避免节流窗口内看不到会话补录
-    try { syncSessionTelemetry(localStats, { force: true }); } catch {}
+    try { scheduleSessionTelemetry({ force: true }); } catch {}
     // Cursor：打开明细时立即清 transcript 0 token 占位（节流窗口内也能刷新列表）
     if (app?.agent_id === 'cursor') {
       try { cursorHooks.purgeTranscriptZeroTokens(localStats); } catch {}
@@ -5448,13 +5481,11 @@ function registerIPC() {
   const sessionManager = require('./session-manager');
   const _sessionDeps = { sessionBrowser, localStats };
 
-  ipcMain.handle('sessions:listAll', (_e, opts = {}) => {
+  ipcMain.handle('sessions:listAll', async (_e, opts = {}) => {
     try {
-      // 列表优先返回；telemetry 后台补录，避免扫盘挡住首屏
-      setImmediate(() => {
-        try { syncSessionTelemetry(localStats); } catch {}
-      });
-      return sessionManager.getSessions(_sessionDeps, opts);
+      // 列表在 worker 扫盘；补录后台跑，都不占主线程
+      scheduleSessionTelemetry();
+      return await sessionManager.getSessionsAsync(_sessionDeps, opts);
     }
     catch (e) { console.error('[sessions:listAll]', e.message); return []; }
   });
@@ -5552,7 +5583,7 @@ function registerIPC() {
 
   // 批量查所有应用的统计（调一次，合并进 apps:list 或单独查询）
   ipcMain.handle('apps:stats', (_e, appList) => {
-    try { syncSessionTelemetry(localStats); } catch {}
+    try { scheduleSessionTelemetry(); } catch {}
     const stats = {};
     for (const app of (appList || [])) {
       const dataSources = resolveAppDataSources(app);
@@ -5586,7 +5617,7 @@ function registerIPC() {
   // 盘点页：按网关应用聚合用量（合并原「工具来源 + 场景应用」）
   ipcMain.handle('localStats:appsUsage', (_e, days) => {
     const d = Math.max(1, Math.min(365, parseInt(days, 10) || 1));
-    try { syncSessionTelemetry(localStats); } catch {}
+    try { scheduleSessionTelemetry(); } catch {}
     const apps = getApps().filter(a => !a.draft);
     return apps.map(app => {
       const dataSources = resolveAppDataSources(app);
@@ -5775,8 +5806,8 @@ function registerIPC() {
   }, 60_000);
 }
 
-// 主动测速探针：向本地网关发一次极小流式请求，网关在流结束时 record 记速。
-// 同时在客户端侧捕获首包时间 → firstTokenMs（托盘展示用）。
+// 主动测速探针：向本地网关发一次极小请求，网关在结束时 record 记速。
+// chat 走流式 /v1/chat/completions 并捕获首包 → firstTokenMs；嵌入走 /v1/embeddings（非流式，总延迟当测速点）。
 // gateway:probeModel IPC 与「启动自动测速」共用。
 function probeModelViaGateway(model) {
   return new Promise((resolve) => {
@@ -5790,21 +5821,35 @@ function probeModelViaGateway(model) {
       // 客户端不能拨 0.0.0.0/::（监听地址≠可连接地址）：macOS/Linux 内核会兜到回环，Windows 直接
       // WSAEADDRNOTAVAIL 失败 → 探针在 Windows 上永远拿不到数据。统一回退回环。
       const host = (!rawHost || rawHost === '0.0.0.0' || rawHost === '::' || rawHost === '*') ? '127.0.0.1' : rawHost;
-      const payload = JSON.stringify({ model, max_tokens: 12, stream: true, messages: [{ role: 'user', content: 'hi' }] });
+
+      let isEmbed = false;
+      try {
+        const { parseRoute } = require('../shared/route-binding');
+        const { inferModelTypeFromName } = require('./models-mcp');
+        const pr = parseRoute(model);
+        const type = inferModelTypeFromName(pr.model || model);
+        // 生图测一次就要真出图，耗时长且计费，测速直接跳过
+        if (type === 'image') return resolve({ ok: true, skipped: 'image' });
+        isEmbed = type === 'embedding';
+      } catch { /* 推断失败则按 chat */ }
+
+      const payload = JSON.stringify(isEmbed
+        ? { model, input: 'hi' }
+        : { model, max_tokens: 12, stream: true, messages: [{ role: 'user', content: 'hi' }] });
       const start = Date.now();
       let firstTokenMs = null;
       let buf = '';
       const req = http.request({
         host, port: parseInt(portStr, 10) || 11430,
-        path: '/v1/chat/completions', method: 'POST',
+        path: isEmbed ? '/v1/embeddings' : '/v1/chat/completions', method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}`, 'Content-Length': Buffer.byteLength(payload) },
         timeout: 30000,
       }, (res) => {
         res.on('data', (chunk) => {
-          // 必须读完流，网关才会在流结束时 record 记速
+          // 必须读完流，网关才会在结束时 record 记速
           const text = chunk.toString();
           buf += text;
-          if (firstTokenMs != null) return;
+          if (isEmbed || firstTokenMs != null) return;
           // 首 token：SSE 里出现 content/text 增量，或首个 data:{...} 事件
           if (/"(?:content|text)"\s*:\s*"[^"]/.test(buf)
             || /"delta"\s*:\s*\{[^}]*"(?:content|text)"/.test(buf)
@@ -5812,12 +5857,16 @@ function probeModelViaGateway(model) {
             firstTokenMs = Date.now() - start;
           }
         });
-        res.on('end', () => resolve({
-          ok: res.statusCode < 400,
-          status: res.statusCode,
-          latencyMs: Date.now() - start,
-          firstTokenMs: firstTokenMs != null ? firstTokenMs : null,
-        }));
+        res.on('end', () => {
+          const latencyMs = Date.now() - start;
+          const ok = res.statusCode < 400;
+          resolve({
+            ok,
+            status: res.statusCode,
+            latencyMs,
+            firstTokenMs: isEmbed ? (ok ? latencyMs : null) : (firstTokenMs != null ? firstTokenMs : null),
+          });
+        });
         res.on('error', () => resolve({ ok: false, error: 'stream-error' }));
       });
       req.on('error', (e) => resolve({ ok: false, error: e.message }));
@@ -6024,18 +6073,7 @@ app.whenReady().then(() => {
   // 补录「不走网关、直连官方」的会话用量：启动跑一次 + 每 30s 增量扫一次。
   // 与网关实时记录靠 request_id 跨来源去重，不会重复计。
   // 有新增就通知前端刷新——否则直连用量要等重启重新挂载才显示，不像网关那样"实时"。
-  const runSessionImport = () => {
-    try {
-      const { hookImported, sessionImported, skillRecorded, toolsRecorded } = syncSessionTelemetry(localStats);
-      // Skill/工具补录也要通知前端：否则 WorkBuddy 等只写 skill_calls 时 Dashboard 一直显示 0
-      if (hookImported > 0 || sessionImported > 0 || skillRecorded > 0 || toolsRecorded > 0) {
-        try {
-          mainWindow?.webContents?.send('apps:changed');
-          mainWindow?.webContents?.send('localStats:changed');
-        } catch {}
-      }
-    } catch (e) { console.error('[session-import]', e.message); }
-  };
+  const runSessionImport = () => { scheduleSessionTelemetry(); };
   // 一次性迁移：历史 Claude 会话用量都存成 session-claude（混了 cli / claude-desktop）。
   // 删掉重扫，按 entrypoint 重新拆分（cli→session-claude、claude-desktop→session-claude-desktop、sdk-cli 跳过）。
   try {

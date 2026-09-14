@@ -38,17 +38,41 @@ describe('mcp-catalog', () => {
         default_value: '~/projects',
         append_arg: true,
         env_key: 'DIR',
+        header_key: 'X-API-Key',
         required: true,
       }],
     });
     assert.equal(item.configFields[0].defaultValue.includes('projects'), true);
     assert.equal(item.configFields[0].appendArg, true);
     assert.equal(item.configFields[0].envKey, 'DIR');
+    assert.equal(item.configFields[0].headerKey, 'X-API-Key');
   });
 
   it('yaml file exists at electron config path', () => {
     const p = path.join(__dirname, '..', 'config', 'mcp-catalog.yaml');
     const fs = require('fs');
     assert.ok(fs.existsSync(p), `missing ${p}`);
+  });
+
+  it('includes pipeworx as remote http catalog item', () => {
+    const item = catalog.getCatalogItem('pipeworx');
+    assert.ok(item);
+    assert.equal(item.type, 'http');
+    assert.equal(item.url, 'https://gateway.pipeworx.io/mcp');
+    assert.equal(item.alwaysInstalled, false);
+    assert.equal(item.configFields[0].key, 'pipeworxApiKey');
+    assert.equal(item.configFields[0].headerKey, 'X-API-Key');
+    assert.equal(item.configFields[0].required, false);
+  });
+
+  it('normalizes yaml url for remote http items', () => {
+    const item = catalog.normalizeYamlItem({
+      catalog_id: 'remote-demo',
+      name: 'remote-demo',
+      type: 'http',
+      url: 'https://example.com/mcp',
+    });
+    assert.equal(item.type, 'http');
+    assert.equal(item.url, 'https://example.com/mcp');
   });
 });

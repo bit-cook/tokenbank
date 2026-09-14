@@ -10,6 +10,7 @@ const { STATS_DIR } = require('../shared/telemetry');
 let shim = null;
 try { shim = require('./shim-installer'); } catch { /* optional in CLI */ }
 const { getCatalogItem, listCatalogItems, listCatalogGrouped, MCP_CATEGORY_GROUPS } = require('./mcp-catalog');
+const { clearExecRestrictions, mcpStdioFromLauncher } = require('./host-exec');
 
 const { DELIVERY_POLICY } = require('./agent-delivery-policy');
 const { formatOrchestratorCapabilityHint } = require('./tb-capabilities');
@@ -60,6 +61,14 @@ function isTokenbankBuiltinRelayId(serverId) {
   return serverId === BUILTIN_PROMPTS_ID
     || serverId === BUILTIN_MODELS_ID
     || serverId === BUILTIN_RESOURCES_ID;
+}
+
+/** 与网关聚合工具名前缀一致（name → pipeworx__ask_pipeworx） */
+function mcpToolPrefix(name) {
+  return String(name || 'mcp')
+    .replace(/[^a-zA-Z0-9_-]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 48) || 'mcp';
 }
 /** 默认即开发模式（含 Agent 桥 + 已纳管工具 MCP），不再做多 Profile 选择 */
 const DEVELOPMENT_PROFILE_ID = 'development';
@@ -141,6 +150,7 @@ function writeElectronAsNodeLauncher({ name, scriptPath, env = {}, platform = pr
       '',
     ];
     fs.writeFileSync(launcherPath, lines.join('\r\n'), 'utf8');
+    clearExecRestrictions(launcherPath);
     return launcherPath;
   }
 
@@ -148,32 +158,15 @@ function writeElectronAsNodeLauncher({ name, scriptPath, env = {}, platform = pr
     ([k, v]) => `export ${k}=${shellQuote(String(v))}`,
   );
   const lines = [
-    '#!/bin/bash',
+    '#!/bin/sh',
     'export ELECTRON_RUN_AS_NODE=1',
     ...envExports,
     `exec env ELECTRON_RUN_AS_NODE=1 ${shellQuote(electronBin)} ${shellQuote(absScript)}`,
     '',
   ];
   fs.writeFileSync(launcherPath, lines.join('\n'), { mode: 0o755 });
+  clearExecRestrictions(launcherPath);
   return launcherPath;
-}
-
-/**
- * 将 launcher 路径转成 MCP stdio 的 command/args。
- * Windows 上 .cmd 需经 cmd.exe /c 启动，否则多数 Agent 的 spawn 会失败。
- */
-function mcpStdioFromLauncher(launcherPath, extraEnv = {}, platform = process.platform) {
-  const launcher = String(launcherPath || '');
-  if (platform === 'win32' && /\.cmd$/i.test(launcher)) {
-    const comspec = process.env.ComSpec || 'cmd.exe';
-    const quoted = `"${launcher.replace(/"/g, '')}"`;
-    return {
-      command: comspec,
-      args: ['/d', '/s', '/c', quoted],
-      env: { ...(extraEnv || {}) },
-    };
-  }
-  return { command: launcher, args: [], env: { ...(extraEnv || {}) } };
 }
 
 /**
@@ -313,6 +306,8 @@ class MCPManager {
     this._seeded = true;
     // seeded 之后再默认投射，避免 sync→listManagedServers→init 重入未完成的 seed
     this._ensureBuiltinDefaultProjection();
+    // 清掉已删除 API 应用残留的中转/投射，避免 MCP 页仍显示「New app」
+    this.pruneStaleDeletedAppBindings();
   }
 
   /**
@@ -479,8 +474,8 @@ class MCPManager {
     const prev = this._parseJson(row?.metadata, {});
     const meta = JSON.stringify({
       ...prev,
-      description: '内置资源发现：能力总览 / 资源 / tb_get_prompt / 目录 / 网关',
-      tools: ['tb_capabilities', 'tb_list_resources', 'tb_get_resource', 'tb_get_prompt', 'tb_list_prompts', 'tb_list_catalog', 'tb_list_gateway'],
+      description: '内置资源发现：能力总览 / 资源 / 中转 MCP / tb_get_prompt / 目录 / 网关',
+      tools: ['tb_capabilities', 'tb_list_resources', 'tb_get_resource', 'tb_get_prompt', 'tb_list_prompts', 'tb_list_catalog', 'tb_list_gateway', 'tb_call_mcp'],
     });
     if (!row) {
       db.prepare(`
@@ -614,6 +609,9 @@ class MCPManager {
     const now = Date.now();
     const args = [...(item.args || [])];
     const env = { ...(item.env || {}) };
+    const headers = {
+      ...(item.metadata?.headers && typeof item.metadata.headers === 'object' ? item.metadata.headers : {}),
+    };
 
     for (const field of item.configFields || []) {
       const val = String(config[field.key] ?? field.defaultValue ?? '').trim();
@@ -623,6 +621,9 @@ class MCPManager {
       if (field.envKey && val) {
         env[field.envKey] = val;
       }
+      if (field.headerKey && val) {
+        headers[field.headerKey] = val;
+      }
       if (field.required && !val) {
         throw new Error(`请填写: ${field.label}`);
       }
@@ -630,47 +631,105 @@ class MCPManager {
 
     const command = item.command === 'npx'
       ? (shim?.resolveRealCommand?.('npx') || 'npx')
-      : item.command;
+      : (item.command || '');
+    // 远程 HTTP/SSE 目录项（如 Pipeworx）写入 url，由内置网关中转
+    const url = item.url && String(item.url).trim() ? String(item.url).trim() : null;
+    const type = item.type || (url ? 'http' : 'stdio');
+    if ((type === 'sse' || type === 'http') && !url) {
+      throw new Error('URL 模式需填写 url');
+    }
+    const metadataObj = { ...item.metadata, catalogId: item.catalogId };
+    if (Object.keys(headers).length) metadataObj.headers = headers;
 
-    const existing = db.prepare('SELECT id FROM mcp_servers WHERE id = ?').get(item.id);
+    const existing = db.prepare('SELECT id, metadata FROM mcp_servers WHERE id = ?').get(item.id);
+    if (existing) {
+      const prevMeta = this._parseJson(existing.metadata, {});
+      // 重装目录项时保留用户投射/中转勾选与已填 headers
+      if (Array.isArray(prevMeta.sync_clients)) metadataObj.sync_clients = prevMeta.sync_clients;
+      if (Array.isArray(prevMeta.gateway_clients)) metadataObj.gateway_clients = prevMeta.gateway_clients;
+      if (prevMeta.gateway_routed != null) metadataObj.gateway_routed = prevMeta.gateway_routed;
+      if (!Object.keys(headers).length && prevMeta.headers) metadataObj.headers = prevMeta.headers;
+    }
+    const metadata = JSON.stringify(metadataObj);
     if (existing) {
       db.prepare(`
         UPDATE mcp_servers
-        SET command = ?, args = ?, env = ?, status = 'active', metadata = ?, updated_at = ?
+        SET type = ?, command = ?, args = ?, url = ?, env = ?, status = 'active', metadata = ?, updated_at = ?
         WHERE id = ?
       `).run(
+        type,
         command,
         JSON.stringify(args),
+        url,
         JSON.stringify(env),
-        JSON.stringify({ ...item.metadata, catalogId: item.catalogId }),
+        metadata,
         now,
         item.id,
       );
     } else {
       db.prepare(`
         INSERT INTO mcp_servers
-        (id, name, display_name, type, command, args, env, builtin, status, metadata, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 0, 'active', ?, ?, ?)
+        (id, name, display_name, type, command, args, url, env, builtin, status, metadata, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, 'active', ?, ?, ?)
       `).run(
         item.id,
         item.name,
         item.display_name,
-        item.type,
+        type,
         command,
         JSON.stringify(args),
+        url,
         JSON.stringify(env),
-        JSON.stringify({ ...item.metadata, catalogId: item.catalogId }),
+        metadata,
         now,
         now,
       );
     }
 
     this._linkServerToProfile(DEVELOPMENT_PROFILE_ID, item.id);
-    const sync = this._autoSyncClients();
+    const sync = this._defaultRelayToManagedApps(item.id) || this._autoSyncClients();
     return { success: true, server: this.getServer(item.id), sync };
   }
 
-  /** 卸载（非内置）MCP Server */
+  /**
+   * 卸载前从各 Agent 配置文件删掉该 MCP。
+   * 客户端自配条目不在 TB sync-state 里，只删库会被「扫描即纳管」立刻再导入。
+   */
+  _removeUninstalledServerFromAgents(server) {
+    if (!server) return;
+    const mcpClientSync = require('./mcp-client-sync');
+    const { CLIENT_TARGETS } = mcpClientSync;
+    const keys = new Set([server.name].filter(Boolean));
+    const clientIds = new Set([
+      ...(Array.isArray(server.metadata?.originAgents) ? server.metadata.originAgents : []),
+      ...(Array.isArray(server.sync_clients) ? server.sync_clients : []),
+    ].filter(Boolean));
+
+    try {
+      const [enriched] = mcpClientSync.enrichServersWithClientInstalls([server]);
+      for (const inst of enriched?.clientInstalls || []) {
+        if (inst.clientId) clientIds.add(inst.clientId);
+        if (inst.clientKey) keys.add(inst.clientKey);
+      }
+    } catch (e) {
+      console.warn('[mcp-manager] uninstall scan installs:', e.message);
+    }
+
+    // 旧数据可能没有 originAgents；按 name 在各 Agent 上尝试删除（找不到则跳过）
+    const targets = clientIds.size ? clientIds : new Set(Object.keys(CLIENT_TARGETS));
+    for (const clientId of targets) {
+      if (!CLIENT_TARGETS[clientId]) continue;
+      for (const key of keys) {
+        try {
+          mcpClientSync.removeRawClientMcpEntry(clientId, key, { ignoreMissing: true });
+        } catch (e) {
+          console.warn('[mcp-manager] uninstall remove from agent:', clientId, key, e.message);
+        }
+      }
+    }
+  }
+
+  /** 卸载（非内置）MCP Server：删库 + 从各 Agent 配置移除 */
   uninstallServer(serverId) {
     this.init();
     if (serverId === BUILTIN_BRIDGE_ID) {
@@ -679,6 +738,10 @@ class MCPManager {
     if (serverId === BUILTIN_PROMPTS_ID || serverId === BUILTIN_MODELS_ID || serverId === BUILTIN_RESOURCES_ID) {
       throw new Error('内置 MCP 不可卸载');
     }
+    // 先读出安装位置，再删库（删库后就扫不到 originAgents / sync_clients）
+    const server = this.getServer(serverId);
+    if (server) this._removeUninstalledServerFromAgents(server);
+
     const db = this._getDb();
     db.prepare('DELETE FROM mcp_profile_servers WHERE server_id = ?').run(serverId);
     db.prepare('DELETE FROM mcp_servers WHERE id = ? AND builtin = 0').run(serverId);
@@ -736,10 +799,10 @@ class MCPManager {
     };
 
     if (payload.type === 'stdio' && !payload.command) {
-      throw new Error('stdio 类型需填写 command');
+      throw new Error('CLI 模式需填写 command');
     }
     if ((payload.type === 'sse' || payload.type === 'http') && !payload.url) {
-      throw new Error('URL 类型需填写 url');
+      throw new Error('URL 模式需填写 url');
     }
 
     if (existing) {
@@ -783,6 +846,9 @@ class MCPManager {
         } else {
           sync = { success: true, results: [], skipped: true };
         }
+      } else if (!existing) {
+        // 新建自定义 MCP：默认中转到全部已纳管应用
+        sync = this._defaultRelayToManagedApps(id) || this._autoSyncClients();
       } else {
         sync = this._autoSyncClients();
       }
@@ -888,19 +954,16 @@ class MCPManager {
     return isAllowedGatewayClientId(id);
   }
 
-  /** 经内置 MCP 网关代理的服务器列表（active + 已绑定应用 + stdio） */
+  /** 经内置 MCP 网关代理的服务器列表（active + 已绑定应用；stdio 或远程 HTTP） */
   listGatewayRoutedServers() {
     this.init();
-    return this.listManagedServers().filter((s) => (
-      s
-      && s.status === 'active'
-      && !!s.gateway_routed
-      && s.id !== BUILTIN_BRIDGE_ID
-      && !s.url
-      && s.type !== 'sse'
-      && s.type !== 'http'
-      && !!s.command
-    ));
+    return this.listManagedServers().filter((s) => {
+      if (!s || s.status !== 'active' || !s.gateway_routed) return false;
+      if (s.id === BUILTIN_BRIDGE_ID) return false;
+      const isUrl = !!(s.url) || s.type === 'http' || s.type === 'sse';
+      if (isUrl) return !!String(s.url || '').trim();
+      return !!s.command;
+    });
   }
 
   /**
@@ -918,9 +981,10 @@ class MCPManager {
     const row = db.prepare('SELECT id, type, command, url, metadata FROM mcp_servers WHERE id = ?').get(serverId);
     if (!row) throw new Error('Server not found');
 
-    // 中转仅支持 stdio
-    if (row.url || row.type === 'sse' || row.type === 'http' || !row.command) {
-      throw new Error('仅 stdio 型 MCP 可加入内置中转');
+    // 中转：stdio 需 command；远程 HTTP/SSE 需 url。通用档仍仅内置 MCP。
+    const isUrl = !!(String(row.url || '').trim()) || row.type === 'sse' || row.type === 'http';
+    if (!isUrl && !row.command) {
+      throw new Error('仅 stdio 或 URL 型 MCP 可加入内置中转');
     }
 
     const metadata = this._parseJson(row.metadata, {});
@@ -1064,6 +1128,73 @@ class MCPManager {
     };
   }
 
+  /**
+   * 从所有 MCP 的中转（gateway_clients）与写盘投射（sync_clients）去掉指定 client。
+   * 删除 Gateway 应用时调用；clientId=app-xxx 或 agent_id。
+   */
+  unbindClient(clientId) {
+    if (!clientId || clientId === 'api') return { updated: 0 };
+    this.init();
+    const db = this._getDb();
+    const now = Date.now();
+    const rows = db.prepare('SELECT id, metadata FROM mcp_servers').all();
+    let updated = 0;
+    const syncAffected = [];
+    for (const row of rows) {
+      const metadata = this._parseJson(row.metadata, {});
+      let changed = false;
+      if (Array.isArray(metadata.gateway_clients) && metadata.gateway_clients.includes(clientId)) {
+        metadata.gateway_clients = metadata.gateway_clients.filter((id) => id !== clientId);
+        metadata.gateway_routed = metadata.gateway_clients.length > 0;
+        changed = true;
+      }
+      if (Array.isArray(metadata.sync_clients) && metadata.sync_clients.includes(clientId)) {
+        metadata.sync_clients = metadata.sync_clients.filter((id) => id !== clientId);
+        changed = true;
+        syncAffected.push(clientId);
+      }
+      if (!changed) continue;
+      db.prepare('UPDATE mcp_servers SET metadata = ?, updated_at = ? WHERE id = ?')
+        .run(JSON.stringify(metadata), now, row.id);
+      updated += 1;
+    }
+    if (syncAffected.length) {
+      try { this.syncToClients({ clientIds: [...new Set(syncAffected)] }); } catch (e) {
+        console.warn('[mcp-manager] unbindClient sync:', e.message);
+      }
+    }
+    if (updated) {
+      try { require('./mcp-gateway-server').reloadMcpGateway(); } catch { /* ignore */ }
+    }
+    return { updated };
+  }
+
+  /** 清掉已从 Gateway 删除的 app-* 在中转/投射里的残留 */
+  pruneStaleDeletedAppBindings() {
+    if (this._pruningStale) return { updated: 0 };
+    this._pruningStale = true;
+    try {
+      const { isDeletedAppClientId } = require('./mcp-gateway-targets');
+      const db = this._getDb();
+      const rows = db.prepare('SELECT id, metadata FROM mcp_servers').all();
+      const stale = new Set();
+      for (const row of rows) {
+        const metadata = this._parseJson(row.metadata, {});
+        for (const id of [...(metadata.gateway_clients || []), ...(metadata.sync_clients || [])]) {
+          if (isDeletedAppClientId(id)) stale.add(id);
+        }
+      }
+      let updated = 0;
+      for (const id of stale) updated += this.unbindClient(id).updated || 0;
+      try { require('./resource-manager').pruneStaleDeletedAppProjections(); } catch (e) {
+        console.warn('[mcp-manager] prune resource projections:', e.message);
+      }
+      return { updated, stale: [...stale] };
+    } finally {
+      this._pruningStale = false;
+    }
+  }
+
   getGatewayInfo() {
     try {
       const gw = require('./mcp-gateway-server');
@@ -1192,11 +1323,120 @@ class MCPManager {
     }
   }
 
+  /** 已纳管应用中可中转的 client id（含 Trae / API 应用，不含通用档 api） */
+  _listManagedRelayClientIds() {
+    const { listManagedAppTargetIds, isAllowedGatewayClientId } = require('./mcp-gateway-targets');
+    const { resolveMcpSyncClientId } = require('./mcp-agent-targets');
+    const ids = [];
+    const seen = new Set();
+    const add = (id) => {
+      const s = String(id || '').trim();
+      if (!s || s === 'api' || seen.has(s) || !isAllowedGatewayClientId(s)) return;
+      seen.add(s);
+      ids.push(s);
+    };
+    let managed = new Set();
+    try { managed = listManagedAppTargetIds(); } catch (e) {
+      console.warn('[mcp-manager] listManagedAppTargetIds failed:', e.message);
+    }
+    for (const raw of managed) {
+      const mapped = resolveMcpSyncClientId(raw);
+      add(mapped || raw);
+    }
+    return ids;
+  }
+
+  /**
+   * 目录/自定义纳管后：默认中转到全部已纳管应用（含不能写盘的 API / Trae）。
+   * 已有 gateway_clients（含用户清空的 []）不覆盖。
+   */
+  _defaultRelayToManagedApps(serverId) {
+    if (!serverId || serverId === BUILTIN_BRIDGE_ID) return null;
+    if (isTokenbankBuiltinRelayId(serverId)) return null;
+    const db = this._getDb();
+    const row = db.prepare('SELECT id, builtin, metadata FROM mcp_servers WHERE id = ?').get(serverId);
+    if (!row || row.builtin) return null;
+    const meta = this._parseJson(row.metadata, {});
+    if (Array.isArray(meta.gateway_clients)) return null;
+    const clientIds = this._listManagedRelayClientIds();
+    if (!clientIds.length) return this._autoSyncClients();
+    return this.setServerGatewayRouted(serverId, true, clientIds);
+  }
+
+  /** 中转绑定是否覆盖该应用（含 claude-desktop ↔ claude-code 别名） */
+  _clientMatchesRelay(gatewayClients, clientId) {
+    const clients = Array.isArray(gatewayClients) ? gatewayClients : [];
+    if (!clients.length) return false;
+    const cid = String(clientId || '').trim();
+    if (!cid) return true;
+    const { expandMcpClientMatchIds } = require('./mcp-agent-targets');
+    const want = new Set([cid, ...expandMcpClientMatchIds(cid)]);
+    return clients.some((id) => want.has(id)
+      || expandMcpClientMatchIds(id).some((x) => want.has(x)));
+  }
+
+  _summarizeRelayedServer(s) {
+    let tools = Array.isArray(s.metadata?.tools) ? s.metadata.tools.filter(Boolean) : [];
+    if (!tools.length) {
+      try {
+        const catalogId = s.metadata?.catalogId;
+        if (catalogId) {
+          const it = getCatalogItem(catalogId);
+          tools = (it?.metadata?.tools || []).filter(Boolean);
+        }
+      } catch { /* ignore */ }
+    }
+    const name = s.name || s.id;
+    return {
+      id: s.id,
+      name,
+      display_name: s.display_name || name,
+      description: s.metadata?.description || '',
+      tools,
+      prefix: mcpToolPrefix(name),
+    };
+  }
+
+  /**
+   * 当前应用已中转的第三方 MCP（不含内置 prompts/models/resources/Bridge）。
+   * 供 tb_capabilities / tb_list_resources(type=mcp)：Agent 工具列表里看不到这些服务时据此发现。
+   */
+  listRelayedMcpsForClient(clientId) {
+    this.init();
+    const db = this._getDb();
+    const rows = db.prepare(`
+      SELECT id, name, display_name, type, command, args, url, env, builtin, status, metadata
+      FROM mcp_servers WHERE status = 'active'
+    `).all().map((row) => this._formatServerRow(row));
+    const out = [];
+    for (const s of rows) {
+      if (!s || s.id === BUILTIN_BRIDGE_ID || isTokenbankBuiltinRelayId(s.id)) continue;
+      if (!this._clientMatchesRelay(s.gateway_clients, clientId)) continue;
+      out.push(this._summarizeRelayedServer(s));
+    }
+    return out;
+  }
+
+  /** 按 id / name / 显示名 / 前缀解析当前应用的中转 MCP */
+  resolveRelayedMcpForClient(clientId, ref) {
+    const raw = String(ref || '').trim().toLowerCase();
+    if (!raw) return null;
+    const list = this.listRelayedMcpsForClient(clientId);
+    const exact = list.find((s) => s.id.toLowerCase() === raw
+      || s.name.toLowerCase() === raw
+      || String(s.display_name || '').toLowerCase() === raw
+      || s.prefix.toLowerCase() === raw);
+    if (exact) return exact;
+    return list.find((s) => s.name.toLowerCase().includes(raw)
+      || String(s.display_name || '').toLowerCase().includes(raw)) || null;
+  }
+
   /** Token Bank 数据库中已纳管的 MCP（不含客户端自配） */
   listManagedServers() {
     this.init();
     // 首次无 Agent / 后装 Agent：补齐内置 MCP 默认投射
     this._ensureBuiltinDefaultProjection();
+    this.pruneStaleDeletedAppBindings();
     const db = this._getDb();
     const rows = db.prepare(`
       SELECT id, name, display_name, type, command, args, url, env, builtin, status, metadata, created_at, updated_at
@@ -1209,7 +1449,7 @@ class MCPManager {
 
   /**
    * 将 Agent 上扫描到的 MCP 纳管进 Token Bank（不改动该 Agent 原配置、不自动同步到其他 Agent）
-   * 纳管后可在「已纳管」页选择投射到其他应用
+   * 纳管后可在「已纳管」页选择中转到其他应用
    */
   importFromAgent({ clientId, clientKey, originAgents }) {
     this.init();
@@ -1640,6 +1880,11 @@ class MCPManager {
     if (!isTokenbankBuiltinRelayId(row.id)) {
       gateway_clients = gateway_clients.filter((id) => id !== 'api');
     }
+    // 已删除的 API 应用不在列表展示（落库清理由 prune / unbindClient）
+    try {
+      const { isDeletedAppClientId } = require('./mcp-gateway-targets');
+      gateway_clients = gateway_clients.filter((id) => !isDeletedAppClientId(id));
+    } catch { /* ignore */ }
 
     return {
       ...row,

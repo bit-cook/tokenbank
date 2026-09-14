@@ -57,6 +57,8 @@ function normalizeYamlItem(raw) {
     placeholder: f.placeholder,
     defaultValue: expandHome(f.default_value ?? f.defaultValue ?? ''),
     envKey: f.env_key ?? f.envKey,
+    // 远程 HTTP/SSE：写入 metadata.headers（如 Pipeworx X-API-Key）
+    headerKey: f.header_key ?? f.headerKey,
     appendArg: f.append_arg ?? f.appendArg,
     required: !!f.required,
   }));
@@ -70,6 +72,8 @@ function normalizeYamlItem(raw) {
     type: raw.type || 'stdio',
     command: raw.command,
     args: Array.isArray(raw.args) ? raw.args : [],
+    // 远程 HTTP/SSE MCP（如 Pipeworx）用 url，stdio 项可省略
+    url: raw.url ? String(raw.url).trim() : '',
     env: raw.env && typeof raw.env === 'object' ? raw.env : {},
     metadata: raw.metadata && typeof raw.metadata === 'object' ? raw.metadata : {},
     configFields,
@@ -157,7 +161,7 @@ function fallbackCatalog() {
     id: 'tokenbank-resources',
     name: 'tokenbank-resources',
     display_name: 'Token Bank Resources',
-    description: '内置资源发现：tb_capabilities 能力总览、已纳管 skill/assistant、社区目录、网关 API',
+    description: '内置资源发现：tb_capabilities 能力总览、已纳管 skill/assistant、社区目录、中转 MCP、网关 API',
     type: 'stdio',
     command: '__DYNAMIC_ELECTRON__',
     args: [],
@@ -166,7 +170,7 @@ function fallbackCatalog() {
       category: 'agent',
       categoryGroup: 'tokenbank',
       icon: '📚',
-      tools: ['tb_capabilities', 'tb_list_resources', 'tb_get_resource', 'tb_get_prompt', 'tb_list_prompts', 'tb_list_catalog', 'tb_list_gateway'],
+      tools: ['tb_capabilities', 'tb_list_resources', 'tb_get_resource', 'tb_get_prompt', 'tb_list_prompts', 'tb_list_catalog', 'tb_list_gateway', 'tb_call_mcp'],
       tags: ['内置', '资源'],
     },
     configFields: [],

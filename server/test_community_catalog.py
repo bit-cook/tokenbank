@@ -17,6 +17,7 @@ class TestDefaultDoc(unittest.TestCase):
         ids = {m.get("catalog_id") or m.get("id") for m in doc["mcp"]}
         self.assertIn("tokenbank-agent-bridge", ids)
         self.assertIn("tokenbank-prompts", ids)
+        self.assertIn("pipeworx", ids)
 
     def test_resources_seeded_from_yaml(self):
         doc = cc.load_default_doc()

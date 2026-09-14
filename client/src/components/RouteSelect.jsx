@@ -34,10 +34,32 @@ function modelTierKey(m) {
   return encodeTierModelRoute(m.tier, m.id);
 }
 
+function sceneRouteAllSteps(route) {
+  return [...(route?.steps || []), ...(route?.rules || []).flatMap(r => r.steps || [])];
+}
+
+/** 钉死模型在本地不可用 → 与场景路由列表「需重新设置」同口径 */
+function sceneRouteNeedsReset(route, avail) {
+  return sceneRouteAllSteps(route).some(s => (s.model || s.label) && !avail.has(s.model || s.label));
+}
+
+function isUsableSceneRoute(route, avail) {
+  if (sceneRouteNeedsReset(route, avail)) return false;
+  if (route.strategy || route.flow) return true;
+  return sceneRouteAllSteps(route).some(s =>
+    s.strategy || s.scope || s.tier || s.provider || s.sharer || avail.has(s.model || s.label)
+  );
+}
+
+/** 可绑到应用的场景路由（排除需重新设置的） */
+export function usableSceneRoutes(routes, availableModels) {
+  const avail = new Set((availableModels || []).map(m => m.id || m.name));
+  return (routes || []).filter(r => isUsableSceneRoute(r, avail));
+}
+
 /** 场景路由 + 模型分层选项（供其他原生 <select> 复用） */
 export function routeSelectChildren({ routes, availableModels, t, showOfficial, showGatewayRoutes, isManual }) {
-  const avail = new Set((availableModels || []).map(m => m.id));
-  const usable = (routes || []).filter(r => r.strategy || r.flow || (r.steps || []).some(s => s.strategy || s.scope || s.tier || s.provider || s.sharer || avail.has(s.model || s.label)));
+  const usable = usableSceneRoutes(routes, availableModels);
   const showRoutes = showGatewayRoutes !== false;
   return (
     <>
@@ -73,8 +95,7 @@ function buildRouteMenuItems({ routes, availableModels, t, showGatewayRoutes, is
   }
   if (showGatewayRoutes === false) return items;
 
-  const avail = new Set((availableModels || []).map(m => m.id));
-  const usable = (routes || []).filter(r => r.strategy || r.flow || (r.steps || []).some(s => s.strategy || s.scope || s.tier || s.provider || s.sharer || avail.has(s.model || s.label)));
+  const usable = usableSceneRoutes(routes, availableModels);
   if (usable.length) {
     items.push({ kind: 'group', label: t('gateway.app.sceneRoutes') });
     for (const r of usable) {
@@ -95,9 +116,10 @@ function buildRouteMenuItems({ routes, availableModels, t, showGatewayRoutes, is
   return items;
 }
 
-export const ROUTE_SELECT_COMPACT = 'w-full min-w-0 max-w-full text-[11px] bg-white/45 dark:bg-zinc-900/35 border border-white/50 dark:border-white/10 rounded-[6px] px-1.5 py-1 outline-none text-zinc-700 dark:text-zinc-200 backdrop-blur-xl backdrop-saturate-150 shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_1px_3px_rgba(0,0,0,0.06)] disabled:opacity-40 disabled:cursor-not-allowed transition-[border-color,box-shadow,background-color] duration-200';
-export const ROUTE_SELECT_NORMAL = 'w-full text-sm bg-white/45 dark:bg-zinc-900/35 border border-white/50 dark:border-white/10 rounded-lg px-3 py-1.5 outline-none text-zinc-800 dark:text-zinc-100 backdrop-blur-xl backdrop-saturate-150 shadow-[inset_0_1px_0_rgba(255,255,255,0.65),0_1px_3px_rgba(0,0,0,0.06)] disabled:opacity-40 disabled:cursor-not-allowed transition-[border-color,box-shadow,background-color] duration-200';
-export const ROUTE_SELECT_OPEN = 'bg-white/55 dark:bg-zinc-900/45 ring-[2px] ring-[#007AFF]/25 border-[#007AFF]/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.75),0_0_0_1px_rgba(0,122,255,0.12),0_4px_16px_rgba(0,122,255,0.12)]';
+// 触发器底色跟随所在行/主题，避免实心白块贴在灰色表格上
+export const ROUTE_SELECT_COMPACT = 'w-full min-w-0 max-w-full text-[11px] bg-transparent border border-zinc-200/80 dark:border-white/10 rounded-[6px] px-1.5 py-1 outline-none text-zinc-700 dark:text-zinc-200 disabled:opacity-40 disabled:cursor-not-allowed transition-[border-color,box-shadow,background-color] duration-200';
+export const ROUTE_SELECT_NORMAL = 'w-full text-sm bg-transparent border border-zinc-200/80 dark:border-white/10 rounded-lg px-3 py-1.5 outline-none text-zinc-800 dark:text-zinc-100 disabled:opacity-40 disabled:cursor-not-allowed transition-[border-color,box-shadow,background-color] duration-200';
+export const ROUTE_SELECT_OPEN = 'bg-white/35 dark:bg-white/[0.06] ring-[2px] ring-[#007AFF]/25 border-[#007AFF]/30 shadow-[0_0_0_1px_rgba(0,122,255,0.12)]';
 
 const PANEL_MAX_H = 240;
 const PANEL_MARGIN = 8;
@@ -156,8 +178,8 @@ const POPUP_THEME = {
       'antialiased subpixel-antialiased',
       'text-[11px] leading-[16px] tracking-[-0.01em]',
       'rounded-[12px]',
-      'border border-white/40 dark:border-white/[0.12]',
-      'bg-white/55 dark:bg-zinc-900/45',
+      'border border-zinc-200/80 dark:border-white/[0.12]',
+      'bg-white/95 dark:bg-zinc-900/95',
       'backdrop-blur-3xl backdrop-saturate-[200%]',
       'shadow-[inset_0_1px_0_rgba(255,255,255,0.72),0_0_0_0.5px_rgba(255,255,255,0.35),0_8px_32px_rgba(0,0,0,0.12),0_2px_8px_rgba(0,0,0,0.06)]',
       'py-1.5',
@@ -179,8 +201,8 @@ const POPUP_THEME = {
       'antialiased subpixel-antialiased',
       'text-[13px] leading-[18px] tracking-[-0.01em]',
       'rounded-[14px]',
-      'border border-white/40 dark:border-white/[0.12]',
-      'bg-white/55 dark:bg-zinc-900/45',
+      'border border-zinc-200/80 dark:border-white/[0.12]',
+      'bg-white/95 dark:bg-zinc-900/95',
       'backdrop-blur-3xl backdrop-saturate-[200%]',
       'shadow-[inset_0_1px_0_rgba(255,255,255,0.72),0_0_0_0.5px_rgba(255,255,255,0.35),0_12px_40px_rgba(0,0,0,0.14),0_4px_12px_rgba(0,0,0,0.06)]',
       'py-2',
