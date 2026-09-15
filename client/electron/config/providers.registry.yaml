@@ -432,6 +432,28 @@ providers:
   signup_url: https://platform.openai.com/api-keys
   aliases:
   - codex-cli
+- id: chatgpt-web
+  label: ChatGPT 网页
+  icon: 🌐
+  tier: free
+  # 个人本地源：指向你本机运行的 codex-chatgpt-web(miuuyy) loopback，凭据存本地不上云
+  hint: 本机运行 codex-chatgpt-web 后填入端口/Bearer；仅本地路由，实验性
+  base_url: http://127.0.0.1:17841
+  modalities:
+    language: true
+  models: []
+  pricing: {}
+  handler: openai
+  api_format: responses
+  supports_responses: true
+  enabled_default: false
+  keyless: false
+  key_prefix: []
+  local_only: true
+  experimental: true
+  signup_url: https://github.com/miuuyy/codex-chatgpt-web
+  aliases:
+  - chatgpt-web-personal
 - id: anthropic-paid
   label: Claude Code
   icon: 🔷

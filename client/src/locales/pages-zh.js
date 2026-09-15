@@ -839,6 +839,8 @@ export default {
   'providers.meta.tokenbank-p2p.label': '社区分享网络',
   'providers.meta.tokenbank-p2p.hint': '消耗积分使用社区共享算力',
   'providers.meta.openai.hint': '付费 API，支持 GPT-4o / o3 等全系模型',
+  'providers.meta.chatgpt-web.label': 'ChatGPT 网页',
+  'providers.meta.chatgpt-web.hint': '⚠️ 实验性·仅本地：本机运行 codex-chatgpt-web 后填端口/Bearer；浏览器自动化、非官方 API，仅供个人自用，请遵守 ChatGPT 使用条款',
   'providers.meta.anthropic-paid.hint': '付费 API，Claude 3.5 / 3.7 等系列',
   'providers.meta.gemini.hint': 'AI Studio 免费领 API Key',
   'providers.meta.github-copilot.hint': '用 GitHub 账号登录（需 Copilot 订阅）',

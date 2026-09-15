@@ -839,6 +839,8 @@ export default {
   'providers.meta.tokenbank-p2p.label': 'Community sharing network',
   'providers.meta.tokenbank-p2p.hint': 'Spend credits to use community shared compute',
   'providers.meta.openai.hint': 'Paid API — GPT-4o, o3, and full model lineup',
+  'providers.meta.chatgpt-web.label': 'ChatGPT Web',
+  'providers.meta.chatgpt-web.hint': '⚠️ Experimental · local-only: run codex-chatgpt-web locally, then enter its port/Bearer. Browser automation, unofficial API — personal use only; follow ChatGPT’s terms of service',
   'providers.meta.anthropic-paid.hint': 'Paid API — Claude 3.5 / 3.7 series',
   'providers.meta.gemini.hint': 'Free API key from AI Studio',
   'providers.meta.github-copilot.hint': 'Sign in with GitHub (Copilot subscription required)',

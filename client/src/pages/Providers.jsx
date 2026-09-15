@@ -2583,6 +2583,169 @@ function formatProviderTestMsg(result, t) {
   };
 }
 
+/**
+ * 统一「ChatGPT」源卡：把 Codex 桶(OAuth) 与 网页桶(内嵌会话) 并到一起。
+ * 一次内嵌登录共享会话；Codex 授权在独立内嵌窗口完成（已登录→基本一键 Approve）。
+ * 网页桶 base_url/token 由本地 server 自动管，UI 不出现手填框。
+ */
+function ChatGptCard({ provider, codexProvider, onPersistEnabled, onUpdate }) {
+  const api = (typeof window !== 'undefined' && window.electronAPI && window.electronAPI.chatgptWeb) || null;
+  const [st, setSt] = useState({ running: false, loggedIn: false, port: null });
+  const [busy, setBusy] = useState('');
+  const [msg, setMsg] = useState('');
+  const [codexBusy, setCodexBusy] = useState(false);
+  const [codexMsg, setCodexMsg] = useState('');
+  const [codexCode, setCodexCode] = useState('');
+  const pollRef = useRef(false);
+  const webEnabled = provider.enabled !== false;
+  const codexConnected = !!(codexProvider && codexProvider.auth_type === 'oauth'
+    && (codexProvider.credentials?.access_token || codexProvider.credentials?.refresh_token));
+
+  const refresh = useCallback(async () => {
+    if (!api) return;
+    try { setSt(await api.status()); } catch { /* ignore */ }
+  }, [api]);
+  useEffect(() => {
+    if (!webEnabled) return undefined;
+    refresh();
+    const id = setInterval(refresh, 5000);
+    return () => clearInterval(id);
+  }, [webEnabled, refresh]);
+  useEffect(() => () => { pollRef.current = false; }, []);
+
+  // —— 网页桶 ——
+  const doLogin = async () => {
+    if (!api) return;
+    setBusy('login'); setMsg('');
+    try { await api.login(); await refresh(); } catch (e) { setMsg('✗ ' + (e.message || 'login failed')); }
+    setBusy('');
+  };
+  const doTest = async () => {
+    if (!api) return;
+    setBusy('test'); setMsg('');
+    try {
+      const r = await api.test();
+      setMsg(r.ok ? '✓ ' + (r.text || 'ok') : '✗ ' + (r.message || r.code || 'failed'));
+    } catch (e) { setMsg('✗ ' + (e.message || 'error')); }
+    setBusy(''); refresh();
+  };
+  const toggleWeb = () => onPersistEnabled && onPersistEnabled('chatgpt-web', !webEnabled);
+
+  // —— Codex 桶（OAuth，授权页走内嵌独立窗口，复用现成 device 流）——
+  async function persistCodex(r) {
+    try {
+      const cfg = (await getConfig().read()) || {};
+      const list = [...(cfg.providers || [])];
+      const i = list.findIndex(p => p.id === 'openai');
+      const patch = { id: 'openai', auth_type: 'oauth', oauth_provider: r.oauth_provider || 'codex',
+        credentials: r.credentials, token: '', enabled: true };
+      if (i >= 0) list[i] = { ...list[i], ...patch }; else list.push(patch);
+      await getConfig().write({ ...cfg, providers: list });
+      if (onUpdate) onUpdate('openai', patch);
+      setCodexMsg('✓ Codex 已连接');
+    } catch (e) { setCodexMsg('✗ 保存失败：' + (e.message || 'error')); }
+  }
+  const loginCodex = async () => {
+    setCodexBusy(true); setCodexMsg(''); setCodexCode('');
+    try {
+      const oapi = getOauth();
+      const r = await oapi.start('codex', {});
+      const url = r.verificationUrl || r.authUrl;
+      setCodexCode(r.userCode || '');
+      // 优先在内嵌授权窗口打开（共享 ChatGPT 登录态）；无 IPC 时回退外部浏览器
+      if (url) {
+        if (api && api.openAuth) await api.openAuth(url);
+        else await oapi.openExternal(url);
+      }
+      // 轮询设备码
+      pollRef.current = true;
+      for (let i = 0; i < 60 && pollRef.current; i += 1) {
+        await new Promise(res => setTimeout(res, 5000));
+        if (!pollRef.current) break;
+        let p;
+        try { p = await oapi.poll(r.sessionId); }
+        catch (e) { setCodexMsg('✗ ' + (e.message || 'poll failed')); break; }
+        if (p.done) { await persistCodex(p); setCodexCode(''); if (api && api.closeAuth) api.closeAuth(); break; }
+      }
+    } catch (e) { setCodexMsg('✗ ' + (e.message || 'login failed')); }
+    setCodexBusy(false);
+  };
+  const disconnectCodex = () => {
+    if (onUpdate) onUpdate('openai', { auth_type: 'api_key', oauth_provider: '', credentials: null });
+    setCodexMsg('');
+  };
+
+  const btnDark = 'text-xs px-2.5 py-1 rounded-lg bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-50 transition';
+  const btnLight = 'text-xs px-2.5 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-50 transition';
+
+  return (
+    <div className="tb-soft-tile rounded-2xl overflow-hidden">
+      <div className="flex items-start gap-3 p-4">
+        <div className="w-9 h-9 rounded-xl bg-zinc-100/70 dark:bg-zinc-800/70 backdrop-blur-sm flex items-center justify-center text-lg shrink-0">⚡</div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-sm font-medium truncate text-zinc-800 dark:text-zinc-200">ChatGPT</span>
+            <span className="text-[10px] text-zinc-400">Codex + 网页，双桶</span>
+          </div>
+
+          {/* 共享登录 */}
+          <div className="mt-2 flex items-center gap-2 flex-wrap">
+            <button onClick={doLogin} disabled={busy === 'login'} className={btnDark}>
+              {busy === 'login' ? '…' : (st.loggedIn ? '重新登录 ChatGPT' : '登录 ChatGPT')}
+            </button>
+            <span className={`inline-flex items-center gap-1 text-[11px] ${st.loggedIn ? 'text-green-600 dark:text-green-400' : 'text-zinc-400'}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${st.loggedIn ? 'bg-green-500' : 'bg-zinc-400'}`} />
+              {st.loggedIn ? '会话已登录' : '会话未登录'}
+            </span>
+          </div>
+
+          {/* Codex 桶 */}
+          <div className="mt-3 rounded-xl bg-zinc-50/70 dark:bg-zinc-800/40 p-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-200">Codex 桶</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">官方 OAuth · 稳定</span>
+                <span className={`text-[11px] ${codexConnected ? 'text-green-600 dark:text-green-400' : 'text-zinc-400'}`}>{codexConnected ? '已连接' : '未连接'}</span>
+              </div>
+              {codexConnected
+                ? <button onClick={disconnectCodex} className={btnLight}>断开</button>
+                : <button onClick={loginCodex} disabled={codexBusy} className={btnLight}>{codexBusy ? '授权中…' : '连接 Codex'}</button>}
+            </div>
+            {codexCode && <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">授权码：<code className="font-mono text-zinc-700 dark:text-zinc-200">{codexCode}</code>（在弹出的授权窗口里确认）</p>}
+            {codexMsg && <p className={`mt-1 text-[11px] ${codexMsg.startsWith('✓') ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>{codexMsg}</p>}
+            <p className="mt-1 text-[10px] text-zinc-400">上游 backend-api/codex，官方通道</p>
+          </div>
+
+          {/* 网页桶 */}
+          <div className="mt-2 rounded-xl bg-zinc-50/70 dark:bg-zinc-800/40 p-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-200">网页桶</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">实验性 · 大额度</span>
+                {webEnabled && st.running && (
+                  <span className="text-[11px] text-zinc-500 dark:text-zinc-400"><code>127.0.0.1:{st.port || '…'}</code></span>
+                )}
+              </div>
+              <Toggle enabled={webEnabled} onChange={toggleWeb} />
+            </div>
+            {webEnabled && (
+              <div className="mt-2 flex items-center gap-2">
+                <button onClick={doTest} disabled={busy === 'test'} className={btnLight}>{busy === 'test' ? '测试中…' : '测试'}</button>
+                <span className="text-[10px] text-zinc-400">凭据本地自动管理，无需填写</span>
+              </div>
+            )}
+            {msg && <p className={`mt-1 text-[11px] ${msg.startsWith('✓') ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>{msg}</p>}
+          </div>
+
+          <p className="mt-2 text-[11px] leading-snug text-amber-700/90 dark:text-amber-300/80">
+            ⚠️ 网页桶为浏览器自动化·非官方 API，登录你自己的 ChatGPT 会话，仅供个人自用；把订阅当 API 使用可能违反 ChatGPT 使用条款，风险自担。Codex 桶为官方 OAuth 通道。
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CustomProviderCard({ provider, onUpdate, onRemove, onTest, onSilentPersist, onPersistEnabled, userPayg = [], userSubscriptions = [], onEditPricing, providerPricing = {}, paygCatalog = [], accountInst = null, pricingOverrides = {}, onSaveAccounts, onOverridesChange, onPersistModels, onPersistTier, cooldown = null, onRetryCooldown = null }) {
   const { t } = useLang();
   const [showKey, setShowKey] = useState(false);
@@ -3884,6 +4047,24 @@ export default function Providers() {
 
   /** 立即落盘 enabled，避免 debounce 未完成时网关页仍读到旧开关 */
   const persistProviderEnabled = useCallback(async (id, enabled) => {
+    // ChatGPT 网页源：base_url/token 由本地 server 自动管，启用即起 server（写入真实 base_url+token），
+    // 禁用即停。之后回读配置把自动填好的字段灌回 UI，无需用户手填 base_url。
+    if (id === 'chatgpt-web' && isElectron() && window.electronAPI?.chatgptWeb) {
+      try {
+        if (enabled) await window.electronAPI.chatgptWeb.start();
+        else await window.electronAPI.chatgptWeb.disable();
+        const cfg = (await getConfig().read()) || {};
+        const fresh = (cfg.providers || []).find(p => p.id === 'chatgpt-web');
+        lastSaved.current = cfg.providers || [];
+        setProviders(prev => {
+          const i = prev.findIndex(p => p.id === id);
+          const merged = fresh ? { ...(prev[i] || {}), ...fresh } : { ...(prev[i] || {}), enabled: !!enabled };
+          if (i >= 0) { const n = [...prev]; n[i] = merged; return n; }
+          return fresh ? [...prev, fresh] : prev;
+        });
+      } catch (e) { console.warn('[chatgpt-web] enable failed:', e?.message); }
+      return;
+    }
     const stub = id === 'tokenbank-p2p'
       ? { ...BUILTIN_P2P_PROVIDER, enabled: !!enabled }
       : { id, type: 'paid', enabled: !!enabled, token: '', base_url: '', models: [] };
@@ -4189,19 +4370,32 @@ export default function Providers() {
     [directAll],
   );
   // 按模型视图：仅已启用供给源；不回退 catalog 刊例价
-  const modelViewInstances = useMemo(() => accountInstances.flatMap(inst => {
-    const gwId = inst.gateway_id;
-    const prov = gwId ? providers.find(p => p.id === gwId) : null;
-    // 有对应网关源且已停用 → 不进入模型列表
-    if (prov && prov.enabled === false) return [];
-    return [{
-      ...inst,
-      test_verified: prov?.test_verified === true,
-      models: resolveModelsForModelView(
-        inst, providers, userPayg, userSubscriptions, pricingOverrides, directByAgent,
-      ),
-    }];
-  }), [accountInstances, providers, userPayg, userSubscriptions, pricingOverrides, directByAgent]);
+  const modelViewInstances = useMemo(() => {
+    const base = accountInstances.flatMap(inst => {
+      const gwId = inst.gateway_id;
+      const prov = gwId ? providers.find(p => p.id === gwId) : null;
+      // 有对应网关源且已停用 → 不进入模型列表
+      if (prov && prov.enabled === false) return [];
+      return [{
+        ...inst,
+        test_verified: prov?.test_verified === true,
+        models: resolveModelsForModelView(
+          inst, providers, userPayg, userSubscriptions, pricingOverrides, directByAgent,
+        ),
+      }];
+    });
+    // ChatGPT 网页源：非账户实例，手动并入模型视图，否则源/模型列表里看不到它
+    const cw = providers.find(p => p.id === 'chatgpt-web');
+    if (cw && cw.enabled !== false && isElectron() && window.electronAPI?.chatgptWeb) {
+      base.push({
+        id: 'chatgpt-web', gateway_id: 'chatgpt-web', source_id: 'chatgpt-web',
+        name: cw.label || 'ChatGPT 网页', icon: '🌐', tag: 'free',
+        test_verified: false,
+        models: Array.isArray(cw.models) ? cw.models : [],
+      });
+    }
+    return base;
+  }, [accountInstances, providers, userPayg, userSubscriptions, pricingOverrides, directByAgent]);
   // 个人源「全部测速」：每个账户×模型钉 provider，避免同模型多账户只打中其中一个（展开会显示「无请求」）
   const personalProbeTargets = useMemo(() => {
     const seen = new Set(); const out = [];
@@ -4257,6 +4451,7 @@ export default function Providers() {
   // 已启用但未登记账户实例的供给源（如 Ollama），与账户卡片同一网格展示
   const extraEnabledSources = personalEnabledAll.filter(p => {
     if (p.type === 'p2p' || hasAcct(p.id)) return false;
+    if (p.id === 'chatgpt-web') return false; // 走专用卡，不进通用渲染
     return matchFilter(getPersonalSourceTag(liveStateOf(p), meta, userPayg, userSubscriptions));
   });
   // 列表视图：网关 / 直连 / 无账户实例的免费源，统一按添加顺序渲染
@@ -4279,8 +4474,13 @@ export default function Providers() {
       rows.push({ order: extraBase + i, type: 'extra', provider: p });
     });
     rows.sort((a, b) => a.order - b.order);
+    // ChatGPT 网页源：本地自管，固定置顶一行专用卡（仅 electron）
+    if (isElectron() && window.electronAPI?.chatgptWeb) {
+      const cw = providers.find(p => p.id === 'chatgpt-web') || { id: 'chatgpt-web', enabled: false, label: 'ChatGPT 网页' };
+      rows.unshift({ order: -1, type: 'chatgptweb', provider: cw });
+    }
     return rows;
-  }, [accountInstances, directByAgent, bill, extraEnabledSources, personalFilter]);
+  }, [accountInstances, directByAgent, bill, extraEnabledSources, personalFilter, providers]);
 
   // 删除单个账户实例：仅删对应 user_payg/sub 行；无其他实例共用 gateway_id 时才停用 provider
   const removeAccountInstance = async (inst) => {
@@ -4614,6 +4814,11 @@ export default function Providers() {
         <>
         <div className="grid grid-cols-2 gap-3">
           {personalSourceRows.map(row => {
+            if (row.type === 'chatgptweb') {
+              return <ChatGptCard key="chatgpt" provider={row.provider}
+                codexProvider={providers.find(p => p.id === 'openai')}
+                onPersistEnabled={persistProviderEnabled} onUpdate={updateProvider} />;
+            }
             if (row.type === 'direct') {
               const d = row.direct;
               return (

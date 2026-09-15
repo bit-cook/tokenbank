@@ -2877,6 +2877,11 @@ function registerIPC() {
   });
   ipcMain.handle('oauth:openExternal', (_e, { url } = {}) => { if (url) shell.openExternal(url); return { ok: true }; });
 
+  // ChatGPT 网页源（原生 port）：内嵌浏览器 + 本地 Responses server + provider.token 回写
+  try {
+    require('./chatgpt-web').registerIpc(ipcMain, { readAgentConfig, writeAgentConfig });
+  } catch (e) { console.warn('[chatgpt-web] IPC 注册失败:', e && e.message); }
+
   // 订阅用量额度抓取（复用 oauth 凭证；provider 条目存在 agent config ~/.llm-agent/config.json）
   const usageMod = require('./usage');
   const usageDeps = { getCfg: readAgentConfig, saveCfg: writeAgentConfig };
@@ -6045,6 +6050,9 @@ app.whenReady().then(() => {
   // OpenRouter 模型目录：启动拉一次(无缓存/过期时) + 每 1h 定时刷新，供网关合并进 openrouter 源模型。
   // 前端源卡显示由前端主导（启用时 refresh + 拿模型写进自己的配置状态，见 Providers.persistProviderEnabled）。
   try { require('./openrouter-catalog').start(); } catch {}
+
+  // ChatGPT 网页源：仅当用户已启用时自启本地 server（未启用不开浏览器/不占端口）
+  try { require('./chatgpt-web').maybeStart(); } catch (e) { console.warn('[chatgpt-web] maybeStart:', e && e.message); }
 
   // OAuth token 后台定时刷新：之前只在"用 Claude/看用量卡片"时懒刷新，不用就会过期。
   // 每 30min 扫一遍 oauth 源，过期前 45min 主动刷新回写，保证 token 不断供（Claude/Gemini 等）。

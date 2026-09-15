@@ -163,6 +163,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     configure: (baseUrl, apiKey, models) => ipcRenderer.invoke('claude:configure', { baseUrl, apiKey, models }),
     status: () => ipcRenderer.invoke('claude:status'),
   },
+  chatgptWeb: {
+    status:    () => ipcRenderer.invoke('chatgptweb:status'),
+    start:     () => ipcRenderer.invoke('chatgptweb:start'),
+    stop:      () => ipcRenderer.invoke('chatgptweb:stop'),
+    login:     () => ipcRenderer.invoke('chatgptweb:login'),
+    hideLogin: () => ipcRenderer.invoke('chatgptweb:hideLogin'),
+    openAuth:  (url) => ipcRenderer.invoke('chatgptweb:openAuth', url),
+    closeAuth: () => ipcRenderer.invoke('chatgptweb:closeAuth'),
+    conn:      () => ipcRenderer.invoke('chatgptweb:conn'),
+    test:      () => ipcRenderer.invoke('chatgptweb:test'),
+    disable:   () => ipcRenderer.invoke('chatgptweb:disable'),
+  },
   usage: {
     fetch:    (provider) => ipcRenderer.invoke('usage:fetch', { provider }),
     fetchAll: ()         => ipcRenderer.invoke('usage:fetchAll'),
