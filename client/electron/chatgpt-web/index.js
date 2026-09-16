@@ -1,121 +1,141 @@
-// index.js — ChatGPT 网页源编排层：起本地 Responses server + 把 provider.token 写进 agent config + IPC。
-// main.js 只需 require 本模块调 registerIpc / maybeStart，改动最小。
+// index.js — ChatGPT 网页源编排层（多实例）。
+// 每个实例 = 一个账户 = provider `chatgpt-web-<n>` + 独立 server(端口) + 独立浏览器分区。
+// main.js 只需 require 本模块调 registerIpc / maybeStart。
 const server = require('./server');
 const host = require('./host');
 
-const PROVIDER_ID = 'chatgpt-web';
+const INSTANCE_RE = /^chatgpt-web-(\d+)$/;
 
 let deps = { readAgentConfig: null, writeAgentConfig: null };
-
 function log(...a) { console.log('[chatgpt-web]', ...a); }
 
-// 是否已启用（用户在 GUI 勾选后落到 agent config 的 provider.enabled）
-function isEnabled() {
-  try {
-    const cfg = deps.readAgentConfig?.() || {};
-    const p = (cfg.providers || []).find((x) => x && x.id === PROVIDER_ID);
-    return !!(p && p.enabled);
-  } catch { return false; }
+function readCfg() { try { return deps.readAgentConfig?.() || {}; } catch { return {}; } }
+function writeCfg(cfg) { try { deps.writeAgentConfig?.(cfg); } catch (e) { log('写配置失败', e && e.message); } }
+
+// 所有实例 provider（chatgpt-web-<n>）
+function instanceProviders() {
+  return (readCfg().providers || []).filter((p) => p && INSTANCE_RE.test(p.id));
+}
+function nextIndex() {
+  let max = 0;
+  for (const p of instanceProviders()) { const m = INSTANCE_RE.exec(p.id); if (m) max = Math.max(max, Number(m[1])); }
+  return max + 1;
 }
 
-// 把本地 server 的 base_url + bearer 写进 agent config 的 provider（网关据此注入 Authorization）。
-// enable 省略时保留条目原有 enabled（开机补正用）；显式传 true/false 时覆盖（用户启用/禁用用）。
-function upsertProvider({ port, token }, { enable } = {}) {
-  const read = deps.readAgentConfig, write = deps.writeAgentConfig;
-  if (!read || !write) return;
-  const cfg = read() || {};
+// 写/补正某实例的 provider 条目（base_url/token 由 server 分配）
+function upsertProvider(providerId, n, { port, token }, { enable } = {}) {
+  const cfg = readCfg();
   const providers = Array.isArray(cfg.providers) ? cfg.providers : [];
   const base = `http://127.0.0.1:${port}`;
-  const models = server.status().models.map((m) => ({ name: m, type: 'chat' }));
+  const models = server.WEB_MODELS.map((m) => ({ name: m, type: 'chat' }));
   const patch = {
-    id: PROVIDER_ID,
-    label: 'ChatGPT 网页',
-    // type=free：可路由 tier（网关按 p.type===requestTier 过滤），且非 paid → 不被 migrateAgentProviders 清理
-    type: 'free',
+    id: providerId,
+    label: `ChatGPT 网页 ${n}`,
+    type: 'free',            // 可路由 tier，且非 paid → 不被 migrateAgentProviders 清理
     handler: 'openai',
     api_format: 'responses',
     supports_responses: true,
     base_url: base,
-    token,                    // 本地 bearer；网关 local-gateway.js:1140 注入 Authorization
+    token,
     local_only: true,
     experimental: true,
+    chatgpt_web_instance: n, // 标记 + 序号（前端显示/排序）
   };
-  // enable 省略时保留条目原有 enabled（开机补正用）；显式传 true/false 时覆盖（用户启用/禁用用）。
-  const i = providers.findIndex((x) => x && x.id === PROVIDER_ID);
+  const i = providers.findIndex((x) => x && x.id === providerId);
   if (i >= 0) {
     const prevEnabled = providers[i].enabled;
     const prevModels = Array.isArray(providers[i].models) && providers[i].models.length ? providers[i].models : models;
-    providers[i] = { ...providers[i], ...patch, models: prevModels,
-      enabled: enable === undefined ? prevEnabled : !!enable };
+    providers[i] = { ...providers[i], ...patch, models: prevModels, enabled: enable === undefined ? prevEnabled : !!enable };
   } else {
     providers.push({ ...patch, models, enabled: !!enable });
   }
   cfg.providers = providers;
-  write(cfg);
-  log('已写入 provider', base, 'enabled=', providers.find((x) => x.id === PROVIDER_ID)?.enabled);
+  writeCfg(cfg);
 }
 
-// 启动本地 server（幂等）+ 回写 provider。opts.enable 传给 upsertProvider。不开浏览器窗口（登录时才开）。
-async function start(opts = {}) {
-  const st = await server.start();
-  upsertProvider(st, opts);
+// 新增一个实例：分配序号 → 起 server → 写 provider（启用）
+async function addInstance() {
+  const n = nextIndex();
+  const providerId = `chatgpt-web-${n}`;
+  const st = await server.start(providerId);
+  upsertProvider(providerId, n, st, { enable: true });
+  log('新增实例', providerId, 'port', st.port);
+  return { id: providerId, n, ...st };
+}
+
+// 移除某实例：停 server + 销毁窗口 + 从 conf/agent 删除
+function removeInstance(providerId) {
+  server.forget(providerId);
+  host.destroy(providerId);
+  const cfg = readCfg();
+  if (Array.isArray(cfg.providers)) {
+    const before = cfg.providers.length;
+    cfg.providers = cfg.providers.filter((p) => !(p && p.id === providerId));
+    if (cfg.providers.length !== before) writeCfg(cfg);
+  }
+  log('移除实例', providerId);
+}
+
+// 确保某实例 server 起着并补正 base_url/token（登录/测试前调）
+async function ensureInstance(providerId) {
+  const p = instanceProviders().find((x) => x.id === providerId);
+  const n = p ? (p.chatgpt_web_instance || Number(INSTANCE_RE.exec(providerId)?.[1]) || 1) : (Number(INSTANCE_RE.exec(providerId)?.[1]) || 1);
+  const st = await server.start(providerId);
+  upsertProvider(providerId, n, st, {}); // 保留 enabled
   return st;
 }
 
-// 存在 chatgpt-web 条目 = 用户加过 → 起 server 并补正 base_url/token/type（保留 enabled）
-function hasEntry() {
-  try {
-    const cfg = deps.readAgentConfig?.() || {};
-    return (cfg.providers || []).some((x) => x && x.id === PROVIDER_ID);
-  } catch { return false; }
+// 迁移：删掉旧的单实例 chatgpt-web 条目（现改用 chatgpt-web-<n>）
+function migrateLegacy() {
+  const cfg = readCfg();
+  if (Array.isArray(cfg.providers) && cfg.providers.some((p) => p && p.id === 'chatgpt-web')) {
+    cfg.providers = cfg.providers.filter((p) => !(p && p.id === 'chatgpt-web'));
+    writeCfg(cfg);
+    log('迁移：移除旧单实例 chatgpt-web 条目');
+  }
 }
 
-function stop() {
-  server.stop();
-  host.hideLogin();
-}
-
-// 开机：只要用户加过 chatgpt-web 条目，就起 server 并补正 base_url/token/type（保留 enabled）。
+// 开机：为每个「启用」的实例起 server + 补正
 async function maybeStart() {
-  if (!hasEntry()) { log('无条目，跳过自启'); return; }
-  try { await start(); log(isEnabled() ? '已补正并就绪' : '已补正（当前禁用）'); }
-  catch (e) { log('自启失败', e.message); }
+  migrateLegacy();
+  const enabled = instanceProviders().filter((p) => p.enabled !== false);
+  if (!enabled.length) { log('无启用实例，跳过自启'); return; }
+  for (const p of enabled) {
+    try { await ensureInstance(p.id); } catch (e) { log('实例自启失败', p.id, e && e.message); }
+  }
+  log('已就绪，启用实例数', enabled.length);
+}
+
+async function statusOf(providerId) {
+  const st = server.statusOf(providerId);
+  let loggedIn = false;
+  if (st.running) { try { loggedIn = await host.isLoggedIn(providerId); } catch {} }
+  return { ...st, loggedIn };
 }
 
 function registerIpc(ipcMain, injected) {
   deps = { ...deps, ...injected };
-  ipcMain.handle('chatgptweb:status', async () => {
-    const st = server.status();
-    let loggedIn = false;
-    if (st.running) { try { loggedIn = await host.isLoggedIn(); } catch {} }
-    return { ...st, enabled: isEnabled(), loggedIn };
+  const argId = (a) => (typeof a === 'string' ? a : (a && a.id) || '');
+
+  ipcMain.handle('chatgptweb:add', async () => addInstance());
+  ipcMain.handle('chatgptweb:remove', async (_e, a) => { removeInstance(argId(a)); return { ok: true }; });
+  ipcMain.handle('chatgptweb:list', async () => {
+    const out = [];
+    for (const p of instanceProviders()) out.push({ id: p.id, n: p.chatgpt_web_instance, enabled: p.enabled !== false, ...(await statusOf(p.id)) });
+    return out;
   });
-  ipcMain.handle('chatgptweb:start', async () => start({ enable: true }));
-  ipcMain.handle('chatgptweb:stop', async () => { stop(); return { ok: true }; });
-  ipcMain.handle('chatgptweb:login', async () => { await start({ enable: true }); await host.showLogin(); return { ok: true }; });
-  ipcMain.handle('chatgptweb:hideLogin', async () => { host.hideLogin(); return { ok: true }; });
-  ipcMain.handle('chatgptweb:conn', async () => {
-    const st = server.status();
-    return { port: st.port, endpoint: st.port ? `http://127.0.0.1:${st.port}` : null,
-      tokenMasked: st.token ? st.token.slice(0, 8) + '…' : null };
+  ipcMain.handle('chatgptweb:status', async (_e, a) => statusOf(argId(a)));
+  ipcMain.handle('chatgptweb:login', async (_e, a) => { const id = argId(a); await ensureInstance(id); await host.showLogin(id); return { ok: true }; });
+  ipcMain.handle('chatgptweb:hideLogin', async (_e, a) => { host.hideLogin(argId(a)); return { ok: true }; });
+  ipcMain.handle('chatgptweb:test', async (_e, a) => {
+    const id = argId(a);
+    try { await ensureInstance(id); const out = await host.runTurn(id, '用一句话回复：ok', { overallTimeoutMs: 60000 }); return { ok: true, text: out.text }; }
+    catch (e) { return { ok: false, code: e.code || 'error', message: e.message }; }
   });
-  // 打一发 ping（走本地 server → host → 你自己的 ChatGPT）
-  ipcMain.handle('chatgptweb:test', async () => {
-    try {
-      const out = await host.runTurn('用一句话回复：ok', { overallTimeoutMs: 60000 });
-      return { ok: true, text: out.text };
-    } catch (e) { return { ok: false, code: e.code || 'error', message: e.message }; }
-  });
-  // 禁用：停 server + 把 provider.enabled 置 false
-  ipcMain.handle('chatgptweb:disable', async () => {
-    stop();
-    try {
-      const cfg = deps.readAgentConfig?.() || {};
-      const p = (cfg.providers || []).find((x) => x && x.id === PROVIDER_ID);
-      if (p) { p.enabled = false; deps.writeAgentConfig?.(cfg); }
-    } catch {}
-    return { ok: true };
+  ipcMain.handle('chatgptweb:conn', async (_e, a) => {
+    const st = server.statusOf(argId(a));
+    return { port: st.port, endpoint: st.port ? `http://127.0.0.1:${st.port}` : null, tokenMasked: st.token ? st.token.slice(0, 8) + '…' : null };
   });
 }
 
-module.exports = { registerIpc, maybeStart, start, stop, isEnabled, PROVIDER_ID };
+module.exports = { registerIpc, maybeStart, addInstance, removeInstance, instanceProviders };

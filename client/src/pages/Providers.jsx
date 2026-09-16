@@ -2605,104 +2605,94 @@ function CodeCopy({ value, className = '' }) {
 }
 
 /**
- * ChatGPT 网页源专用卡（只管网页桶；Codex 保持它自己的独立卡，互不影响）。
- * 内嵌浏览器登录你自己的 ChatGPT 会话，驱动 DOM 收发；base_url/token 由本地 server 自动管。
+ * ChatGPT 网页「单实例」卡：一张卡 = 一个 ChatGPT 账户(独立浏览器分区+端口)。
+ * 用 provider.id(chatgpt-web-<n>) 调各自的 IPC；× 删除该实例；无开关(加/删即启停)。
  */
-function ChatGptCard({ provider, onPersistEnabled }) {
+function ChatGptCard({ provider, onRemove }) {
   const api = (typeof window !== 'undefined' && window.electronAPI && window.electronAPI.chatgptWeb) || null;
+  const instId = provider.id;
+  const n = provider.chatgpt_web_instance || (/(\d+)$/.exec(instId) || [])[1] || '';
   const [st, setSt] = useState({ running: false, loggedIn: false, port: null });
   const [busy, setBusy] = useState('');
   const [msg, setMsg] = useState('');
-  const webEnabled = provider.enabled !== false;
   const modelName = (m) => (typeof m === 'string' ? m : (m && (m.name || m.id)) || '');
   const webModels = (provider.models || []).map(modelName).filter(Boolean);
 
   const refresh = useCallback(async () => {
     if (!api) return;
-    try { setSt(await api.status()); } catch { /* ignore */ }
-  }, [api]);
+    try { setSt(await api.status(instId)); } catch { /* ignore */ }
+  }, [api, instId]);
   useEffect(() => {
-    if (!webEnabled) return undefined;
     refresh();
-    const id = setInterval(refresh, 5000);
-    return () => clearInterval(id);
-  }, [webEnabled, refresh]);
+    const t = setInterval(refresh, 5000);
+    return () => clearInterval(t);
+  }, [refresh]);
 
   const doLogin = async () => {
     if (!api) return;
     setBusy('login'); setMsg('');
-    try { await api.login(); await refresh(); } catch (e) { setMsg('✗ ' + (e.message || 'login failed')); }
+    try { await api.login(instId); await refresh(); } catch (e) { setMsg('✗ ' + (e.message || 'login failed')); }
     setBusy('');
   };
   const doTest = async () => {
     if (!api) return;
     setBusy('test'); setMsg('');
     try {
-      const r = await api.test();
+      const r = await api.test(instId);
       setMsg(r.ok ? '✓ ' + (r.text || 'ok') : '✗ ' + (r.message || r.code || 'failed'));
     } catch (e) { setMsg('✗ ' + (e.message || 'error')); }
     setBusy(''); refresh();
   };
-  const toggleWeb = () => onPersistEnabled && onPersistEnabled('chatgpt-web', !webEnabled);
 
-  // 与其它卡片一致的标准按钮样式（rounded-lg + zinc 描边）；登录=蓝字强调，同 OAuth 卡
   const btnPrimary = 'inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-blue-600 dark:text-blue-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-50 transition-colors';
   const btnGhost = 'inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-50 transition-colors';
-  const StatusPill = ({ ok, on, off }) => (
-    <span className={`inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full ${ok ? 'bg-emerald-500/12 text-emerald-600 dark:text-emerald-400' : 'bg-zinc-500/10 text-zinc-400'}`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${ok ? 'bg-emerald-500' : 'bg-zinc-400'}`} />
-      {ok ? on : off}
-    </span>
-  );
 
   return (
     <div className="tb-soft-tile rounded-2xl overflow-hidden">
       <div className="p-4">
-        {/* 头部 */}
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-2xl flex items-center justify-center text-lg shrink-0 bg-gradient-to-br from-amber-400/25 to-orange-500/20 border border-white/50 dark:border-white/10 shadow-sm">🌐</div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">ChatGPT 网页</span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400">实验性 · 大额度</span>
+              <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">ChatGPT 网页 {n}</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400">实验性</span>
             </div>
-            <div className="text-[11px] text-zinc-400 mt-0.5">内嵌登录你自己的网页会话，驱动 DOM 收发</div>
+            <div className="text-[11px] text-zinc-400 mt-0.5">账户 {n} · 独立登录会话</div>
           </div>
           <div className="flex items-center gap-2 shrink-0">
-            {webEnabled && <StatusPill ok={st.loggedIn} on="已登录" off="未登录" />}
-            <Toggle enabled={webEnabled} onChange={toggleWeb} />
+            <span className={`inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full ${st.loggedIn ? 'bg-emerald-500/12 text-emerald-600 dark:text-emerald-400' : 'bg-zinc-500/10 text-zinc-400'}`}>
+              <span className={`w-1.5 h-1.5 rounded-full ${st.loggedIn ? 'bg-emerald-500' : 'bg-zinc-400'}`} />
+              {st.loggedIn ? '已登录' : '未登录'}
+            </span>
+            <button onClick={() => onRemove && onRemove(instId)} title="删除该账户实例"
+              className="text-zinc-400 hover:text-red-500 dark:hover:text-red-400 text-lg leading-none transition-colors">×</button>
           </div>
         </div>
 
-        {webEnabled && (
-          <div className="mt-3 space-y-2.5">
-            <div className="flex items-center gap-2 flex-wrap">
-              <button onClick={doLogin} disabled={busy === 'login'} className={btnPrimary}>
-                {busy === 'login' ? '打开登录窗口…' : (st.loggedIn ? '重新登录 ChatGPT' : '登录 ChatGPT')}
-              </button>
-              <button onClick={doTest} disabled={busy === 'test' || !st.running} className={btnGhost} title={!st.running ? '启动中' : '测试'}>
-                {busy === 'test' ? '测试中…' : '测试'}
-              </button>
-              {msg && <span className={`text-[11px] ${msg.startsWith('✓') ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>{msg}</span>}
-            </div>
-            <div className="flex items-center gap-1.5 text-[11px] text-zinc-500 dark:text-zinc-400">
-              <span>本地端点</span>
-              {st.running ? <CodeCopy value={`http://127.0.0.1:${st.port}`} /> : <span className="text-zinc-400">启动中…</span>}
-              <span className="text-[10px] text-zinc-400">凭据本地自动管理</span>
-            </div>
-            {webModels.length > 0 && (
-              <div className="flex items-center gap-1 flex-wrap">
-                <span className="text-[10px] text-zinc-400 mr-0.5">模型</span>
-                {webModels.map(m => (
-                  <span key={m} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/12 text-amber-700 dark:text-amber-300">{m}</span>
-                ))}
-              </div>
-            )}
+        <div className="mt-3 space-y-2.5">
+          <div className="flex items-center gap-2 flex-wrap">
+            <button onClick={doLogin} disabled={busy === 'login'} className={btnPrimary}>
+              {busy === 'login' ? '打开登录窗口…' : (st.loggedIn ? '重新登录' : '登录 ChatGPT')}
+            </button>
+            <button onClick={doTest} disabled={busy === 'test' || !st.running} className={btnGhost} title={!st.running ? '启动中' : '测试'}>
+              {busy === 'test' ? '测试中…' : '测试'}
+            </button>
+            {msg && <span className={`text-[11px] ${msg.startsWith('✓') ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>{msg}</span>}
           </div>
-        )}
-        {!webEnabled && <p className="mt-2 text-[10px] text-zinc-400">打开开关后可登录并测试。</p>}
+          <div className="flex items-center gap-1.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+            <span>本地端点</span>
+            {st.running ? <CodeCopy value={`http://127.0.0.1:${st.port}`} /> : <span className="text-zinc-400">启动中…</span>}
+          </div>
+          {webModels.length > 0 && (
+            <div className="flex items-center gap-1 flex-wrap">
+              <span className="text-[10px] text-zinc-400 mr-0.5">模型</span>
+              {webModels.map(m => (
+                <span key={m} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/12 text-amber-700 dark:text-amber-300">{m}</span>
+              ))}
+            </div>
+          )}
+        </div>
 
-        {/* 提示 */}
         <div className="mt-3 flex items-start gap-1.5 text-[10.5px] leading-snug text-amber-700/85 dark:text-amber-300/75">
           <svg className="shrink-0 mt-0.5" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
           <span>浏览器自动化·非官方 API，仅登录你自己的会话、供个人自用；把订阅当 API 可能违反 ChatGPT 使用条款，风险自担。</span>
@@ -4011,26 +4001,27 @@ export default function Providers() {
     });
   }, []);
 
+  // ChatGPT 网页多实例：从添加器加一个账户实例（后端起独立 server+分区+provider），回读配置刷新
+  const addChatgptWebInstance = useCallback(async () => {
+    if (!isElectron() || !window.electronAPI?.chatgptWeb) return;
+    try {
+      await window.electronAPI.chatgptWeb.add();
+      const cfg = (await getConfig().read()) || {};
+      lastSaved.current = cfg.providers || [];
+      setProviders(cfg.providers || []);
+    } catch (e) { console.warn('[chatgpt-web] add failed:', e?.message); }
+  }, []);
+  const removeChatgptWebInstance = useCallback(async (instId) => {
+    try { await window.electronAPI?.chatgptWeb?.remove(instId); } catch (e) { console.warn('[chatgpt-web] remove failed:', e?.message); }
+    try {
+      const cfg = (await getConfig().read()) || {};
+      lastSaved.current = cfg.providers || [];
+      setProviders(cfg.providers || []);
+    } catch { setProviders(prev => prev.filter(p => p.id !== instId)); }
+  }, []);
+
   /** 立即落盘 enabled，避免 debounce 未完成时网关页仍读到旧开关 */
   const persistProviderEnabled = useCallback(async (id, enabled) => {
-    // ChatGPT 网页源：base_url/token 由本地 server 自动管，启用即起 server（写入真实 base_url+token），
-    // 禁用即停。之后回读配置把自动填好的字段灌回 UI，无需用户手填 base_url。
-    if (id === 'chatgpt-web' && isElectron() && window.electronAPI?.chatgptWeb) {
-      try {
-        if (enabled) await window.electronAPI.chatgptWeb.start();
-        else await window.electronAPI.chatgptWeb.disable();
-        const cfg = (await getConfig().read()) || {};
-        const fresh = (cfg.providers || []).find(p => p.id === 'chatgpt-web');
-        lastSaved.current = cfg.providers || [];
-        setProviders(prev => {
-          const i = prev.findIndex(p => p.id === id);
-          const merged = fresh ? { ...(prev[i] || {}), ...fresh } : { ...(prev[i] || {}), enabled: !!enabled };
-          if (i >= 0) { const n = [...prev]; n[i] = merged; return n; }
-          return fresh ? [...prev, fresh] : prev;
-        });
-      } catch (e) { console.warn('[chatgpt-web] enable failed:', e?.message); }
-      return;
-    }
     const stub = id === 'tokenbank-p2p'
       ? { ...BUILTIN_P2P_PROVIDER, enabled: !!enabled }
       : { id, type: 'paid', enabled: !!enabled, token: '', base_url: '', models: [] };
@@ -4350,15 +4341,16 @@ export default function Providers() {
         ),
       }];
     });
-    // ChatGPT 网页源：非账户实例，手动并入模型视图，否则源/模型列表里看不到它
-    const cw = providers.find(p => p.id === 'chatgpt-web');
-    if (cw && cw.enabled !== false && isElectron() && window.electronAPI?.chatgptWeb) {
-      base.push({
-        id: 'chatgpt-web', gateway_id: 'chatgpt-web', source_id: 'chatgpt-web',
-        name: cw.label || 'ChatGPT 网页', icon: '🌐', tag: 'free',
-        test_verified: false,
-        models: Array.isArray(cw.models) ? cw.models : [],
-      });
+    // ChatGPT 网页多实例：每个 chatgpt-web-<n> 并入模型视图
+    if (isElectron() && window.electronAPI?.chatgptWeb) {
+      for (const cw of providers.filter(p => /^chatgpt-web-\d+$/.test(p.id) && p.enabled !== false)) {
+        base.push({
+          id: cw.id, gateway_id: cw.id, source_id: cw.id,
+          name: cw.label || cw.id, icon: '🌐', tag: 'free',
+          test_verified: false,
+          models: Array.isArray(cw.models) ? cw.models : [],
+        });
+      }
     }
     return base;
   }, [accountInstances, providers, userPayg, userSubscriptions, pricingOverrides, directByAgent]);
@@ -4417,7 +4409,7 @@ export default function Providers() {
   // 已启用但未登记账户实例的供给源（如 Ollama），与账户卡片同一网格展示
   const extraEnabledSources = personalEnabledAll.filter(p => {
     if (p.type === 'p2p' || hasAcct(p.id)) return false;
-    if (p.id === 'chatgpt-web') return false; // 走网页专用卡，不进通用渲染（Codex 保持独立卡）
+    if (/^chatgpt-web-\d+$/.test(p.id) || p.id === 'chatgpt-web') return false; // 网页实例走专用卡，不进通用渲染
     return matchFilter(getPersonalSourceTag(liveStateOf(p), meta, userPayg, userSubscriptions));
   });
   // 列表视图：网关 / 直连 / 无账户实例的免费源，统一按添加顺序渲染
@@ -4440,10 +4432,11 @@ export default function Providers() {
       rows.push({ order: extraBase + i, type: 'extra', provider: p });
     });
     rows.sort((a, b) => a.order - b.order);
-    // ChatGPT 网页源：本地自管，固定置顶一行专用卡（仅 electron）
+    // ChatGPT 网页多实例：每个 chatgpt-web-<n> 源一张专用卡（默认无实例；从添加器加）
     if (isElectron() && window.electronAPI?.chatgptWeb) {
-      const cw = providers.find(p => p.id === 'chatgpt-web') || { id: 'chatgpt-web', enabled: false, label: 'ChatGPT 网页' };
-      rows.unshift({ order: -1, type: 'chatgptweb', provider: cw });
+      const insts = providers.filter(p => /^chatgpt-web-\d+$/.test(p.id) && p.enabled !== false)
+        .sort((a, b) => (a.chatgpt_web_instance || 0) - (b.chatgpt_web_instance || 0));
+      insts.forEach((p, i) => rows.unshift({ order: -1000 + i, type: 'chatgptweb', provider: p }));
     }
     return rows;
   }, [accountInstances, directByAgent, bill, extraEnabledSources, personalFilter, providers]);
@@ -4509,6 +4502,14 @@ export default function Providers() {
       kind: 'free', tag: 'free', provider: pr, key: `free:${pr.id}`,
     }))),
   ];
+  // ChatGPT 网页：始终显示为「添加账户实例」入口（每点加一个独立账户），带已添加数量
+  const chatgptWebCount = providers.filter(p => /^chatgpt-web-\d+$/.test(p.id) && p.enabled !== false).length;
+  if (isElectron() && window.electronAPI?.chatgptWeb
+      && !pickerItems.some(it => it.provider && it.provider.id === 'chatgpt-web')) {
+    pickerItems.push({ kind: 'chatgptweb', tag: 'free',
+      provider: { id: 'chatgpt-web', type: 'free', label: 'ChatGPT 网页', icon: '🌐' },
+      count: chatgptWebCount, key: 'free:chatgpt-web' });
+  }
   // 免费账户置顶，便于发现
   const pickerItemsFiltered = pickerItems
     .filter(item => pickerItemMatchesFilter(item.tag, personalFilter))
@@ -4595,14 +4596,19 @@ export default function Providers() {
                 if (item.kind === 'entry') return renderPickerButton(item.entry);
                 const pr = item.provider;
                 const m = meta[pr.id] || {};
+                const isChatgptWeb = item.kind === 'chatgptweb';
                 return (
                   <button key={item.key} type="button" title={m.hint || ''} onClick={() => {
-                    updateProvider(pr.id, { enabled: true });
+                    // ChatGPT 网页：每点加一个独立账户实例（保持添加器打开，可连续加）
+                    if (isChatgptWeb) addChatgptWebInstance();
+                    else updateProvider(pr.id, { enabled: true });
                   }}
                     className="tb-soft-tile w-full flex items-center gap-2.5 px-3 py-3 rounded-xl text-left text-sm font-medium text-zinc-600 dark:text-zinc-400">
-                    <span className="text-lg shrink-0">{m.icon || '🔌'}</span>
-                    <span className="min-w-0 flex-1 truncate">{m.label || pr.id}</span>
-                    {(m.keyless || pr.type === 'free') && (
+                    <span className="text-lg shrink-0">{m.icon || pr.icon || '🔌'}</span>
+                    <span className="min-w-0 flex-1 truncate">{m.label || pr.label || pr.id}</span>
+                    {isChatgptWeb ? (
+                      item.count > 0 && <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 shrink-0">{t('providers.add.instanceCount', { n: item.count })}</span>
+                    ) : (m.keyless || pr.type === 'free') && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 shrink-0">{t('providers.add.freeTag')}</span>
                     )}
                   </button>
@@ -4781,7 +4787,7 @@ export default function Providers() {
         <div className="grid grid-cols-2 gap-3">
           {personalSourceRows.map(row => {
             if (row.type === 'chatgptweb') {
-              return <ChatGptCard key="chatgpt" provider={row.provider} onPersistEnabled={persistProviderEnabled} />;
+              return <ChatGptCard key={row.provider.id} provider={row.provider} onRemove={removeChatgptWebInstance} />;
             }
             if (row.type === 'direct') {
               const d = row.direct;
