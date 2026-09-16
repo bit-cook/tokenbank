@@ -2609,12 +2609,13 @@ function CodeCopy({ value, className = '' }) {
  * 一次内嵌登录共享会话；Codex 授权在独立内嵌窗口完成（已登录→基本一键 Approve）。
  * 网页桶 base_url/token 由本地 server 自动管，UI 不出现手填框。
  */
-function ChatGptCard({ provider, codexProvider, onPersistEnabled, onUpdate }) {
+function ChatGptCard({ provider, codexProvider, onPersistEnabled, onUpdate, onTest }) {
   const api = (typeof window !== 'undefined' && window.electronAPI && window.electronAPI.chatgptWeb) || null;
   const [st, setSt] = useState({ running: false, loggedIn: false, port: null });
   const [busy, setBusy] = useState('');
   const [msg, setMsg] = useState('');
   const [codexBusy, setCodexBusy] = useState(false);
+  const [codexTesting, setCodexTesting] = useState(false);
   const [codexMsg, setCodexMsg] = useState('');
   const [codexCode, setCodexCode] = useState('');
   const pollRef = useRef(false);
@@ -2698,14 +2699,38 @@ function ChatGptCard({ provider, codexProvider, onPersistEnabled, onUpdate }) {
     if (onUpdate) onUpdate('openai', { auth_type: 'api_key', oauth_provider: '', credentials: null });
     setCodexMsg('');
   };
+  // Codex 桶用官方用量端点验证 OAuth 鉴权（token 只对 chatgpt.com/backend-api 有效，
+  // 不能打 api.openai.com/models——那会 403）。
+  const doTestCodex = async () => {
+    const u = (typeof window !== 'undefined' && window.electronAPI?.usage?.fetch) || null;
+    if (!u) { setCodexMsg('✗ 无法测试（缺 usage 接口）'); return; }
+    setCodexTesting(true); setCodexMsg('');
+    try {
+      const r = await u('codex');
+      if (r && r.error) {
+        setCodexMsg('✗ ' + r.error);
+      } else {
+        const pct = r && (r.usedPercent ?? r.rateLimits?.primary?.usedPercent);
+        setCodexMsg('✓ 鉴权正常' + (pct != null ? `（已用 ${Math.round(pct)}%）` : ''));
+      }
+    } catch (e) { setCodexMsg('✗ ' + (e.message || 'error')); }
+    setCodexTesting(false);
+  };
 
-  const btnPrimary = 'inline-flex items-center gap-1.5 text-xs font-medium px-3.5 py-1.5 rounded-full bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-50 transition shadow-sm';
-  const btnGhost = 'inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full tb-glass-chip text-zinc-700 dark:text-zinc-200 hover:brightness-[1.04] disabled:opacity-50 transition';
+  // 与其它卡片一致的标准按钮样式（rounded-lg + zinc 描边）；登录=蓝字强调，同 OAuth 卡
+  const btnPrimary = 'inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-blue-600 dark:text-blue-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-50 transition-colors';
+  const btnGhost = 'inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-50 transition-colors';
   const StatusPill = ({ ok, on, off }) => (
     <span className={`inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full ${ok ? 'bg-emerald-500/12 text-emerald-600 dark:text-emerald-400' : 'bg-zinc-500/10 text-zinc-400'}`}>
       <span className={`w-1.5 h-1.5 rounded-full ${ok ? 'bg-emerald-500' : 'bg-zinc-400'}`} />
       {ok ? on : off}
     </span>
+  );
+  // 两个桶共用同一测试按钮，样式一致
+  const TestButton = ({ onClick, busy, disabled }) => (
+    <button onClick={onClick} disabled={busy || disabled} className={btnGhost} title={disabled ? '先连接/开启该桶' : '测试'}>
+      {busy ? '测试中…' : '测试'}
+    </button>
   );
 
   return (
@@ -2727,7 +2752,6 @@ function ChatGptCard({ provider, codexProvider, onPersistEnabled, onUpdate }) {
         {/* 共享登录 */}
         <div className="mt-3">
           <button onClick={doLogin} disabled={busy === 'login'} className={btnPrimary}>
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><polyline points="10 17 15 12 10 7" /><line x1="15" y1="12" x2="3" y2="12" /></svg>
             {busy === 'login' ? '打开登录窗口…' : (st.loggedIn ? '重新登录 ChatGPT' : '登录 ChatGPT')}
           </button>
           <span className="ml-2 text-[10px] text-zinc-400">一次登录，下面两个桶共用会话</span>
@@ -2756,6 +2780,10 @@ function ChatGptCard({ provider, codexProvider, onPersistEnabled, onUpdate }) {
               <span key={m} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">{m}</span>
             ))}
             {!codexModels.length && <span className="text-[10px] text-zinc-400">（连接后同步）</span>}
+          </div>
+          <div className="mt-2 flex items-center gap-2">
+            <TestButton onClick={doTestCodex} busy={codexTesting} disabled={!codexConnected} />
+            <span className="text-[10px] text-zinc-400">验证 OAuth 鉴权（ChatGPT/Codex 会员）</span>
           </div>
           {codexCode && (
             <div className="mt-2 flex items-center gap-1.5 text-[11px] text-zinc-500 dark:text-zinc-400">
@@ -2788,10 +2816,7 @@ function ChatGptCard({ provider, codexProvider, onPersistEnabled, onUpdate }) {
                 {st.running ? <CodeCopy value={`http://127.0.0.1:${st.port}`} /> : <span className="text-zinc-400">启动中…</span>}
               </div>
               <div className="flex items-center gap-2">
-                <button onClick={doTest} disabled={busy === 'test'} className={btnGhost}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-                  {busy === 'test' ? '测试中…' : '测试网页桶'}
-                </button>
+                <TestButton onClick={doTest} busy={busy === 'test'} disabled={!st.running} />
                 <span className="text-[10px] text-zinc-400">打一发验证网页会话通不通</span>
               </div>
               {msg && <p className={`text-[11px] ${msg.startsWith('✓') ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>{msg}</p>}
@@ -4881,7 +4906,7 @@ export default function Providers() {
             if (row.type === 'chatgptweb') {
               return <ChatGptCard key="chatgpt" provider={row.provider}
                 codexProvider={providers.find(p => p.id === 'openai')}
-                onPersistEnabled={persistProviderEnabled} onUpdate={updateProvider} />;
+                onPersistEnabled={persistProviderEnabled} onUpdate={updateProvider} onTest={testProvider} />;
             }
             if (row.type === 'direct') {
               const d = row.direct;
