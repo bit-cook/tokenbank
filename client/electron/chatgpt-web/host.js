@@ -124,6 +124,22 @@ function closeAuth() {
   authWin = null;
 }
 
+// 重置到全新临时对话：重载 temp-chat URL → 回合清零，消除累积/虚拟化导致的读空超时。
+async function freshChat(w) {
+  try {
+    w.__tbLoadStarted = true;
+    const p = w.webContents.loadURL(CHATGPT_URL);
+    if (p && p.catch) p.catch(() => {}); // 未登录会重定向 → ERR_ABORTED，无害
+    await waitReady(w);
+    // 等 SPA 把 composer 渲染出来（已登录时）
+    for (let i = 0; i < 12; i += 1) {
+      try { if (await evalDriver('window.__tbCgw.isLoggedIn()')) return true; } catch { /* ignore */ }
+      await new Promise((r) => setTimeout(r, 400));
+    }
+  } catch (e) { log('freshChat', e && e.message); }
+  return false;
+}
+
 // 跑一轮：submit → 绑定新 turn → 轮询收流；onDelta(增量文本)
 async function runTurn(prompt, { onDelta, signal, overallTimeoutMs = 180000 } = {}) {
   const task = queue.then(() => doRunTurn(prompt, { onDelta, signal, overallTimeoutMs }));
@@ -133,16 +149,10 @@ async function runTurn(prompt, { onDelta, signal, overallTimeoutMs = 180000 } = 
 }
 
 async function doRunTurn(prompt, { onDelta, signal, overallTimeoutMs }) {
-  const w = beginLoad();
-  await waitReady(w);
-  log('runTurn: 就绪，检查登录');
-  // 页面刚加载时 composer 可能还没渲染，给 SPA 几秒重试；仍失败才判未登录
-  let loggedIn = false;
-  for (let i = 0; i < 12; i += 1) {
-    try { loggedIn = await evalDriver('window.__tbCgw.isLoggedIn()'); } catch { loggedIn = false; }
-    if (loggedIn) break;
-    await new Promise((r) => setTimeout(r, 600));
-  }
+  const w = ensureWindow();
+  // 每轮都重置到全新临时对话（回合数恒为 0，避免累积/漂移）
+  const loggedIn = await freshChat(w);
+  log('runTurn: 新会话就绪，登录=', loggedIn);
   if (!loggedIn) {
     log('runTurn: 判定未登录');
     const e = new Error('尚未登录 ChatGPT，请在「ChatGPT 源」卡片点“登录 ChatGPT”完成登录'); e.code = 'NOT_LOGGED_IN'; throw e;
@@ -167,7 +177,7 @@ async function doRunTurn(prompt, { onDelta, signal, overallTimeoutMs }) {
   let stableSince = 0;
   while (Date.now() < deadline) {
     if (signal?.aborted) { const e = new Error('已取消'); e.code = 'ABORTED'; throw e; }
-    const { text, done } = await evalDriver(`window.__tbCgw.poll(${turnIndex})`);
+    const { text, done } = await evalDriver('window.__tbCgw.poll()');
     if (text && text.length > last.length) {
       const delta = text.slice(last.length);
       last = text;

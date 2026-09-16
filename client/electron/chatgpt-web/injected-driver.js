@@ -4,7 +4,7 @@
 // 真登录浏览器里往真 composer 打字、按 data-turn-id 绑定新 assistant turn、扫 .markdown 收流。
 // 不做任何反爬/arkose；靠的是用户自己已登录的会话。
 (function initTbChatgptWebDriver() {
-  if (window.__tbCgw && window.__tbCgw.__v === 7) return '已就绪';
+  if (window.__tbCgw && window.__tbCgw.__v === 8) return '已就绪';
 
   const COMPOSER = [
     '[data-testid="prompt-textarea"]',
@@ -184,16 +184,18 @@
     throw new Error('提交后未出现新的 assistant 回合（选择器可能需更新）');
   }
 
-  // 轮询收流；host 端每次调 poll(index) 拿当前文本+是否完成，自己算增量
-  function poll(index) {
-    const el = turnAt(index);
+  // 轮询收流；串行下当前回复恒为最后一个 assistant 回合，直接读它，避免 index 漂移读空
+  function poll() {
+    const els = assistantTurns();
+    const el = els.length ? els[els.length - 1] : null;
     const text = turnText(el);
+    // 完成判定：该回合出现 copy 按钮，或（无 stop 按钮 且 已有文本 且 文本稳定由 host 端判）
     const done = turnHasCopy(el) || (!anyStopVisible() && text.length > 0);
     return { text, done, exists: !!el, turns: assistantTurnCount() };
   }
 
   window.__tbCgw = {
-    __v: 7,
+    __v: 8,
     isLoggedIn,
     submit,
     bindNewTurn,
