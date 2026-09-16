@@ -167,11 +167,16 @@ async function doRunTurn(prompt, { onDelta, signal, overallTimeoutMs }) {
     }
     return end;
   };
+  // 完成判定（port 自 miuuyy chatGptTurnIsComplete + 稳定窗口）：
+  //   非生成中(无 stop) 且 有复制按钮 且 有文本 —— 该状态的文本连续稳定 SETTLE_MS 才算真完成。
+  const SETTLE_MS = 2000;
+  let candSig = null; let candSince = 0;
   while (Date.now() < deadline) {
     if (signal?.aborted) { const e = new Error('已取消'); e.code = 'ABORTED'; throw e; }
     const poll = await evalDriver('window.__tbCgw.poll()');
     const cur = poll && typeof poll.text === 'string' ? poll.text : '';
-    const done = !!(poll && poll.done);
+    const hasCopy = !!(poll && poll.hasCopy);
+    const stop = !!(poll && poll.stop);
     // 仅当新文本是已吐出内容的「前缀延伸」才吐增量（重排/回退时不吐错乱片段，等收尾兜底）
     if (cur && cur.startsWith(emitted) && cur.length > emitted.length) {
       const end = safeEnd(cur, cur.length);
@@ -181,14 +186,17 @@ async function doRunTurn(prompt, { onDelta, signal, overallTimeoutMs }) {
         if (onDelta && delta) onDelta(delta);
       }
     }
-    if (done) {
-      const finalText = cur || emitted;
-      // 收尾：把最终全文里还没吐的尾部补上（以最终为准，纠正流式期间的偏差）
-      if (onDelta && finalText.startsWith(emitted) && finalText.length > emitted.length) {
-        onDelta(finalText.slice(emitted.length));
+    // 必须：无 stop + 有复制按钮 + 有文本，且该文本稳定 SETTLE_MS
+    const complete = !stop && hasCopy && cur.length > 0;
+    if (complete) {
+      if (candSig !== cur) { candSig = cur; candSince = Date.now(); }
+      else if (Date.now() - candSince >= SETTLE_MS) {
+        if (onDelta && cur.startsWith(emitted) && cur.length > emitted.length) onDelta(cur.slice(emitted.length));
+        log('runTurn: 完成，长度', cur.length);
+        return { text: cur };
       }
-      log('runTurn: 完成，长度', finalText.length);
-      return { text: finalText };
+    } else {
+      candSig = null;
     }
     await new Promise((r) => setTimeout(r, 250));
   }
