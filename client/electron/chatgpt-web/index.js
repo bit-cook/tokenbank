@@ -95,9 +95,6 @@ function registerIpc(ipcMain, injected) {
   ipcMain.handle('chatgptweb:stop', async () => { stop(); return { ok: true }; });
   ipcMain.handle('chatgptweb:login', async () => { await start({ enable: true }); await host.showLogin(); return { ok: true }; });
   ipcMain.handle('chatgptweb:hideLogin', async () => { host.hideLogin(); return { ok: true }; });
-  // Codex OAuth：在独立内嵌授权窗口打开授权页（共享 ChatGPT 登录态，基本一键 Approve）
-  ipcMain.handle('chatgptweb:openAuth', async (_e, url) => { await host.openAuthUrl(url); return { ok: true }; });
-  ipcMain.handle('chatgptweb:closeAuth', async () => { host.closeAuth(); return { ok: true }; });
   ipcMain.handle('chatgptweb:conn', async () => {
     const st = server.status();
     return { port: st.port, endpoint: st.port ? `http://127.0.0.1:${st.port}` : null,

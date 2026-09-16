@@ -2605,26 +2605,17 @@ function CodeCopy({ value, className = '' }) {
 }
 
 /**
- * 统一「ChatGPT」源卡：把 Codex 桶(OAuth) 与 网页桶(内嵌会话) 并到一起。
- * 一次内嵌登录共享会话；Codex 授权在独立内嵌窗口完成（已登录→基本一键 Approve）。
- * 网页桶 base_url/token 由本地 server 自动管，UI 不出现手填框。
+ * ChatGPT 网页源专用卡（只管网页桶；Codex 保持它自己的独立卡，互不影响）。
+ * 内嵌浏览器登录你自己的 ChatGPT 会话，驱动 DOM 收发；base_url/token 由本地 server 自动管。
  */
-function ChatGptCard({ provider, codexProvider, onPersistEnabled, onUpdate, onTest }) {
+function ChatGptCard({ provider, onPersistEnabled }) {
   const api = (typeof window !== 'undefined' && window.electronAPI && window.electronAPI.chatgptWeb) || null;
   const [st, setSt] = useState({ running: false, loggedIn: false, port: null });
   const [busy, setBusy] = useState('');
   const [msg, setMsg] = useState('');
-  const [codexBusy, setCodexBusy] = useState(false);
-  const [codexTesting, setCodexTesting] = useState(false);
-  const [codexMsg, setCodexMsg] = useState('');
-  const [codexCode, setCodexCode] = useState('');
-  const pollRef = useRef(false);
   const webEnabled = provider.enabled !== false;
-  const codexConnected = !!(codexProvider && codexProvider.auth_type === 'oauth'
-    && (codexProvider.credentials?.access_token || codexProvider.credentials?.refresh_token));
   const modelName = (m) => (typeof m === 'string' ? m : (m && (m.name || m.id)) || '');
   const webModels = (provider.models || []).map(modelName).filter(Boolean);
-  const codexModels = (codexProvider?.models || []).map(modelName).filter(Boolean);
 
   const refresh = useCallback(async () => {
     if (!api) return;
@@ -2636,9 +2627,7 @@ function ChatGptCard({ provider, codexProvider, onPersistEnabled, onUpdate, onTe
     const id = setInterval(refresh, 5000);
     return () => clearInterval(id);
   }, [webEnabled, refresh]);
-  useEffect(() => () => { pollRef.current = false; }, []);
 
-  // —— 网页桶 ——
   const doLogin = async () => {
     if (!api) return;
     setBusy('login'); setMsg('');
@@ -2656,67 +2645,6 @@ function ChatGptCard({ provider, codexProvider, onPersistEnabled, onUpdate, onTe
   };
   const toggleWeb = () => onPersistEnabled && onPersistEnabled('chatgpt-web', !webEnabled);
 
-  // —— Codex 桶（OAuth，授权页走内嵌独立窗口，复用现成 device 流）——
-  async function persistCodex(r) {
-    try {
-      const cfg = (await getConfig().read()) || {};
-      const list = [...(cfg.providers || [])];
-      const i = list.findIndex(p => p.id === 'openai');
-      const patch = { id: 'openai', auth_type: 'oauth', oauth_provider: r.oauth_provider || 'codex',
-        credentials: r.credentials, token: '', enabled: true };
-      if (i >= 0) list[i] = { ...list[i], ...patch }; else list.push(patch);
-      await getConfig().write({ ...cfg, providers: list });
-      if (onUpdate) onUpdate('openai', patch);
-      setCodexMsg('✓ Codex 已连接');
-    } catch (e) { setCodexMsg('✗ 保存失败：' + (e.message || 'error')); }
-  }
-  const loginCodex = async () => {
-    setCodexBusy(true); setCodexMsg(''); setCodexCode('');
-    try {
-      const oapi = getOauth();
-      const r = await oapi.start('codex', {});
-      const url = r.verificationUrl || r.authUrl;
-      setCodexCode(r.userCode || '');
-      // 优先在内嵌授权窗口打开（共享 ChatGPT 登录态）；无 IPC 时回退外部浏览器
-      if (url) {
-        if (api && api.openAuth) await api.openAuth(url);
-        else await oapi.openExternal(url);
-      }
-      // 轮询设备码
-      pollRef.current = true;
-      for (let i = 0; i < 60 && pollRef.current; i += 1) {
-        await new Promise(res => setTimeout(res, 5000));
-        if (!pollRef.current) break;
-        let p;
-        try { p = await oapi.poll(r.sessionId); }
-        catch (e) { setCodexMsg('✗ ' + (e.message || 'poll failed')); break; }
-        if (p.done) { await persistCodex(p); setCodexCode(''); if (api && api.closeAuth) api.closeAuth(); break; }
-      }
-    } catch (e) { setCodexMsg('✗ ' + (e.message || 'login failed')); }
-    setCodexBusy(false);
-  };
-  const disconnectCodex = () => {
-    if (onUpdate) onUpdate('openai', { auth_type: 'api_key', oauth_provider: '', credentials: null });
-    setCodexMsg('');
-  };
-  // Codex 桶用官方用量端点验证 OAuth 鉴权（token 只对 chatgpt.com/backend-api 有效，
-  // 不能打 api.openai.com/models——那会 403）。
-  const doTestCodex = async () => {
-    const u = (typeof window !== 'undefined' && window.electronAPI?.usage?.fetch) || null;
-    if (!u) { setCodexMsg('✗ 无法测试（缺 usage 接口）'); return; }
-    setCodexTesting(true); setCodexMsg('');
-    try {
-      const r = await u('codex');
-      if (r && r.error) {
-        setCodexMsg('✗ ' + r.error);
-      } else {
-        const pct = r && (r.usedPercent ?? r.rateLimits?.primary?.usedPercent);
-        setCodexMsg('✓ 鉴权正常' + (pct != null ? `（已用 ${Math.round(pct)}%）` : ''));
-      }
-    } catch (e) { setCodexMsg('✗ ' + (e.message || 'error')); }
-    setCodexTesting(false);
-  };
-
   // 与其它卡片一致的标准按钮样式（rounded-lg + zinc 描边）；登录=蓝字强调，同 OAuth 卡
   const btnPrimary = 'inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-blue-600 dark:text-blue-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-50 transition-colors';
   const btnGhost = 'inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-50 transition-colors';
@@ -2726,109 +2654,58 @@ function ChatGptCard({ provider, codexProvider, onPersistEnabled, onUpdate, onTe
       {ok ? on : off}
     </span>
   );
-  // 两个桶共用同一测试按钮，样式一致
-  const TestButton = ({ onClick, busy, disabled }) => (
-    <button onClick={onClick} disabled={busy || disabled} className={btnGhost} title={disabled ? '先连接/开启该桶' : '测试'}>
-      {busy ? '测试中…' : '测试'}
-    </button>
-  );
 
   return (
     <div className="tb-soft-tile rounded-2xl overflow-hidden">
       <div className="p-4">
         {/* 头部 */}
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-2xl flex items-center justify-center text-lg shrink-0 bg-gradient-to-br from-emerald-400/25 to-teal-500/20 border border-white/50 dark:border-white/10 shadow-sm">🤖</div>
+          <div className="w-10 h-10 rounded-2xl flex items-center justify-center text-lg shrink-0 bg-gradient-to-br from-amber-400/25 to-orange-500/20 border border-white/50 dark:border-white/10 shadow-sm">🌐</div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">ChatGPT</span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full tb-glass-chip text-zinc-500 dark:text-zinc-400">双桶</span>
-            </div>
-            <div className="text-[11px] text-zinc-400 mt-0.5">Codex 官方通道 + 网页大额度</div>
-          </div>
-          <StatusPill ok={st.loggedIn} on="会话已登录" off="未登录" />
-        </div>
-
-        {/* 共享登录 */}
-        <div className="mt-3">
-          <button onClick={doLogin} disabled={busy === 'login'} className={btnPrimary}>
-            {busy === 'login' ? '打开登录窗口…' : (st.loggedIn ? '重新登录 ChatGPT' : '登录 ChatGPT')}
-          </button>
-          <span className="ml-2 text-[10px] text-zinc-400">一次登录，下面两个桶共用会话</span>
-        </div>
-
-        <div className="mt-3 text-[10.5px] text-zinc-400 leading-snug">两个桶<span className="text-zinc-500 dark:text-zinc-300 font-medium">相互独立、可同时开启</span>（非二选一），各自提供不同的模型；路由按<span className="text-zinc-500 dark:text-zinc-300 font-medium">模型名</span>自动走对应桶：</div>
-
-        {/* Codex 桶 */}
-        <div className="mt-1.5 tb-glass-chip rounded-xl p-3 border-l-2 border-emerald-400/60">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-100">① Codex 桶</span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">官方 OAuth · 稳定</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <StatusPill ok={codexConnected} on="已连接" off="未连接" />
-              {codexConnected
-                ? <button onClick={disconnectCodex} className={btnGhost}>断开</button>
-                : <button onClick={loginCodex} disabled={codexBusy} className={btnGhost}>{codexBusy ? '授权中…' : '连接'}</button>}
-            </div>
-          </div>
-          <p className="mt-1.5 text-[10.5px] text-zinc-500 dark:text-zinc-400">换取官方 token → 调 <code className="font-mono text-[10px]">backend-api/codex</code>，稳定、额度按 Codex 计。</p>
-          <div className="mt-1.5 flex items-center gap-1 flex-wrap">
-            <span className="text-[10px] text-zinc-400 mr-0.5">模型</span>
-            {(codexModels.length ? codexModels : ['gpt-5', 'o3', 'gpt-4o']).slice(0, 6).map(m => (
-              <span key={m} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">{m}</span>
-            ))}
-            {!codexModels.length && <span className="text-[10px] text-zinc-400">（连接后同步）</span>}
-          </div>
-          <div className="mt-2 flex items-center gap-2">
-            <TestButton onClick={doTestCodex} busy={codexTesting} disabled={!codexConnected} />
-            <span className="text-[10px] text-zinc-400">验证 OAuth 鉴权（ChatGPT/Codex 会员）</span>
-          </div>
-          {codexCode && (
-            <div className="mt-2 flex items-center gap-1.5 text-[11px] text-zinc-500 dark:text-zinc-400">
-              <span>授权码</span><CodeCopy value={codexCode} /><span>在弹出窗口确认</span>
-            </div>
-          )}
-          {codexMsg && <p className={`mt-1.5 text-[11px] ${codexMsg.startsWith('✓') ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>{codexMsg}</p>}
-        </div>
-
-        {/* 网页桶 */}
-        <div className="mt-2 tb-glass-chip rounded-xl p-3 border-l-2 border-amber-400/60">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 min-w-0">
-              <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-100">② 网页桶</span>
+              <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">ChatGPT 网页</span>
               <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400">实验性 · 大额度</span>
             </div>
+            <div className="text-[11px] text-zinc-400 mt-0.5">内嵌登录你自己的网页会话，驱动 DOM 收发</div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {webEnabled && <StatusPill ok={st.loggedIn} on="已登录" off="未登录" />}
             <Toggle enabled={webEnabled} onChange={toggleWeb} />
           </div>
-          <p className="mt-1.5 text-[10.5px] text-zinc-500 dark:text-zinc-400">驱动你登录的网页会话收发，额度按网页版算（更大），DOM 改版可能失效。</p>
-          <div className="mt-1.5 flex items-center gap-1 flex-wrap">
-            <span className="text-[10px] text-zinc-400 mr-0.5">模型</span>
-            {webModels.map(m => (
-              <span key={m} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/12 text-amber-700 dark:text-amber-300">{m}</span>
-            ))}
-          </div>
-          {webEnabled && (
-            <div className="mt-2 space-y-2">
-              <div className="flex items-center gap-1.5 text-[11px] text-zinc-500 dark:text-zinc-400">
-                <span>本地端点</span>
-                {st.running ? <CodeCopy value={`http://127.0.0.1:${st.port}`} /> : <span className="text-zinc-400">启动中…</span>}
-              </div>
-              <div className="flex items-center gap-2">
-                <TestButton onClick={doTest} busy={busy === 'test'} disabled={!st.running} />
-                <span className="text-[10px] text-zinc-400">打一发验证网页会话通不通</span>
-              </div>
-              {msg && <p className={`text-[11px] ${msg.startsWith('✓') ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>{msg}</p>}
-            </div>
-          )}
-          {!webEnabled && <p className="mt-1.5 text-[10px] text-zinc-400">打开开关后可登录并测试</p>}
         </div>
+
+        {webEnabled && (
+          <div className="mt-3 space-y-2.5">
+            <div className="flex items-center gap-2 flex-wrap">
+              <button onClick={doLogin} disabled={busy === 'login'} className={btnPrimary}>
+                {busy === 'login' ? '打开登录窗口…' : (st.loggedIn ? '重新登录 ChatGPT' : '登录 ChatGPT')}
+              </button>
+              <button onClick={doTest} disabled={busy === 'test' || !st.running} className={btnGhost} title={!st.running ? '启动中' : '测试'}>
+                {busy === 'test' ? '测试中…' : '测试'}
+              </button>
+              {msg && <span className={`text-[11px] ${msg.startsWith('✓') ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>{msg}</span>}
+            </div>
+            <div className="flex items-center gap-1.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+              <span>本地端点</span>
+              {st.running ? <CodeCopy value={`http://127.0.0.1:${st.port}`} /> : <span className="text-zinc-400">启动中…</span>}
+              <span className="text-[10px] text-zinc-400">凭据本地自动管理</span>
+            </div>
+            {webModels.length > 0 && (
+              <div className="flex items-center gap-1 flex-wrap">
+                <span className="text-[10px] text-zinc-400 mr-0.5">模型</span>
+                {webModels.map(m => (
+                  <span key={m} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/12 text-amber-700 dark:text-amber-300">{m}</span>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+        {!webEnabled && <p className="mt-2 text-[10px] text-zinc-400">打开开关后可登录并测试；Codex 请用下方独立的 Codex 卡片。</p>}
 
         {/* 提示 */}
         <div className="mt-3 flex items-start gap-1.5 text-[10.5px] leading-snug text-amber-700/85 dark:text-amber-300/75">
           <svg className="shrink-0 mt-0.5" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
-          <span>网页桶为浏览器自动化·非官方 API，仅登录你自己的会话、供个人自用；把订阅当 API 可能违反 ChatGPT 使用条款，风险自担。Codex 桶为官方 OAuth 通道。</span>
+          <span>浏览器自动化·非官方 API，仅登录你自己的会话、供个人自用；把订阅当 API 可能违反 ChatGPT 使用条款，风险自担。</span>
         </div>
       </div>
     </div>
@@ -4540,7 +4417,7 @@ export default function Providers() {
   // 已启用但未登记账户实例的供给源（如 Ollama），与账户卡片同一网格展示
   const extraEnabledSources = personalEnabledAll.filter(p => {
     if (p.type === 'p2p' || hasAcct(p.id)) return false;
-    if (p.id === 'chatgpt-web') return false; // 走专用卡，不进通用渲染
+    if (p.id === 'chatgpt-web') return false; // 走网页专用卡，不进通用渲染（Codex 保持独立卡）
     return matchFilter(getPersonalSourceTag(liveStateOf(p), meta, userPayg, userSubscriptions));
   });
   // 列表视图：网关 / 直连 / 无账户实例的免费源，统一按添加顺序渲染
@@ -4904,9 +4781,7 @@ export default function Providers() {
         <div className="grid grid-cols-2 gap-3">
           {personalSourceRows.map(row => {
             if (row.type === 'chatgptweb') {
-              return <ChatGptCard key="chatgpt" provider={row.provider}
-                codexProvider={providers.find(p => p.id === 'openai')}
-                onPersistEnabled={persistProviderEnabled} onUpdate={updateProvider} onTest={testProvider} />;
+              return <ChatGptCard key="chatgpt" provider={row.provider} onPersistEnabled={persistProviderEnabled} />;
             }
             if (row.type === 'direct') {
               const d = row.direct;

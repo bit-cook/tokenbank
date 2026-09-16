@@ -169,8 +169,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     stop:      () => ipcRenderer.invoke('chatgptweb:stop'),
     login:     () => ipcRenderer.invoke('chatgptweb:login'),
     hideLogin: () => ipcRenderer.invoke('chatgptweb:hideLogin'),
-    openAuth:  (url) => ipcRenderer.invoke('chatgptweb:openAuth', url),
-    closeAuth: () => ipcRenderer.invoke('chatgptweb:closeAuth'),
     conn:      () => ipcRenderer.invoke('chatgptweb:conn'),
     test:      () => ipcRenderer.invoke('chatgptweb:test'),
     disable:   () => ipcRenderer.invoke('chatgptweb:disable'),

@@ -100,30 +100,6 @@ function hideLogin() {
   if (win && !win.isDestroyed()) win.hide();
 }
 
-// 独立授权窗口（同一 persist 分区，共享 ChatGPT 登录态）——给 Codex OAuth 授权页用，
-// 不动驱动 DOM 的主窗口。
-let authWin = null;
-async function openAuthUrl(url) {
-  ensureElectron();
-  if (!authWin || authWin.isDestroyed()) {
-    authWin = new BrowserWindow({
-      width: 520, height: 700, title: 'ChatGPT 授权',
-      webPreferences: { partition: PARTITION },
-    });
-    authWin.on('closed', () => { authWin = null; });
-  }
-  authWin.loadURL(url).catch((e) => {
-    if (!/ERR_ABORTED/.test(String(e && e.message))) log('openAuthUrl', e && e.message);
-  });
-  authWin.show();
-  authWin.focus();
-  return { ok: true };
-}
-function closeAuth() {
-  if (authWin && !authWin.isDestroyed()) authWin.close();
-  authWin = null;
-}
-
 // 重置到全新临时对话：重载 temp-chat URL → 回合清零，消除累积/虚拟化导致的读空超时。
 async function freshChat(w) {
   try {
@@ -148,21 +124,30 @@ async function runTurn(prompt, { onDelta, signal, overallTimeoutMs = 180000 } = 
   return task;
 }
 
+const CHAT_RESET_TURNS = 6; // 累积超过这么多回合才重置新会话（否则每轮不重载，省延迟）
+
 async function doRunTurn(prompt, { onDelta, signal, overallTimeoutMs }) {
-  const w = ensureWindow();
-  // 每轮都重置到全新临时对话（回合数恒为 0，避免累积/漂移）
-  const loggedIn = await freshChat(w);
-  log('runTurn: 新会话就绪，登录=', loggedIn);
+  const w = beginLoad();
+  await waitReady(w);
+  // 登录检查：页面刚加载 composer 可能没渲染，给 SPA 几秒重试
+  let loggedIn = false;
+  for (let i = 0; i < 12; i += 1) {
+    try { loggedIn = await evalDriver('window.__tbCgw.isLoggedIn()'); } catch { loggedIn = false; }
+    if (loggedIn) break;
+    await new Promise((r) => setTimeout(r, 500));
+  }
   if (!loggedIn) {
     log('runTurn: 判定未登录');
     const e = new Error('尚未登录 ChatGPT，请在「ChatGPT 源」卡片点“登录 ChatGPT”完成登录'); e.code = 'NOT_LOGGED_IN'; throw e;
   }
+  // 回合累积过多才重置（poll 读末回合已消除漂移，这里只为防上下文膨胀）
+  let acc = 0;
+  try { acc = await evalDriver('window.__tbCgw.assistantTurnCount()'); } catch { acc = 0; }
+  if (acc > CHAT_RESET_TURNS) { log('runTurn: 回合累积', acc, '→ 重置新会话'); await freshChat(w); }
+
   const sub = await evalDriver(`window.__tbCgw.submit(${JSON.stringify(prompt)})`);
   log('runTurn: 已提交 via=', sub && sub.via, ' 提交前回合数=', sub && sub.beforeCount);
   const beforeCount = (sub && sub.beforeCount) || 0;
-  // 提交后 1.5s dump 一次 DOM 探针，用于诊断选择器
-  await new Promise((r) => setTimeout(r, 1500));
-  try { log('runTurn: 提交后探针', JSON.stringify(await evalDriver('window.__tbCgw.probe()'))); } catch (e) { log('探针失败', e.message); }
   let turnIndex;
   try {
     turnIndex = await evalDriver(`window.__tbCgw.bindNewTurn(${beforeCount})`);
@@ -173,23 +158,41 @@ async function doRunTurn(prompt, { onDelta, signal, overallTimeoutMs }) {
   }
 
   const deadline = Date.now() + overallTimeoutMs;
-  let last = '';
-  let stableSince = 0;
+  let emitted = ''; // 已吐出的部分（保证是 cur 的前缀）
+  // 安全切点：不落在代理项对(高代理)中间，避免半个 emoji → �
+  const safeEnd = (s, end) => {
+    if (end > 0 && end < s.length) {
+      const c = s.charCodeAt(end - 1);
+      if (c >= 0xD800 && c <= 0xDBFF) return end - 1; // 末尾是高代理项，留到下一轮
+    }
+    return end;
+  };
   while (Date.now() < deadline) {
     if (signal?.aborted) { const e = new Error('已取消'); e.code = 'ABORTED'; throw e; }
-    const { text, done } = await evalDriver('window.__tbCgw.poll()');
-    if (text && text.length > last.length) {
-      const delta = text.slice(last.length);
-      last = text;
-      if (onDelta) onDelta(delta);
-      stableSince = 0;
-    } else if (text === last && text.length > 0) {
-      stableSince = stableSince || Date.now();
+    const poll = await evalDriver('window.__tbCgw.poll()');
+    const cur = poll && typeof poll.text === 'string' ? poll.text : '';
+    const done = !!(poll && poll.done);
+    // 仅当新文本是已吐出内容的「前缀延伸」才吐增量（重排/回退时不吐错乱片段，等收尾兜底）
+    if (cur && cur.startsWith(emitted) && cur.length > emitted.length) {
+      const end = safeEnd(cur, cur.length);
+      if (end > emitted.length) {
+        const delta = cur.slice(emitted.length, end);
+        emitted = cur.slice(0, end);
+        if (onDelta && delta) onDelta(delta);
+      }
     }
-    if (done) { log('runTurn: 完成，长度', (last || text).length); return { text: last || text }; }
+    if (done) {
+      const finalText = cur || emitted;
+      // 收尾：把最终全文里还没吐的尾部补上（以最终为准，纠正流式期间的偏差）
+      if (onDelta && finalText.startsWith(emitted) && finalText.length > emitted.length) {
+        onDelta(finalText.slice(emitted.length));
+      }
+      log('runTurn: 完成，长度', finalText.length);
+      return { text: finalText };
+    }
     await new Promise((r) => setTimeout(r, 250));
   }
-  if (last) { log('runTurn: 超时但有部分文本，长度', last.length); return { text: last }; }
+  if (emitted) { log('runTurn: 超时但有部分文本，长度', emitted.length); return { text: emitted }; }
   const e = new Error('等待 ChatGPT 回复超时'); e.code = 'TIMEOUT'; throw e;
 }
 
@@ -198,4 +201,4 @@ function destroy() {
   win = null;
 }
 
-module.exports = { isLoggedIn, showLogin, hideLogin, openAuthUrl, closeAuth, runTurn, destroy, CHATGPT_URL };
+module.exports = { isLoggedIn, showLogin, hideLogin, runTurn, destroy, CHATGPT_URL };
