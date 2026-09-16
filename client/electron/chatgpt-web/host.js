@@ -4,6 +4,7 @@
 // 边界：只驱动用户自己已登录的会话；不代填凭据；不做反爬。
 const path = require('path');
 const fs = require('fs');
+const { ChatGptMarkdownBuffer } = require('./markdown');
 
 const CHATGPT_URL = 'https://chatgpt.com/?temporary-chat=true';
 const PARTITION = 'persist:tb-chatgpt-web';
@@ -158,49 +159,55 @@ async function doRunTurn(prompt, { onDelta, signal, overallTimeoutMs }) {
   }
 
   const deadline = Date.now() + overallTimeoutMs;
-  let emitted = ''; // 已吐出的部分（保证是 cur 的前缀）
-  // 安全切点：不落在代理项对(高代理)中间，避免半个 emoji → �
-  const safeEnd = (s, end) => {
-    if (end > 0 && end < s.length) {
-      const c = s.charCodeAt(end - 1);
-      if (c >= 0xD800 && c <= 0xDBFF) return end - 1; // 末尾是高代理项，留到下一轮
-    }
-    return end;
-  };
-  // 完成判定（port 自 miuuyy chatGptTurnIsComplete + 稳定窗口）：
-  //   非生成中(无 stop) 且 有复制按钮 且 有文本 —— 该状态的文本连续稳定 SETTLE_MS 才算真完成。
+  // markdown 段缓冲（port 自 miuuyy ChatGptMarkdownBuffer）：按结构块 append-only 提交，
+  // 段稳定 750ms 且后面已有新段才提交，用 turndown 转 markdown；提交后不再改写。
+  const buffer = new ChatGptMarkdownBuffer();
+  // 完成判定（port 自 miuuyy chatGptTurnIsComplete + SETTLE_MS）：无 stop + 有复制按钮 + 有文本，
+  // 且 visibleText 连续稳定 SETTLE_MS。
   const SETTLE_MS = 2000;
   let candSig = null; let candSince = 0;
+  let fullText = '';
   while (Date.now() < deadline) {
     if (signal?.aborted) { const e = new Error('已取消'); e.code = 'ABORTED'; throw e; }
-    const poll = await evalDriver('window.__tbCgw.poll()');
-    const cur = poll && typeof poll.text === 'string' ? poll.text : '';
-    const hasCopy = !!(poll && poll.hasCopy);
-    const stop = !!(poll && poll.stop);
-    // 仅当新文本是已吐出内容的「前缀延伸」才吐增量（重排/回退时不吐错乱片段，等收尾兜底）
-    if (cur && cur.startsWith(emitted) && cur.length > emitted.length) {
-      const end = safeEnd(cur, cur.length);
-      if (end > emitted.length) {
-        const delta = cur.slice(emitted.length, end);
-        emitted = cur.slice(0, end);
-        if (onDelta && delta) onDelta(delta);
-      }
-    }
-    // 必须：无 stop + 有复制按钮 + 有文本，且该文本稳定 SETTLE_MS
-    const complete = !stop && hasCopy && cur.length > 0;
+    const snap = await evalDriver('window.__tbCgw.snapshot()');
+    const segments = (snap && Array.isArray(snap.markdownSegments)) ? snap.markdownSegments : [];
+    const visibleText = snap && typeof snap.visibleText === 'string' ? snap.visibleText : '';
+    const hasCopy = !!(snap && snap.hasCopy);
+    const stop = !!(snap && snap.stop);
+    // 流式：把已稳定的块作为增量吐出
+    try {
+      const delta = buffer.observe(segments);
+      if (delta) { fullText += delta; if (onDelta) onDelta(delta); }
+    } catch (e) { log('observe 异常', e && e.message); }
+    // 完成：无 stop + 复制按钮 + 有文本，且 visibleText 稳定 SETTLE_MS
+    const complete = !stop && hasCopy && visibleText.length > 0;
     if (complete) {
-      if (candSig !== cur) { candSig = cur; candSince = Date.now(); }
+      if (candSig !== visibleText) { candSig = visibleText; candSince = Date.now(); }
       else if (Date.now() - candSince >= SETTLE_MS) {
-        if (onDelta && cur.startsWith(emitted) && cur.length > emitted.length) onDelta(cur.slice(emitted.length));
-        log('runTurn: 完成，长度', cur.length);
-        return { text: cur };
+        let finalMd = fullText;
+        try {
+          const fin = buffer.finish();
+          if (fin.delta && onDelta) onDelta(fin.delta);
+          finalMd = fin.markdown || fullText;
+        } catch (e) {
+          // markdown 一致性异常（ChatGPT 改写了已提交块）：退回可见文本
+          log('finish 一致性异常，退回可见文本', e && e.message);
+          if (visibleText.startsWith(fullText) && visibleText.length > fullText.length && onDelta) {
+            onDelta(visibleText.slice(fullText.length));
+          }
+          finalMd = visibleText || fullText;
+        }
+        log('runTurn: 完成，长度', finalMd.length);
+        return { text: finalMd };
       }
     } else {
       candSig = null;
     }
     await new Promise((r) => setTimeout(r, 250));
   }
-  if (emitted) { log('runTurn: 超时但有部分文本，长度', emitted.length); return { text: emitted }; }
+  // 超时兜底：收尾缓冲取全文
+  try { const fin = buffer.finish(); if (fin.markdown) fullText = fin.markdown; } catch { /* ignore */ }
+  if (fullText) { log('runTurn: 超时但有部分文本，长度', fullText.length); return { text: fullText }; }
   const e = new Error('等待 ChatGPT 回复超时'); e.code = 'TIMEOUT'; throw e;
 }
 

@@ -4,7 +4,7 @@
 // 真登录浏览器里往真 composer 打字、按 data-turn-id 绑定新 assistant turn、扫 .markdown 收流。
 // 不做任何反爬/arkose；靠的是用户自己已登录的会话。
 (function initTbChatgptWebDriver() {
-  if (window.__tbCgw && window.__tbCgw.__v === 9) return '已就绪';
+  if (window.__tbCgw && window.__tbCgw.__v === 10) return '已就绪';
 
   const COMPOSER = [
     '[data-testid="prompt-textarea"]',
@@ -199,12 +199,137 @@
     };
   }
 
+  // ——— markdown 段快照（port 自 miuuyy browser-worker 的 markdownSegments 提取）———
+  const BLOCK_TAGS = new Set([
+    'address', 'article', 'aside', 'blockquote', 'div', 'dl', 'fieldset', 'figcaption',
+    'figure', 'footer', 'form', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'header', 'hr',
+    'li', 'main', 'nav', 'ol', 'p', 'pre', 'section', 'table', 'ul',
+  ]);
+  const renderedInDom = (el) => {
+    if (!el || !el.isConnected) return false;
+    const b = el.getBoundingClientRect();
+    return b.width > 0 || b.height > 0;
+  };
+  function markdownTextOf(element) {
+    const parts = [];
+    const boundary = () => { if (parts.length && !parts[parts.length - 1].endsWith('\n')) parts.push('\n'); };
+    const visit = (node) => {
+      if (node.nodeType === Node.TEXT_NODE) parts.push(node.textContent || '');
+      if (!(node instanceof HTMLElement)) return;
+      const tag = node.tagName.toLowerCase();
+      const block = BLOCK_TAGS.has(tag);
+      if (block) boundary();
+      if (tag === 'br') parts.push('\n');
+      node.childNodes.forEach(visit);
+      if (block) boundary();
+    };
+    visit(element);
+    return parts.join('').trim();
+  }
+  function srcRange(el) {
+    const s = el.getAttribute('data-start'); const e = el.getAttribute('data-end');
+    if (s === null || e === null || !s.trim() || !e.trim()) return undefined;
+    const a = Number(s); const b = Number(e);
+    return Number.isFinite(a) && Number.isFinite(b) && b >= a ? { sourceStart: a, sourceEnd: b } : undefined;
+  }
+  // 分离答案根与思考/commentary 根（chain-of-thought、streaming-status 内、首个 status 之前的都算 commentary）
+  function classifyAnswerRoots(roots, statusContainers) {
+    const first = statusContainers[0];
+    const commentary = roots.filter((c) => (
+      c.closest('[data-streaming-response-status]') !== null
+      || c.closest('[data-testid^="cot-v5"]') !== null
+      || (first !== undefined && Boolean(c.compareDocumentPosition(first) & 4))
+    ));
+    return { answerRoots: roots.filter((c) => !commentary.includes(c)) };
+  }
+  function contentClone(root) {
+    const content = root.cloneNode(true);
+    for (const w of Array.from(content.querySelectorAll(
+      '.chart-widget-container, [data-code-block-preview-pane], button, script, style, svg, img, picture, source'))) {
+      w.remove();
+    }
+    return content;
+  }
+  // 产出最后一个 assistant 回合的 markdown 段 + 完成/生成信号
+  function snapshot() {
+    const els = assistantTurns();
+    const root = els.length ? els[els.length - 1] : null;
+    const base = { markdownSegments: [], visibleText: '', hasCopy: turnHasCopy(root), stop: anyStopVisible(), turns: els.length, exists: !!root };
+    if (!root) return base;
+    const allRoots = [...root.querySelectorAll('.markdown')]
+      .filter((c) => !c.parentElement?.closest('.markdown'))
+      .filter(renderedInDom);
+    const statusContainers = [...root.querySelectorAll('[data-streaming-response-status]')].filter(renderedInDom);
+    const { answerRoots } = classifyAnswerRoots(allRoots, statusContainers);
+
+    const segs = [];
+    let listGroup = 0;
+    const appendBlock = (child) => {
+      const tag = child.tagName.toLowerCase();
+      const range = srcRange(child);
+      const items = (tag === 'ol' || tag === 'ul')
+        ? [...child.children].filter((c) => c.tagName === 'LI') : [];
+      if (items.length === 0) {
+        segs.push({ tag, html: child.outerHTML, text: markdownTextOf(child), ...range });
+        return;
+      }
+      const group = range ? `list:${range.sourceStart}:${tag}` : `list:${listGroup++}:${tag}`;
+      const orderedStart = tag === 'ol' ? Number(child.getAttribute('start') ?? '1') : undefined;
+      items.forEach((item, i) => {
+        const shell = child.cloneNode(false);
+        shell.removeAttribute('data-is-last-node');
+        if (orderedStart !== undefined && Number.isFinite(orderedStart)) shell.setAttribute('start', String(orderedStart + i));
+        shell.append(item.cloneNode(true));
+        segs.push({ tag: `${tag}:item`, html: shell.outerHTML, text: markdownTextOf(item), group, ...srcRange(item) });
+      });
+    };
+    answerRoots.map(contentClone).forEach((mdRoot) => {
+      const children = [...mdRoot.children];
+      const hasBlock = children.some((c) => BLOCK_TAGS.has(c.tagName.toLowerCase()));
+      if (!hasBlock) {
+        if (mdRoot.innerHTML.trim()) segs.push({ tag: 'root', html: mdRoot.innerHTML, text: markdownTextOf(mdRoot), ...srcRange(mdRoot) });
+        return;
+      }
+      let inlineRun = [];
+      const flush = () => {
+        if (!inlineRun.length) return;
+        const nodes = inlineRun; inlineRun = [];
+        const shell = document.createElement('span');
+        nodes.forEach((n) => shell.append(n.cloneNode(true)));
+        const text = markdownTextOf(shell);
+        if (text) {
+          const ranged = nodes.flatMap((n) => n instanceof Element ? [n, ...n.querySelectorAll('[data-start][data-end]')] : []);
+          const ranges = ranged.map(srcRange).filter(Boolean);
+          segs.push({ tag: 'inline', html: shell.outerHTML, text,
+            ...(ranges.length ? { sourceStart: Math.min(...ranges.map((r) => r.sourceStart)), sourceEnd: Math.max(...ranges.map((r) => r.sourceEnd)) } : {}) });
+        }
+      };
+      mdRoot.childNodes.forEach((node) => {
+        if (node instanceof HTMLElement && BLOCK_TAGS.has(node.tagName.toLowerCase())) { flush(); appendBlock(node); return; }
+        inlineRun.push(node);
+      });
+      flush();
+    });
+    const markdownSegments = segs.map((s, index, arr) => ({
+      key: s.sourceStart !== undefined ? `${s.sourceStart}:${s.tag}` : `${index}:${s.tag}`,
+      tag: s.tag, html: s.html, text: s.text,
+      ...(s.group ? { group: s.group } : {}),
+      ...(s.sourceStart !== undefined ? { sourceStart: s.sourceStart } : {}),
+      ...(s.sourceEnd !== undefined ? { sourceEnd: s.sourceEnd } : {}),
+      streamable: index < arr.length - 1,
+    }));
+    base.markdownSegments = markdownSegments;
+    base.visibleText = markdownSegments.map((s) => s.text).join('\n').trim();
+    return base;
+  }
+
   window.__tbCgw = {
-    __v: 9,
+    __v: 10,
     isLoggedIn,
     submit,
     bindNewTurn,
     poll,
+    snapshot,
     assistantTurnCount,
     probe,
     hasSendButton: () => !!findSendButton(),
