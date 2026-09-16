@@ -40,10 +40,10 @@ function upsertProvider({ port, token }, { enable } = {}) {
     local_only: true,
     experimental: true,
   };
+  // enable 省略时保留条目原有 enabled（开机补正用）；显式传 true/false 时覆盖（用户启用/禁用用）。
   const i = providers.findIndex((x) => x && x.id === PROVIDER_ID);
   if (i >= 0) {
     const prevEnabled = providers[i].enabled;
-    // 保留已有模型（用户可能选过），无则给默认
     const prevModels = Array.isArray(providers[i].models) && providers[i].models.length ? providers[i].models : models;
     providers[i] = { ...providers[i], ...patch, models: prevModels,
       enabled: enable === undefined ? prevEnabled : !!enable };
@@ -76,7 +76,6 @@ function stop() {
 }
 
 // 开机：只要用户加过 chatgpt-web 条目，就起 server 并补正 base_url/token/type（保留 enabled）。
-// 没加过则完全不动（不占端口、不开浏览器）。server 仅是 loopback http，浏览器窗口只在登录时才开。
 async function maybeStart() {
   if (!hasEntry()) { log('无条目，跳过自启'); return; }
   try { await start(); log(isEnabled() ? '已补正并就绪' : '已补正（当前禁用）'); }

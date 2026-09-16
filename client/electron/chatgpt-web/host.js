@@ -4,7 +4,10 @@
 // 边界：只驱动用户自己已登录的会话；不代填凭据；不做反爬。
 const path = require('path');
 const fs = require('fs');
-const { ChatGptMarkdownBuffer } = require('./markdown');
+// markdown/turndown 可选：缺依赖(没 npm install)时回退纯文本，绝不因此让模块加载失败、IPC 注册不上
+let ChatGptMarkdownBuffer = null;
+try { ({ ChatGptMarkdownBuffer } = require('./markdown')); }
+catch (e) { console.warn('[chatgpt-web:host] markdown buffer 不可用，回退纯文本收流:', e && e.message); }
 
 const CHATGPT_URL = 'https://chatgpt.com/?temporary-chat=true';
 const PARTITION = 'persist:tb-chatgpt-web';
@@ -161,12 +164,17 @@ async function doRunTurn(prompt, { onDelta, signal, overallTimeoutMs }) {
   const deadline = Date.now() + overallTimeoutMs;
   // markdown 段缓冲（port 自 miuuyy ChatGptMarkdownBuffer）：按结构块 append-only 提交，
   // 段稳定 750ms 且后面已有新段才提交，用 turndown 转 markdown；提交后不再改写。
-  const buffer = new ChatGptMarkdownBuffer();
+  // 缺 turndown 时 buffer=null，回退纯文本(visibleText)前缀安全流式。
+  const buffer = ChatGptMarkdownBuffer ? new ChatGptMarkdownBuffer() : null;
+  const safeEnd = (s, end) => {
+    if (end > 0 && end < s.length) { const c = s.charCodeAt(end - 1); if (c >= 0xD800 && c <= 0xDBFF) return end - 1; }
+    return end;
+  };
   // 完成判定（port 自 miuuyy chatGptTurnIsComplete + SETTLE_MS）：无 stop + 有复制按钮 + 有文本，
   // 且 visibleText 连续稳定 SETTLE_MS。
   const SETTLE_MS = 2000;
   let candSig = null; let candSince = 0;
-  let fullText = '';
+  let fullText = '';   // 已吐出的全文（markdown 模式=已提交 markdown；回退模式=visibleText 前缀）
   while (Date.now() < deadline) {
     if (signal?.aborted) { const e = new Error('已取消'); e.code = 'ABORTED'; throw e; }
     const snap = await evalDriver('window.__tbCgw.snapshot()');
@@ -174,31 +182,33 @@ async function doRunTurn(prompt, { onDelta, signal, overallTimeoutMs }) {
     const visibleText = snap && typeof snap.visibleText === 'string' ? snap.visibleText : '';
     const hasCopy = !!(snap && snap.hasCopy);
     const stop = !!(snap && snap.stop);
-    // 流式：把已稳定的块作为增量吐出
-    try {
-      const delta = buffer.observe(segments);
-      if (delta) { fullText += delta; if (onDelta) onDelta(delta); }
-    } catch (e) { log('observe 异常', e && e.message); }
+    // 流式增量
+    if (buffer) {
+      try { const delta = buffer.observe(segments); if (delta) { fullText += delta; if (onDelta) onDelta(delta); } }
+      catch (e) { log('observe 异常', e && e.message); }
+    } else if (visibleText.startsWith(fullText) && visibleText.length > fullText.length) {
+      const end = safeEnd(visibleText, visibleText.length);
+      if (end > fullText.length) { const d = visibleText.slice(fullText.length, end); fullText = visibleText.slice(0, end); if (onDelta && d) onDelta(d); }
+    }
     // 完成：无 stop + 复制按钮 + 有文本，且 visibleText 稳定 SETTLE_MS
     const complete = !stop && hasCopy && visibleText.length > 0;
     if (complete) {
       if (candSig !== visibleText) { candSig = visibleText; candSince = Date.now(); }
       else if (Date.now() - candSince >= SETTLE_MS) {
-        let finalMd = fullText;
-        try {
-          const fin = buffer.finish();
-          if (fin.delta && onDelta) onDelta(fin.delta);
-          finalMd = fin.markdown || fullText;
-        } catch (e) {
-          // markdown 一致性异常（ChatGPT 改写了已提交块）：退回可见文本
-          log('finish 一致性异常，退回可见文本', e && e.message);
-          if (visibleText.startsWith(fullText) && visibleText.length > fullText.length && onDelta) {
-            onDelta(visibleText.slice(fullText.length));
+        let finalText = fullText;
+        if (buffer) {
+          try { const fin = buffer.finish(); if (fin.delta && onDelta) onDelta(fin.delta); finalText = fin.markdown || fullText; }
+          catch (e) {
+            log('finish 一致性异常，退回可见文本', e && e.message);
+            if (visibleText.startsWith(fullText) && visibleText.length > fullText.length && onDelta) onDelta(visibleText.slice(fullText.length));
+            finalText = visibleText || fullText;
           }
-          finalMd = visibleText || fullText;
+        } else {
+          if (visibleText.startsWith(fullText) && visibleText.length > fullText.length && onDelta) onDelta(visibleText.slice(fullText.length));
+          finalText = visibleText || fullText;
         }
-        log('runTurn: 完成，长度', finalMd.length);
-        return { text: finalMd };
+        log('runTurn: 完成，长度', finalText.length, buffer ? '(md)' : '(text)');
+        return { text: finalText };
       }
     } else {
       candSig = null;
@@ -206,7 +216,7 @@ async function doRunTurn(prompt, { onDelta, signal, overallTimeoutMs }) {
     await new Promise((r) => setTimeout(r, 250));
   }
   // 超时兜底：收尾缓冲取全文
-  try { const fin = buffer.finish(); if (fin.markdown) fullText = fin.markdown; } catch { /* ignore */ }
+  if (buffer) { try { const fin = buffer.finish(); if (fin.markdown) fullText = fin.markdown; } catch { /* ignore */ } }
   if (fullText) { log('runTurn: 超时但有部分文本，长度', fullText.length); return { text: fullText }; }
   const e = new Error('等待 ChatGPT 回复超时'); e.code = 'TIMEOUT'; throw e;
 }

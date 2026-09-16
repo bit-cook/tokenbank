@@ -2700,7 +2700,7 @@ function ChatGptCard({ provider, onPersistEnabled }) {
             )}
           </div>
         )}
-        {!webEnabled && <p className="mt-2 text-[10px] text-zinc-400">打开开关后可登录并测试；Codex 请用下方独立的 Codex 卡片。</p>}
+        {!webEnabled && <p className="mt-2 text-[10px] text-zinc-400">打开开关后可登录并测试。</p>}
 
         {/* 提示 */}
         <div className="mt-3 flex items-start gap-1.5 text-[10.5px] leading-snug text-amber-700/85 dark:text-amber-300/75">
