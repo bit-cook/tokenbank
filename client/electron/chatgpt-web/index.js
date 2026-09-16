@@ -30,7 +30,8 @@ function upsertProvider({ port, token }, { enable } = {}) {
   const patch = {
     id: PROVIDER_ID,
     label: 'ChatGPT 网页',
-    type: 'custom',           // 非 paid → 不被 migrateAgentProviders 清理
+    // type=free：可路由 tier（网关按 p.type===requestTier 过滤），且非 paid → 不被 migrateAgentProviders 清理
+    type: 'free',
     handler: 'openai',
     api_format: 'responses',
     supports_responses: true,

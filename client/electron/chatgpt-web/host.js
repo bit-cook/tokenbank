@@ -136,8 +136,16 @@ async function doRunTurn(prompt, { onDelta, signal, overallTimeoutMs }) {
   const w = beginLoad();
   await waitReady(w);
   log('runTurn: 就绪，检查登录');
-  if (!(await evalDriver('window.__tbCgw.isLoggedIn()'))) {
-    const e = new Error('尚未登录 ChatGPT'); e.code = 'NOT_LOGGED_IN'; throw e;
+  // 页面刚加载时 composer 可能还没渲染，给 SPA 几秒重试；仍失败才判未登录
+  let loggedIn = false;
+  for (let i = 0; i < 12; i += 1) {
+    try { loggedIn = await evalDriver('window.__tbCgw.isLoggedIn()'); } catch { loggedIn = false; }
+    if (loggedIn) break;
+    await new Promise((r) => setTimeout(r, 600));
+  }
+  if (!loggedIn) {
+    log('runTurn: 判定未登录');
+    const e = new Error('尚未登录 ChatGPT，请在「ChatGPT 源」卡片点“登录 ChatGPT”完成登录'); e.code = 'NOT_LOGGED_IN'; throw e;
   }
   const sub = await evalDriver(`window.__tbCgw.submit(${JSON.stringify(prompt)})`);
   log('runTurn: 已提交 via=', sub && sub.via, ' 提交前回合数=', sub && sub.beforeCount);

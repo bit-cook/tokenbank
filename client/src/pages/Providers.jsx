@@ -2583,6 +2583,27 @@ function formatProviderTestMsg(result, t) {
   };
 }
 
+/** 单行 code + 复制按钮（终端/端点/授权码用） */
+function CodeCopy({ value, className = '' }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => {
+    try { navigator.clipboard?.writeText(String(value)); setCopied(true); setTimeout(() => setCopied(false), 1200); } catch { /* ignore */ }
+  };
+  return (
+    <span className={`inline-flex items-center gap-1 ${className}`}>
+      <code className="font-mono text-[11px] px-1.5 py-0.5 rounded-md bg-white/55 dark:bg-zinc-900/45 border border-white/55 dark:border-white/10 text-zinc-700 dark:text-zinc-200">{value}</code>
+      <button onClick={copy} title="复制" aria-label="复制"
+        className="inline-flex items-center justify-center w-5 h-5 rounded-md text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-white/50 dark:hover:bg-white/10 transition">
+        {copied ? (
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+        ) : (
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" /></svg>
+        )}
+      </button>
+    </span>
+  );
+}
+
 /**
  * 统一「ChatGPT」源卡：把 Codex 桶(OAuth) 与 网页桶(内嵌会话) 并到一起。
  * 一次内嵌登录共享会话；Codex 授权在独立内嵌窗口完成（已登录→基本一键 Approve）。
@@ -2600,6 +2621,9 @@ function ChatGptCard({ provider, codexProvider, onPersistEnabled, onUpdate }) {
   const webEnabled = provider.enabled !== false;
   const codexConnected = !!(codexProvider && codexProvider.auth_type === 'oauth'
     && (codexProvider.credentials?.access_token || codexProvider.credentials?.refresh_token));
+  const modelName = (m) => (typeof m === 'string' ? m : (m && (m.name || m.id)) || '');
+  const webModels = (provider.models || []).map(modelName).filter(Boolean);
+  const codexModels = (codexProvider?.models || []).map(modelName).filter(Boolean);
 
   const refresh = useCallback(async () => {
     if (!api) return;
@@ -2675,71 +2699,111 @@ function ChatGptCard({ provider, codexProvider, onPersistEnabled, onUpdate }) {
     setCodexMsg('');
   };
 
-  const btnDark = 'text-xs px-2.5 py-1 rounded-lg bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-50 transition';
-  const btnLight = 'text-xs px-2.5 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-50 transition';
+  const btnPrimary = 'inline-flex items-center gap-1.5 text-xs font-medium px-3.5 py-1.5 rounded-full bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 hover:opacity-90 disabled:opacity-50 transition shadow-sm';
+  const btnGhost = 'inline-flex items-center gap-1.5 text-xs font-medium px-3 py-1.5 rounded-full tb-glass-chip text-zinc-700 dark:text-zinc-200 hover:brightness-[1.04] disabled:opacity-50 transition';
+  const StatusPill = ({ ok, on, off }) => (
+    <span className={`inline-flex items-center gap-1.5 text-[11px] font-medium px-2 py-0.5 rounded-full ${ok ? 'bg-emerald-500/12 text-emerald-600 dark:text-emerald-400' : 'bg-zinc-500/10 text-zinc-400'}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${ok ? 'bg-emerald-500' : 'bg-zinc-400'}`} />
+      {ok ? on : off}
+    </span>
+  );
 
   return (
     <div className="tb-soft-tile rounded-2xl overflow-hidden">
-      <div className="flex items-start gap-3 p-4">
-        <div className="w-9 h-9 rounded-xl bg-zinc-100/70 dark:bg-zinc-800/70 backdrop-blur-sm flex items-center justify-center text-lg shrink-0">⚡</div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="text-sm font-medium truncate text-zinc-800 dark:text-zinc-200">ChatGPT</span>
-            <span className="text-[10px] text-zinc-400">Codex + 网页，双桶</span>
+      <div className="p-4">
+        {/* 头部 */}
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl flex items-center justify-center text-lg shrink-0 bg-gradient-to-br from-emerald-400/25 to-teal-500/20 border border-white/50 dark:border-white/10 shadow-sm">🤖</div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">ChatGPT</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full tb-glass-chip text-zinc-500 dark:text-zinc-400">双桶</span>
+            </div>
+            <div className="text-[11px] text-zinc-400 mt-0.5">Codex 官方通道 + 网页大额度</div>
           </div>
+          <StatusPill ok={st.loggedIn} on="会话已登录" off="未登录" />
+        </div>
 
-          {/* 共享登录 */}
-          <div className="mt-2 flex items-center gap-2 flex-wrap">
-            <button onClick={doLogin} disabled={busy === 'login'} className={btnDark}>
-              {busy === 'login' ? '…' : (st.loggedIn ? '重新登录 ChatGPT' : '登录 ChatGPT')}
-            </button>
-            <span className={`inline-flex items-center gap-1 text-[11px] ${st.loggedIn ? 'text-green-600 dark:text-green-400' : 'text-zinc-400'}`}>
-              <span className={`w-1.5 h-1.5 rounded-full ${st.loggedIn ? 'bg-green-500' : 'bg-zinc-400'}`} />
-              {st.loggedIn ? '会话已登录' : '会话未登录'}
-            </span>
-          </div>
+        {/* 共享登录 */}
+        <div className="mt-3">
+          <button onClick={doLogin} disabled={busy === 'login'} className={btnPrimary}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><polyline points="10 17 15 12 10 7" /><line x1="15" y1="12" x2="3" y2="12" /></svg>
+            {busy === 'login' ? '打开登录窗口…' : (st.loggedIn ? '重新登录 ChatGPT' : '登录 ChatGPT')}
+          </button>
+          <span className="ml-2 text-[10px] text-zinc-400">一次登录，下面两个桶共用会话</span>
+        </div>
 
-          {/* Codex 桶 */}
-          <div className="mt-3 rounded-xl bg-zinc-50/70 dark:bg-zinc-800/40 p-2.5">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-200">Codex 桶</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300">官方 OAuth · 稳定</span>
-                <span className={`text-[11px] ${codexConnected ? 'text-green-600 dark:text-green-400' : 'text-zinc-400'}`}>{codexConnected ? '已连接' : '未连接'}</span>
-              </div>
+        <div className="mt-3 text-[10.5px] text-zinc-400 leading-snug">两个桶<span className="text-zinc-500 dark:text-zinc-300 font-medium">相互独立、可同时开启</span>（非二选一），各自提供不同的模型；路由按<span className="text-zinc-500 dark:text-zinc-300 font-medium">模型名</span>自动走对应桶：</div>
+
+        {/* Codex 桶 */}
+        <div className="mt-1.5 tb-glass-chip rounded-xl p-3 border-l-2 border-emerald-400/60">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-100">① Codex 桶</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">官方 OAuth · 稳定</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <StatusPill ok={codexConnected} on="已连接" off="未连接" />
               {codexConnected
-                ? <button onClick={disconnectCodex} className={btnLight}>断开</button>
-                : <button onClick={loginCodex} disabled={codexBusy} className={btnLight}>{codexBusy ? '授权中…' : '连接 Codex'}</button>}
+                ? <button onClick={disconnectCodex} className={btnGhost}>断开</button>
+                : <button onClick={loginCodex} disabled={codexBusy} className={btnGhost}>{codexBusy ? '授权中…' : '连接'}</button>}
             </div>
-            {codexCode && <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">授权码：<code className="font-mono text-zinc-700 dark:text-zinc-200">{codexCode}</code>（在弹出的授权窗口里确认）</p>}
-            {codexMsg && <p className={`mt-1 text-[11px] ${codexMsg.startsWith('✓') ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>{codexMsg}</p>}
-            <p className="mt-1 text-[10px] text-zinc-400">上游 backend-api/codex，官方通道</p>
           </div>
-
-          {/* 网页桶 */}
-          <div className="mt-2 rounded-xl bg-zinc-50/70 dark:bg-zinc-800/40 p-2.5">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-200">网页桶</span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">实验性 · 大额度</span>
-                {webEnabled && st.running && (
-                  <span className="text-[11px] text-zinc-500 dark:text-zinc-400"><code>127.0.0.1:{st.port || '…'}</code></span>
-                )}
-              </div>
-              <Toggle enabled={webEnabled} onChange={toggleWeb} />
+          <p className="mt-1.5 text-[10.5px] text-zinc-500 dark:text-zinc-400">换取官方 token → 调 <code className="font-mono text-[10px]">backend-api/codex</code>，稳定、额度按 Codex 计。</p>
+          <div className="mt-1.5 flex items-center gap-1 flex-wrap">
+            <span className="text-[10px] text-zinc-400 mr-0.5">模型</span>
+            {(codexModels.length ? codexModels : ['gpt-5', 'o3', 'gpt-4o']).slice(0, 6).map(m => (
+              <span key={m} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-700 dark:text-emerald-300">{m}</span>
+            ))}
+            {!codexModels.length && <span className="text-[10px] text-zinc-400">（连接后同步）</span>}
+          </div>
+          {codexCode && (
+            <div className="mt-2 flex items-center gap-1.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+              <span>授权码</span><CodeCopy value={codexCode} /><span>在弹出窗口确认</span>
             </div>
-            {webEnabled && (
-              <div className="mt-2 flex items-center gap-2">
-                <button onClick={doTest} disabled={busy === 'test'} className={btnLight}>{busy === 'test' ? '测试中…' : '测试'}</button>
-                <span className="text-[10px] text-zinc-400">凭据本地自动管理，无需填写</span>
-              </div>
-            )}
-            {msg && <p className={`mt-1 text-[11px] ${msg.startsWith('✓') ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>{msg}</p>}
-          </div>
+          )}
+          {codexMsg && <p className={`mt-1.5 text-[11px] ${codexMsg.startsWith('✓') ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>{codexMsg}</p>}
+        </div>
 
-          <p className="mt-2 text-[11px] leading-snug text-amber-700/90 dark:text-amber-300/80">
-            ⚠️ 网页桶为浏览器自动化·非官方 API，登录你自己的 ChatGPT 会话，仅供个人自用；把订阅当 API 使用可能违反 ChatGPT 使用条款，风险自担。Codex 桶为官方 OAuth 通道。
-          </p>
+        {/* 网页桶 */}
+        <div className="mt-2 tb-glass-chip rounded-xl p-3 border-l-2 border-amber-400/60">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-100">② 网页桶</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400">实验性 · 大额度</span>
+            </div>
+            <Toggle enabled={webEnabled} onChange={toggleWeb} />
+          </div>
+          <p className="mt-1.5 text-[10.5px] text-zinc-500 dark:text-zinc-400">驱动你登录的网页会话收发，额度按网页版算（更大），DOM 改版可能失效。</p>
+          <div className="mt-1.5 flex items-center gap-1 flex-wrap">
+            <span className="text-[10px] text-zinc-400 mr-0.5">模型</span>
+            {webModels.map(m => (
+              <span key={m} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-500/12 text-amber-700 dark:text-amber-300">{m}</span>
+            ))}
+          </div>
+          {webEnabled && (
+            <div className="mt-2 space-y-2">
+              <div className="flex items-center gap-1.5 text-[11px] text-zinc-500 dark:text-zinc-400">
+                <span>本地端点</span>
+                {st.running ? <CodeCopy value={`http://127.0.0.1:${st.port}`} /> : <span className="text-zinc-400">启动中…</span>}
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={doTest} disabled={busy === 'test'} className={btnGhost}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                  {busy === 'test' ? '测试中…' : '测试网页桶'}
+                </button>
+                <span className="text-[10px] text-zinc-400">打一发验证网页会话通不通</span>
+              </div>
+              {msg && <p className={`text-[11px] ${msg.startsWith('✓') ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-500 dark:text-red-400'}`}>{msg}</p>}
+            </div>
+          )}
+          {!webEnabled && <p className="mt-1.5 text-[10px] text-zinc-400">打开开关后可登录并测试</p>}
+        </div>
+
+        {/* 提示 */}
+        <div className="mt-3 flex items-start gap-1.5 text-[10.5px] leading-snug text-amber-700/85 dark:text-amber-300/75">
+          <svg className="shrink-0 mt-0.5" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
+          <span>网页桶为浏览器自动化·非官方 API，仅登录你自己的会话、供个人自用；把订阅当 API 可能违反 ChatGPT 使用条款，风险自担。Codex 桶为官方 OAuth 通道。</span>
         </div>
       </div>
     </div>
