@@ -4,7 +4,7 @@
 // 真登录浏览器里往真 composer 打字、按 data-turn-id 绑定新 assistant turn、扫 .markdown 收流。
 // 不做任何反爬/arkose；靠的是用户自己已登录的会话。
 (function initTbChatgptWebDriver() {
-  if (window.__tbCgw && window.__tbCgw.__v === 10) return '已就绪';
+  if (window.__tbCgw && window.__tbCgw.__v === 11) return '已就绪';
 
   const COMPOSER = [
     '[data-testid="prompt-textarea"]',
@@ -143,18 +143,43 @@
     return null;
   }
 
-  async function submit(text) {
-    let el = visibleComposer();
+  async function fill(text) {
+    const el = visibleComposer();
     if (!el) throw new Error('composer 不可见（可能未登录）');
+    fillComposer(el, String(text ?? ''));
+    for (let i = 0; i < 25; i += 1) { if (findSendButton()) return true; await sleep(60); }
+    return !!findSendButton();
+  }
+
+  async function send(beforeCount) {
+    const startCount = Number(beforeCount) || assistantTurnCount();
+    let via = 'none';
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const el = visibleComposer();
+      const btn = findSendButton();
+      if (btn) { btn.click(); via = 'button'; }
+      else if (el) {
+        el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
+        via = 'enter';
+      }
+      const t0 = Date.now();
+      while (Date.now() - t0 < 2500) {
+        if (sentEvidence(startCount)) return { beforeCount: startCount, via, attempt };
+        await sleep(120);
+      }
+    }
+    return { beforeCount: startCount, via, unsure: true };
+  }
+
+  async function submit(text) {
     const beforeCount = assistantTurnCount();
     const str = String(text ?? '');
     let via = 'none';
     // 提交并验证：最多 4 次；每次发出后 2.5s 内验证是否真发出，没发就重填重试
     for (let attempt = 0; attempt < 4; attempt += 1) {
-      el = visibleComposer();
+      const el = visibleComposer();
       if (!el) break;
       fillComposer(el, str);
-      // 等发送按钮出现（文字登记后才 enable）
       let btn = null;
       for (let i = 0; i < 25; i += 1) { btn = findSendButton(); if (btn) break; await sleep(60); }
       if (btn) { btn.click(); via = 'button'; }
@@ -162,15 +187,58 @@
         el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true }));
         via = 'enter';
       }
-      // 验证是否真发出
       const t0 = Date.now();
       while (Date.now() - t0 < 2500) {
         if (sentEvidence(beforeCount)) return { beforeCount, via, attempt };
         await sleep(120);
       }
-      // 没发出去，下一轮重填重试
     }
     return { beforeCount, via, unsure: true };
+  }
+
+  function fileInputSelector() {
+    const sels = [
+      'input[data-testid="upload-photos-input"]',
+      'input[data-testid="file-upload-input"]',
+      'input[data-testid="composer-file-input"]',
+      'form input[type="file"]',
+      'input[type="file"][accept*="image"]',
+      'input[type="file"]',
+    ];
+    for (const s of sels) {
+      if (document.querySelector(s)) return s;
+    }
+    return '';
+  }
+
+  function groupLabel(el) {
+    const labelled = el.getAttribute('aria-label') || '';
+    if (labelled) return labelled;
+    const titled = el.querySelector('[title]');
+    if (titled && titled.getAttribute('title')) return titled.getAttribute('title');
+    return (el.innerText || '').replace(/\s+/g, ' ').trim();
+  }
+
+  function attachmentsStatus(names) {
+    const list = Array.isArray(names) ? names : [];
+    const sel = fileInputSelector();
+    const input = sel ? document.querySelector(sel) : null;
+    const inputCount = input && input.files ? input.files.length : 0;
+    const labels = [...document.querySelectorAll('[role="group"]')].map(groupLabel);
+    const missing = list.filter((n) => {
+      const stem = String(n).replace(/\.[^.]+$/, '');
+      return !labels.some((lb) => lb.includes(n) || (stem && lb.includes(stem)));
+    });
+    const chipsOk = missing.length === 0;
+    const inputOk = list.length > 0 && inputCount >= list.length;
+    return {
+      ready: chipsOk || inputOk,
+      missing,
+      sendEnabled: !!findSendButton(),
+      alerts: [...document.querySelectorAll('[role="alert"]')]
+        .map((el) => (el.innerText || '').replace(/\s+/g, ' ').trim()).filter(Boolean),
+      inputCount,
+    };
   }
 
   // 绑定提交后新增的 assistant 回合：等回合数 > beforeCount，或 stop 按钮出现（已在生成）
@@ -324,14 +392,18 @@
   }
 
   window.__tbCgw = {
-    __v: 10,
+    __v: 11,
     isLoggedIn,
+    fill,
+    send,
     submit,
     bindNewTurn,
     poll,
     snapshot,
     assistantTurnCount,
     probe,
+    fileInputSelector,
+    attachmentsStatus,
     hasSendButton: () => !!findSendButton(),
   };
   return '已就绪';

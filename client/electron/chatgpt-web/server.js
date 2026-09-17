@@ -14,6 +14,8 @@ try { transform = require('../codex-transform'); } catch { /* 测试环境可缺
 const CONF_PATH = path.join(os.homedir(), '.tokenbank', 'chatgpt-web.json');
 const DEFAULT_PORT = 17841;
 const WEB_MODELS = ['chatgpt-web', 'chatgpt-web-thinking'];
+const MAX_INPUT_IMAGES = 10; // ChatGPT 单条消息附图上限
+const IMAGE_ONLY_PROMPT = '请查看附图并据此完成任务。';
 
 const servers = new Map(); // instanceId -> { server, port, token }
 
@@ -29,33 +31,79 @@ function saveConf(c) {
 }
 function id(prefix) { return `${prefix}_${crypto.randomBytes(16).toString('hex')}`; }
 
-// ---- 请求解析：Responses `input` 或 Chat `messages` → 单条 prompt ----
-function textOfContent(content) {
-  if (typeof content === 'string') return content;
-  if (Array.isArray(content)) return content.map((p) => (typeof p === 'string' ? p : p?.text || '')).join('');
-  return content?.text || '';
+// ---- 请求解析：Responses `input` 或 Chat `messages` → 文本 + 图片 ----
+function imageUrlOfPart(p) {
+  if (!p || typeof p !== 'object') return '';
+  if (p.type === 'image_url') {
+    const u = p.image_url;
+    return (typeof u === 'string' ? u : (u && u.url)) || '';
+  }
+  if (p.type === 'input_image') {
+    const u = p.image_url;
+    return (typeof u === 'string' ? u : (u && u.url)) || '';
+  }
+  if (p.type === 'image' && p.source) {
+    if (p.source.type === 'base64' && p.source.data) {
+      return `data:${p.source.media_type || 'image/jpeg'};base64,${p.source.data}`;
+    }
+    return p.source.url || '';
+  }
+  return '';
 }
-function flattenToPrompt(body) {
+
+// 抽文本，同时把图片 URL 按出现顺序推进 images
+function harvestContent(content, images) {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) {
+    const url = imageUrlOfPart(content);
+    if (url) { images.push(url); return ''; }
+    return content?.text || '';
+  }
+  const texts = [];
+  for (const p of content) {
+    if (typeof p === 'string') { texts.push(p); continue; }
+    const url = imageUrlOfPart(p);
+    if (url) { images.push(url); continue; }
+    if (p && p.text) texts.push(p.text);
+  }
+  return texts.join('');
+}
+
+function flattenToTurn(body) {
   const parts = [];
-  let src = body;
-  if (transform && Array.isArray(body.input)) { try { src = transform.responsesToChat(body) || body; } catch { src = body; } }
+  const images = [];
+  let src = body || {};
+  if (transform && Array.isArray(src.input)) {
+    try { src = transform.responsesToChat(src) || src; } catch { /* 保持原 body */ }
+  }
   if (src.instructions) parts.push(String(src.instructions).trim());
-  else if (body.instructions) parts.push(String(body.instructions).trim());
+  else if (body && body.instructions) parts.push(String(body.instructions).trim());
   const items = Array.isArray(src.messages) ? src.messages
-    : Array.isArray(body.input) ? body.input
-    : Array.isArray(body.messages) ? body.messages : null;
+    : Array.isArray(body && body.input) ? body.input
+    : Array.isArray(body && body.messages) ? body.messages : null;
   if (items) {
     for (const m of items) {
-      const role = m.role || 'user';
-      const text = textOfContent(m.content).trim();
+      if (typeof m === 'string') { parts.push(m); continue; }
+      if (!m || typeof m !== 'object') continue;
+      const topUrl = imageUrlOfPart(m);
+      if (m.type === 'input_image' && topUrl) { images.push(topUrl); continue; }
+      const text = harvestContent(m.content, images).trim();
       if (!text) continue;
-      if (role === 'system') parts.push(text);
+      const role = m.role || 'user';
+      if (role === 'system' || role === 'developer') parts.push(text);
       else if (role === 'assistant') parts.push(`（助手先前回复）${text}`);
       else parts.push(text);
     }
-  } else if (typeof body.input === 'string') { parts.push(body.input); }
-  return parts.filter(Boolean).join('\n\n');
+  } else if (typeof (body && body.input) === 'string') {
+    parts.push(body.input);
+  }
+  const dropped = Math.max(0, images.length - MAX_INPUT_IMAGES);
+  const kept = images.slice(-MAX_INPUT_IMAGES).map((url) => ({ url }));
+  if (dropped) parts.push(`[有 ${dropped} 张较早的图未附上：ChatGPT 每条最多 ${MAX_INPUT_IMAGES} 张]`);
+  const prompt = parts.filter(Boolean).join('\n\n') || (kept.length ? IMAGE_ONLY_PROMPT : '');
+  return { prompt, images: kept };
 }
+function flattenToPrompt(body) { return flattenToTurn(body).prompt; }
 
 function sse(res, event, data) { res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); }
 function baseResponse(respId, model, status, output) {
@@ -77,7 +125,8 @@ function readBody(req) {
 
 async function handleResponses(instId, res, body, wantStream) {
   const model = body.model || 'chatgpt-web';
-  const prompt = flattenToPrompt(body);
+  const turn = flattenToTurn(body);
+  const prompt = turn.prompt;
   if (!prompt) { sendJson(res, 400, { error: { message: 'empty input' } }); return; }
   const respId = id('resp'); const itemId = id('msg');
   if (wantStream) {
@@ -88,7 +137,7 @@ async function handleResponses(instId, res, body, wantStream) {
     sse(res, 'response.content_part.added', { type: 'response.content_part.added', item_id: itemId, output_index: 0, content_index: 0, part: { type: 'output_text', text: '', annotations: [] } });
     let full = '';
     try {
-      const out = await host.runTurn(instId, prompt, { onDelta: (delta) => { full += delta; sse(res, 'response.output_text.delta', { type: 'response.output_text.delta', item_id: itemId, output_index: 0, content_index: 0, delta }); } });
+      const out = await host.runTurn(instId, prompt, { images: turn.images, onDelta: (delta) => { full += delta; sse(res, 'response.output_text.delta', { type: 'response.output_text.delta', item_id: itemId, output_index: 0, content_index: 0, delta }); } });
       full = out.text || full;
     } catch (e) {
       sse(res, 'response.failed', { type: 'response.failed', response: { ...baseResponse(respId, model, 'failed', []), error: { code: e.code || 'error', message: e.message } } });
@@ -102,7 +151,7 @@ async function handleResponses(instId, res, body, wantStream) {
     return;
   }
   try {
-    const out = await host.runTurn(instId, prompt, {});
+    const out = await host.runTurn(instId, prompt, { images: turn.images });
     const item = { id: itemId, type: 'message', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: out.text || '', annotations: [] }] };
     sendJson(res, 200, baseResponse(respId, model, 'completed', [item]));
   } catch (e) { sendJson(res, e.code === 'NOT_LOGGED_IN' ? 401 : 502, { error: { code: e.code || 'error', message: e.message } }); }
@@ -110,19 +159,20 @@ async function handleResponses(instId, res, body, wantStream) {
 
 async function handleChat(instId, res, body, wantStream) {
   const model = body.model || 'chatgpt-web';
-  const prompt = flattenToPrompt(body);
+  const turn = flattenToTurn(body);
+  const prompt = turn.prompt;
   if (!prompt) { sendJson(res, 400, { error: { message: 'empty messages' } }); return; }
   const cid = id('chatcmpl');
   if (wantStream) {
     res.writeHead(200, { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
     const chunk = (delta, finish) => res.write(`data: ${JSON.stringify({ id: cid, object: 'chat.completion.chunk', created: Math.floor(Date.now() / 1000), model, choices: [{ index: 0, delta, finish_reason: finish || null }] })}\n\n`);
-    try { chunk({ role: 'assistant' }); await host.runTurn(instId, prompt, { onDelta: (d) => chunk({ content: d }) }); chunk({}, 'stop'); }
+    try { chunk({ role: 'assistant' }); await host.runTurn(instId, prompt, { images: turn.images, onDelta: (d) => chunk({ content: d }) }); chunk({}, 'stop'); }
     catch (e) { chunk({ content: `\n[错误] ${e.message}` }, 'stop'); }
     res.write('data: [DONE]\n\n'); res.end();
     return;
   }
   try {
-    const out = await host.runTurn(instId, prompt, {});
+    const out = await host.runTurn(instId, prompt, { images: turn.images });
     sendJson(res, 200, { id: cid, object: 'chat.completion', created: Math.floor(Date.now() / 1000), model, choices: [{ index: 0, message: { role: 'assistant', content: out.text || '' }, finish_reason: 'stop' }] });
   } catch (e) { sendJson(res, e.code === 'NOT_LOGGED_IN' ? 401 : 502, { error: { code: e.code || 'error', message: e.message } }); }
 }
@@ -211,4 +261,7 @@ function statusOf(instId) {
 }
 function status() { return { instances: [...servers.keys()].map(statusOf), models: WEB_MODELS, confPath: CONF_PATH }; }
 
-module.exports = { start, stop, stopAll, forget, statusOf, status, DEFAULT_PORT, WEB_MODELS };
+module.exports = {
+  start, stop, stopAll, forget, statusOf, status, DEFAULT_PORT, WEB_MODELS,
+  flattenToTurn, flattenToPrompt, MAX_INPUT_IMAGES, IMAGE_ONLY_PROMPT,
+};

@@ -17,6 +17,8 @@ try {
 } catch (e) {
   console.warn('[proxy-env] inject failed:', e && e.message);
 }
+// HTTP 代理拦不住 QUIC；直连 chatgpt.com 等会被中间盒用过期/伪造证书掐握手（net_error -201）
+try { app.commandLine.appendSwitch('disable-quic'); } catch { /* ignore */ }
 const agent = require('./agent-worker');
 const gateway = require('./local-gateway');
 const localStats = require('./local-stats');
@@ -5906,6 +5908,10 @@ function seedRandomSpeedForSources() {
 // ── App lifecycle ─────────────────────────────────────────────────────────────
 
 app.whenReady().then(() => {
+  try {
+    const { session } = require('electron');
+    require('./chromium-session-proxy').applySessionProxy(session.defaultSession, 'default');
+  } catch (e) { console.warn('[chromium-proxy] defaultSession:', e && e.message); }
   // 尽早注册菜单栏托盘：macOS 把新状态项插在已有第三方项的「左侧」（刘海侧，最先被挤掉），
   // 越早创建越靠右、越不容易在菜单栏满时被遮挡。数据读取已做空安全，2s 定时器随后补真实值。
   createTray();

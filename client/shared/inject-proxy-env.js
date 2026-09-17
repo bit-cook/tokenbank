@@ -15,6 +15,27 @@ function hasProxyEnv() {
   return PROXY_ENV_KEYS.some((k) => process.env[k]);
 }
 
+/** 出站代理 URL：环境变量优先，否则读系统代理 */
+function resolveOutboundProxyUrl() {
+  for (const k of ['HTTPS_PROXY', 'https_proxy', 'HTTP_PROXY', 'http_proxy', 'ALL_PROXY', 'all_proxy']) {
+    const v = process.env[k] && String(process.env[k]).trim();
+    if (v) return v;
+  }
+  return readSystemProxyUrl();
+}
+
+const CHROMIUM_PROXY_BYPASS = 'localhost,127.0.0.1,::1,<local>';
+
+/**
+ * Electron session.setProxy 参数。persist 分区默认不一定走系统代理；
+ * QUIC 还会绕过 HTTP CONNECT，直连时中间盒常用过期证书掐握手（net_error -201）。
+ */
+function chromiumProxySettings() {
+  const url = resolveOutboundProxyUrl();
+  if (!url) return { mode: 'system', proxyBypassRules: CHROMIUM_PROXY_BYPASS };
+  return { proxyRules: url, proxyBypassRules: CHROMIUM_PROXY_BYPASS };
+}
+
 /** 解析 macOS `scutil --proxy` → http://host:port */
 function parseScutilProxy(text) {
   const src = String(text || '');
@@ -107,4 +128,7 @@ module.exports = {
   parseWinProxyServer,
   readSystemProxyUrl,
   hasProxyEnv,
+  resolveOutboundProxyUrl,
+  chromiumProxySettings,
+  CHROMIUM_PROXY_BYPASS,
 };

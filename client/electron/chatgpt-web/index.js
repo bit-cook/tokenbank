@@ -27,7 +27,8 @@ function upsertProvider(providerId, n, { port, token }, { enable } = {}) {
   const cfg = readCfg();
   const providers = Array.isArray(cfg.providers) ? cfg.providers : [];
   const base = `http://127.0.0.1:${port}`;
-  const models = server.WEB_MODELS.map((m) => ({ name: m, type: 'chat' }));
+  // type=vision：网关才会把 image_url / input_image 留给本源，而不是剥成「[图片]」
+  const models = server.WEB_MODELS.map((m) => ({ name: m, type: 'vision' }));
   const patch = {
     id: providerId,
     label: `ChatGPT 网页 ${n}`,
@@ -44,8 +45,7 @@ function upsertProvider(providerId, n, { port, token }, { enable } = {}) {
   const i = providers.findIndex((x) => x && x.id === providerId);
   if (i >= 0) {
     const prevEnabled = providers[i].enabled;
-    const prevModels = Array.isArray(providers[i].models) && providers[i].models.length ? providers[i].models : models;
-    providers[i] = { ...providers[i], ...patch, models: prevModels, enabled: enable === undefined ? prevEnabled : !!enable };
+    providers[i] = { ...providers[i], ...patch, models, enabled: enable === undefined ? prevEnabled : !!enable };
   } else {
     providers.push({ ...patch, models, enabled: !!enable });
   }
