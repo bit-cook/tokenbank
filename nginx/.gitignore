@@ -1,4 +1,5 @@
-# 证书勿提交仓库；将 fullchain.pem / privkey.pem 放在此目录
+# 证书与 Let’s Encrypt 账户私钥勿提交仓库
 *.pem
 *.key
 *.crt
+letsencrypt/
