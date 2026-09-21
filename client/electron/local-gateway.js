@@ -592,6 +592,20 @@ function withUsageOption(body) {
 // All enabled providers, each with an effective models list.
 // P2P providers: base_url/token come from backend config; models come from live _peerModels.
 // 个人源：合并账户登记 + 刊例价覆盖的模型（与供给源页按模型视图一致）。
+// Claude 订阅 OAuth 源的兜底模型清单：catalog 后台同步常把该源 models 清空，
+// 导致 claude 模型在 /v1/models 列表与路由里凭空消失。models 为空时注入本清单，
+// 保证有效 OAuth 至少稳定可见/可用（haiku 走 Anthropic 允许额度；opus/sonnet 仍可能被上游 429）。
+const CLAUDE_OAUTH_FALLBACK_MODELS = [
+  'claude-opus-4-5-20251101',
+  'claude-sonnet-4-5-20250929',
+  'claude-haiku-4-5-20251001',
+];
+function isClaudeOAuthProvider(p) {
+  if (!p) return false;
+  if (p.oauth_provider === 'claude') return true;
+  return p.auth_type === 'oauth' && typeof p.base_url === 'string' && /api\.anthropic\.com/.test(p.base_url);
+}
+
 function enabledProviders() {
   if (!_getConfig) return [];
   const cfg = _getConfig();
@@ -622,6 +636,10 @@ function enabledProviders() {
     .map(p => {
       if (p.type === 'p2p') {
         return { ...p, enabled: true, base_url: _backendUrl, token: _cloudToken || p.token, models: [..._peerModels] };
+      }
+      // Claude 订阅 OAuth 源 models 被清空时，兜底注入硬编码清单（列表 + 路由统一生效）
+      if ((!Array.isArray(p.models) || p.models.length === 0) && isClaudeOAuthProvider(p)) {
+        return { ...p, enabled: true, models: CLAUDE_OAUTH_FALLBACK_MODELS.map(name => ({ name, type: 'chat' })) };
       }
       return { ...p, enabled: true };
     });
@@ -3249,7 +3267,8 @@ async function route(model, reqPath, body, res, callerKey, skipP2P = false) {
   // tier/provider 客户端过滤候选；strategy/sharer 通过 X-TB-Route 头交服务端（p2p 派发）执行。
   let requestTier = null, requestScope = null, requestStrategy = null, requestSharer = null, requestProvider = null;
   {
-    const pr = parseRoute(model);
+    const _provIds = new Set((_getConfig?.()?.providers || []).map((p) => p && p.id).filter(Boolean));
+    const pr = parseRoute(model, _provIds);
     // 纯前缀 codec(整串都是 token、无裸模型) 另走策略分支，这里不当 model 前缀处理
     if (pr.model && !parsePureCodec(origModel)) {
       if (pr.tier || pr.scope || pr.strategy || pr.sharer || pr.provider) {

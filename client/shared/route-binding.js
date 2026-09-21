@@ -25,14 +25,23 @@ function encodeRoute(parts = {}) {
 
 /**
  * 解析规范串 → { strategy, scope, tier, sharer, provider, model }（缺省为 null）。
- * 规则：最后一段永远是 model（单段时若命中 strategy/scope/tier/sharer 取值域则为纯前缀、无 model）；
- * 前导段按取值域分类，剩下未识别的单段作 provider。
- * 例外：模型 ID 含冒号时（OpenRouter `org/name:free`），从「带 / 的段」起整段作为 model。
+ *
+ * 规则（从左消费已知 codec 段，其余整段作 model）：
+ *   - strategy/scope/tier/sharer 是封闭取值域，命中即消费为对应字段；
+ *   - provider 仅在传入 knownProviders 白名单且命中时消费（避免把模型名首段误判为 provider）；
+ *   - 遇到第一个不属于上述任何类别的段，即认定 model 从此开始，
+ *     其后所有段用 ':' 原样拼回 —— 这样 Ollama 的 `name:tag`（如 qwen2.5:32b）、
+ *     OpenRouter 的 `org/name:free` 里模型名内含的 ':' / '/' 都不会被截断。
+ *
+ * knownProviders：可选 Set<string> / 数组，供给源 id 白名单。不传则不解析 provider 段
+ *   （宁可整串保留为 model，也不冒险按位置猜 provider 而截断带冒号的模型名）。
  */
-function parseRoute(str) {
+function parseRoute(str, knownProviders = null) {
   const out = { strategy: null, scope: null, tier: null, sharer: null, provider: null, model: null };
   const s = String(str == null ? '' : str).trim();
   if (!s) return out;
+  const provSet = knownProviders instanceof Set ? knownProviders
+    : (Array.isArray(knownProviders) ? new Set(knownProviders) : null);
   const segs = s.split(':');
   if (segs.length === 1) {
     const seg = segs[0];
@@ -44,7 +53,25 @@ function parseRoute(str) {
     return out;
   }
 
-  // OpenRouter 等：模型段含 org/name，后缀可再带 :free → 不能「末段=model」
+  // 传入 provider 白名单时：从左消费已知 codec 段 + 已知 provider，遇到第一个不认识的段即为
+  // model 起点、其后整段拼回。这样模型名内含 ':'（Ollama name:tag，如 qwen2.5:32b）不会被截断。
+  if (provSet) {
+    let i = 0;
+    for (; i < segs.length - 1; i++) {
+      const seg = segs[i];
+      if (_STRAT_SET.has(seg) && !out.strategy)          { out.strategy = seg; continue; }
+      if (_SCOPE_SET.has(seg) && !out.scope)             { out.scope = seg; continue; }
+      if (_TIER_SET.has(seg) && !out.tier)               { out.tier = seg; continue; }
+      if (SHARER_RE.test(seg) && !out.sharer)            { out.sharer = seg; continue; }
+      if (provSet.has(seg) && !out.provider)             { out.provider = seg; continue; }
+      break;
+    }
+    out.model = segs.slice(i).join(':');
+    return out;
+  }
+
+  // 未传白名单（前端/route_id 等）：保留原有按位置解析 —— 含 '/' 的段起整段作 model（OpenRouter
+  // org/name:free），否则末段=model、前导未识别单段作 provider。此路径不处理 Ollama 冒号模型。
   let modelStart = -1;
   for (let i = 0; i < segs.length; i++) {
     if (segs[i].includes('/')) { modelStart = i; break; }
@@ -60,7 +87,6 @@ function parseRoute(str) {
     }
     return out;
   }
-
   out.model = segs[segs.length - 1];
   for (const seg of segs.slice(0, -1)) {
     if (_STRAT_SET.has(seg) && !out.strategy)      out.strategy = seg;

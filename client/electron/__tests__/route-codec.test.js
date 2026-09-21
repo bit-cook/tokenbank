@@ -141,3 +141,49 @@ test('legacy: 旧 codec tier=p2p 仍解析为 tier（网关兼容旧数据）', 
   assert.strictEqual(r.tier, 'p2p');
   assert.strictEqual(r.model, 'deepseek');
 });
+
+// ── 传入 provider 白名单：模型名内含冒号（Ollama name:tag）不被截断 ──
+const OLLAMA_WL = ['ollama', 'openrouter', 'openai'];
+
+test('whitelist: 裸 Ollama 冒号模型不被截断', () => {
+  assert.deepStrictEqual(
+    parseRoute('qwen2.5:32b', OLLAMA_WL),
+    withDefaults({ model: 'qwen2.5:32b' }),
+  );
+});
+
+test('whitelist: provider + Ollama 冒号模型', () => {
+  assert.deepStrictEqual(
+    parseRoute('ollama:qwen2.5:32b', OLLAMA_WL),
+    withDefaults({ provider: 'ollama', model: 'qwen2.5:32b' }),
+  );
+});
+
+test('whitelist: tier + Ollama 冒号模型', () => {
+  assert.deepStrictEqual(
+    parseRoute('free:qwen2.5:32b', OLLAMA_WL),
+    withDefaults({ tier: 'free', model: 'qwen2.5:32b' }),
+  );
+});
+
+test('whitelist: 未知首段整段作 model（provider 只认白名单）', () => {
+  // mistral-nemo 不在白名单 → 整串作 model，不被当 provider 而截断
+  assert.deepStrictEqual(
+    parseRoute('mistral-nemo:latest', OLLAMA_WL),
+    withDefaults({ model: 'mistral-nemo:latest' }),
+  );
+});
+
+test('whitelist: provider + OpenRouter org/name:free', () => {
+  assert.deepStrictEqual(
+    parseRoute('openrouter:cohere/north-mini-code:free', OLLAMA_WL),
+    withDefaults({ provider: 'openrouter', model: 'cohere/north-mini-code:free' }),
+  );
+});
+
+test('whitelist: 全前缀 + Ollama 冒号模型', () => {
+  assert.deepStrictEqual(
+    parseRoute('auto:personal:paid:ollama:qwen2.5:32b', OLLAMA_WL),
+    withDefaults({ strategy: 'auto', scope: 'personal', tier: 'paid', provider: 'ollama', model: 'qwen2.5:32b' }),
+  );
+});
