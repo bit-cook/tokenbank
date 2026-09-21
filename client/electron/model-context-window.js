@@ -2,6 +2,7 @@
 // 按模型解析上下文窗口，避免 catalog / Claude Code 全员硬编码同一窗口。
 // 优先级：显式字段 → 供给源元数据 → 模型名族启发式 → 仅未知时兜底。
 'use strict';
+const { claudeModelInfo } = require('./claude-models');
 
 /** 完全未知模型时的兜底（对齐 Claude Code 对未知模型的默认量级 200K） */
 const FALLBACK_CONTEXT_WINDOW = 200000;
@@ -78,6 +79,8 @@ function contextWindowFromModelName(modelId) {
   const { slug, window: suffixWin } = parseContextWindowSuffix(raw);
   if (suffixWin) return suffixWin;
   const id = (slug || raw).toLowerCase();
+  const claude = claudeModelInfo(id);
+  if (claude) return claude.context_window;
 
   // 顺序：更具体在前。注释标注 cc-switch 来源。
   const rules = [
@@ -86,8 +89,8 @@ function contextWindowFromModelName(modelId) {
     { re: /gpt-5\.1|gpt-5-1|gpt-5(?![\d.])/, window: 400000 },
     { re: /\bo3\b|\bo4-mini\b/, window: 200000 },
 
-    // Claude —— 4.x 系列 200K；opus-5 / sonnet-5 为 1M（opencode/bedrock 预设）
-    { re: /claude-(opus|sonnet)-5(?!\d)|claude-opus-5|claude-sonnet-5/, window: 1000000 },
+    // Claude —— 已知型号优先查上方官方目录；供应商前缀走族名兜底
+    { re: /claude-(opus|sonnet|fable)-5(?!\d)|claude-opus-4-[678](?!\d)|claude-sonnet-4-6(?!\d)/, window: 1000000 },
     { re: /claude/, window: 200000 },
 
     // DeepSeek —— v4 = 1M；其余保守 128K（codex deepseek catalog / presets）

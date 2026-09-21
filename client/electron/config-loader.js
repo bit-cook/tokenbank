@@ -8,6 +8,7 @@ const fs   = require('fs');
 const path = require('path');
 const os   = require('os');
 const yaml = require('js-yaml');
+const { withClaudeOAuthModels } = require('./claude-models');
 
 const DEFAULT_YAML = path.join(__dirname, 'config', 'tokenbank.default.yaml');
 // 全局路由策略目录（name + label/description）；逻辑由 routing-strategies.js 同名 JS 实现
@@ -61,6 +62,7 @@ function mergeRegistryDoc(doc) {
   if (!Array.isArray(out.billing_sources) || !out.billing_sources.length) {
     out.billing_sources = Array.isArray(def.billing_sources) ? def.billing_sources : [];
   }
+  out.providers = out.providers.map(withClaudeOAuthModels);
   return out;
 }
 
