@@ -20,12 +20,17 @@ export function encodeRoute(parts = {}) {
   return [strategy, scope, tier, sharer, provider, model].filter(Boolean).join(':');
 }
 
-/** 解析规范串 → { strategy, scope, tier, sharer, provider, model }（缺省 null）；
- *  模型 ID 含冒号时（如 openai/gpt-oss-20b:free）从带 / 的段起整段作为 model。 */
-export function parseRoute(str) {
+/** 解析规范串 → { strategy, scope, tier, sharer, provider, model }（缺省 null）。
+ *  与 shared/route-binding.js 逻辑保持一致（双路径）：
+ *   - 传入 knownProviders 白名单时：从左消费已知 codec/provider 段，首个未知段起整段作 model，
+ *     模型名内含 ':'（Ollama name:tag，如 qwen2.5:32b）不被截断；
+ *   - 不传白名单时：按位置解析（含 / 的段起整段作 model；否则末段=model、前导未识别段作 provider）。 */
+export function parseRoute(str, knownProviders = null) {
   const out = { strategy: null, scope: null, tier: null, sharer: null, provider: null, model: null };
   const s = String(str == null ? '' : str).trim();
   if (!s) return out;
+  const provSet = knownProviders instanceof Set ? knownProviders
+    : (Array.isArray(knownProviders) ? new Set(knownProviders) : null);
   const segs = s.split(':');
   if (segs.length === 1) {
     const seg = segs[0];
@@ -34,6 +39,21 @@ export function parseRoute(str) {
     else if (_TIER_SET.has(seg))  out.tier = seg;
     else if (SHARER_RE.test(seg)) out.sharer = seg;
     else                          out.model = seg;
+    return out;
+  }
+
+  if (provSet) {
+    let i = 0;
+    for (; i < segs.length - 1; i++) {
+      const seg = segs[i];
+      if (_STRAT_SET.has(seg) && !out.strategy)      { out.strategy = seg; continue; }
+      if (_SCOPE_SET.has(seg) && !out.scope)         { out.scope = seg; continue; }
+      if (_TIER_SET.has(seg) && !out.tier)           { out.tier = seg; continue; }
+      if (SHARER_RE.test(seg) && !out.sharer)        { out.sharer = seg; continue; }
+      if (provSet.has(seg) && !out.provider)         { out.provider = seg; continue; }
+      break;
+    }
+    out.model = segs.slice(i).join(':');
     return out;
   }
 
