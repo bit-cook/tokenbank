@@ -1,0 +1,16 @@
+{
+  "name": "tokenbank-promo",
+  "private": true,
+  "type": "module",
+  "description": "Token Bank promo video: HTML timeline rendered frame-by-frame with Playwright, encoded with ffmpeg",
+  "scripts": {
+    "stills": "node render.mjs --stills",
+    "audio": "python3 soundtrack.py",
+    "render": "node render.mjs"
+  },
+  "dependencies": {
+    "@fontsource/inter": "^5.2.8",
+    "@fontsource/jetbrains-mono": "^5.2.8",
+    "@fontsource/noto-sans-sc": "^5.2.8"
+  }
+}

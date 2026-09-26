@@ -1,0 +1,790 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Token Bank Promo</title>
+<link rel="stylesheet" href="node_modules/@fontsource/inter/400.css">
+<link rel="stylesheet" href="node_modules/@fontsource/inter/500.css">
+<link rel="stylesheet" href="node_modules/@fontsource/inter/600.css">
+<link rel="stylesheet" href="node_modules/@fontsource/inter/700.css">
+<link rel="stylesheet" href="node_modules/@fontsource/inter/800.css">
+<link rel="stylesheet" href="node_modules/@fontsource/inter/900.css">
+<link rel="stylesheet" href="node_modules/@fontsource/noto-sans-sc/400.css">
+<link rel="stylesheet" href="node_modules/@fontsource/noto-sans-sc/500.css">
+<link rel="stylesheet" href="node_modules/@fontsource/noto-sans-sc/700.css">
+<link rel="stylesheet" href="node_modules/@fontsource/noto-sans-sc/900.css">
+<link rel="stylesheet" href="node_modules/@fontsource/jetbrains-mono/400.css">
+<link rel="stylesheet" href="node_modules/@fontsource/jetbrains-mono/600.css">
+<style>
+  :root {
+    --bg: #05050a;
+    --fg: #f5f5f7;
+    --muted: #8b8b98;
+    --line: rgba(255,255,255,.09);
+    --gold: #ffc23d;
+    --gold-hi: #ffe9a8;
+    --gold-lo: #e08a00;
+    --cyan: #5ac8fa;
+  }
+  html, body { margin: 0; background: #000; }
+  #stage {
+    position: relative; width: 1920px; height: 1080px; overflow: hidden;
+    background: var(--bg); color: var(--fg);
+    font-family: 'Inter', 'Noto Sans SC', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  #bg, #fx { position: absolute; inset: 0; }
+  .scene { position: absolute; inset: 0; opacity: 0; }
+  .abs { position: absolute; }
+  .c { position: absolute; left: 0; top: 0; }
+  .gold {
+    background: linear-gradient(180deg, var(--gold-hi) 0%, var(--gold) 45%, var(--gold-lo) 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .card {
+    background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.025));
+    border: 1px solid var(--line); border-radius: 22px;
+    box-shadow: 0 40px 100px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.07);
+  }
+  .eyebrow { font-size: 24px; letter-spacing: .28em; color: var(--gold); font-weight: 600; }
+  .h1 { font-size: 76px; font-weight: 900; letter-spacing: -.01em; line-height: 1.1; margin-top: 18px; }
+  .header { position: absolute; left: 140px; top: 96px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 12px; padding: 14px 26px; border-radius: 999px;
+    border: 1px solid rgba(255,194,61,.35); background: rgba(255,194,61,.07);
+    font-size: 26px; font-weight: 500; color: #ffe2a0; white-space: nowrap;
+  }
+  .chip i { width: 10px; height: 10px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 12px var(--gold); }
+  .badge {
+    width: 58px; height: 58px; border-radius: 16px; display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 26px; color: #fff; flex: none;
+  }
+  .toggle { width: 74px; height: 40px; border-radius: 20px; background: #2a2a33; position: relative; flex: none; }
+  .toggle b { position: absolute; top: 4px; left: 4px; width: 32px; height: 32px; border-radius: 50%; background: #d8d8e0; box-shadow: 0 2px 6px rgba(0,0,0,.4); }
+  .kpi-label { font-size: 22px; color: var(--muted); }
+  .kpi-val { font-size: 64px; font-weight: 800; letter-spacing: -.02em; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .row {
+    position: absolute; left: 28px; right: 28px; height: 58px; border-radius: 12px;
+    display: flex; align-items: center; gap: 16px; padding: 0 16px; font-size: 20px;
+  }
+  .pill { padding: 5px 12px; border-radius: 8px; font-size: 17px; font-weight: 600; white-space: nowrap; }
+  .dest { position: absolute; width: 500px; height: 112px; display: flex; align-items: center; gap: 22px; padding: 0 28px; box-sizing: border-box; }
+  .rec { position: absolute; width: 720px; height: 132px; display: flex; align-items: center; gap: 24px; padding: 0 30px; box-sizing: border-box; }
+  .type { font-size: 18px; font-weight: 700; letter-spacing: .08em; padding: 6px 12px; border-radius: 8px; width: 86px; text-align: center; flex: none; }
+  .word { position: absolute; left: 0; right: 0; top: 400px; text-align: center; font-size: 190px; font-weight: 900; letter-spacing: -.01em; }
+  .sub-en { position: absolute; left: 0; right: 0; top: 660px; text-align: center; font-size: 30px; letter-spacing: .5em; color: var(--muted); font-weight: 500; }
+  #vignette { position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(0,0,0,.65) 100%); }
+  #flash { position: absolute; inset: 0; opacity: 0; pointer-events: none;
+    background: radial-gradient(circle at 50% 50%, rgba(255,226,150,.95), rgba(255,170,30,.35) 35%, rgba(0,0,0,0) 70%); }
+  #fade { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="bg" width="1920" height="1080"></canvas>
+
+  <!-- ============ S1 · 痛点开场 ============ -->
+  <div class="scene" id="s1">
+    <div id="s1logs"></div>
+    <div class="c" id="ph0"><div style="font-size:128px;font-weight:900">订阅越来越多</div></div>
+    <div class="c" id="ph1"><div style="font-size:128px;font-weight:900">账单越来越长</div></div>
+    <div class="c" id="ph2"><div style="font-size:128px;font-weight:900">额度月底清零</div></div>
+    <div class="c" id="ph3"><div style="font-size:156px;font-weight:900;white-space:nowrap"><span class="gold">Token</span> 都去哪了？</div></div>
+    <div class="c" id="bill"><div class="mono" style="font-size:34px;color:#ff6a6a;letter-spacing:.04em;white-space:nowrap">本月账单&nbsp;&nbsp;¥ <span id="billv">0.00</span></div></div>
+    <div class="c" id="dot"><div style="width:40px;height:40px;border-radius:50%;background:radial-gradient(circle,#fff6d0,#ffc23d 50%,#e08a00);box-shadow:0 0 60px 20px rgba(255,194,61,.6)"></div></div>
+  </div>
+
+  <!-- ============ S2 · Logo 揭幕 ============ -->
+  <div class="scene" id="s2">
+    <div class="c" id="rays"><div style="width:1600px;height:1600px;border-radius:50%;background:repeating-conic-gradient(from 0deg, rgba(255,200,80,.10) 0deg 4deg, rgba(255,200,80,0) 4deg 15deg);-webkit-mask:radial-gradient(circle, #000 0%, rgba(0,0,0,.6) 25%, transparent 62%);mask:radial-gradient(circle, #000 0%, rgba(0,0,0,.6) 25%, transparent 62%)"></div></div>
+    <div class="c" id="glow2"><div style="width:900px;height:900px;border-radius:50%;background:radial-gradient(circle, rgba(255,190,60,.45), rgba(255,150,0,.12) 40%, rgba(0,0,0,0) 70%)"></div></div>
+    <div class="c" id="coinWrap" style="perspective:1400px"><div id="coin" style="width:340px;height:340px"></div></div>
+    <div class="c" id="title2"><div id="title2t" style="font-size:150px;font-weight:900;white-space:nowrap;letter-spacing:-.02em"><span>Token</span> <span class="gold">Bank</span></div></div>
+    <div class="c" id="sub2"><div style="font-size:46px;color:#c9c9d3;font-weight:500;letter-spacing:.35em;white-space:nowrap">你的个人 AI 中枢</div></div>
+  </div>
+
+  <!-- ============ S3 · 一键纳管 ============ -->
+  <div class="scene" id="s3">
+    <div class="header" id="h3"><div class="eyebrow">01 — 一键纳管</div><div class="h1">零侵入，一键接入<span class="gold">所有 AI 工具</span></div></div>
+    <svg id="s3svg" class="abs" width="1920" height="1080" style="left:0;top:0"></svg>
+    <div id="apps"></div>
+    <div class="c" id="gw"><div class="card" style="width:540px;height:230px;padding:34px 38px;box-sizing:border-box;border-color:rgba(255,194,61,.35)">
+      <div style="display:flex;align-items:center;gap:18px">
+        <div id="gwlogo" style="width:64px;height:64px"></div>
+        <div><div style="font-size:32px;font-weight:800;white-space:nowrap">Token Bank Gateway</div>
+          <div class="mono" style="font-size:22px;color:var(--gold);margin-top:4px">localhost:11430/v1</div></div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:34px;font-size:24px;color:var(--muted)">
+        <span style="display:flex;align-items:center;gap:10px"><i style="width:12px;height:12px;border-radius:50%;background:#34d399;box-shadow:0 0 12px #34d399;display:inline-block"></i>本地网关运行中</span>
+        <span>已接入 <b id="gwn" style="color:#fff;font-size:34px">0</b> / 6</span>
+      </div>
+    </div></div>
+    <div class="c" id="chips3"><div style="display:flex;gap:22px">
+      <div class="chip"><i></i>不改客户端</div><div class="chip"><i></i>不改命令</div><div class="chip"><i></i>一键还原</div>
+    </div></div>
+  </div>
+
+  <!-- ============ S4 · 全链路 Trace ============ -->
+  <div class="scene" id="s4">
+    <div class="header" id="h4"><div class="eyebrow">02 — 用的明白</div><div class="h1">每一个 Token，<span class="gold">都有据可查</span></div></div>
+    <div class="abs" id="dash" style="left:140px;top:330px;width:1640px;height:680px;perspective:1600px">
+      <div id="dashInner" class="card" style="position:absolute;inset:0;transform-origin:50% 100%">
+        <div class="abs" style="left:48px;top:40px;display:flex;gap:80px">
+          <div><div class="kpi-label">今日 Token</div><div class="kpi-val gold" id="k1">0</div></div>
+          <div><div class="kpi-label">请求数</div><div class="kpi-val" id="k2">0</div></div>
+          <div><div class="kpi-label">接入应用</div><div class="kpi-val" id="k3">0</div></div>
+        </div>
+        <div class="abs" id="bars" style="left:48px;top:250px;width:940px;height:360px"></div>
+        <div class="abs" style="left:1020px;top:0;bottom:0;width:1px;background:var(--line)"></div>
+        <div class="abs" style="left:1060px;top:40px;font-size:24px;font-weight:700;display:flex;align-items:center;gap:12px">
+          <i id="live" style="width:12px;height:12px;border-radius:50%;background:#ff4d4f;display:inline-block;box-shadow:0 0 12px #ff4d4f"></i>实时 Trace</div>
+        <div class="abs" id="rows" style="left:1020px;top:100px;width:620px;height:560px;overflow:hidden"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ S5 · 智能路由 ============ -->
+  <div class="scene" id="s5">
+    <div class="header" id="h5"><div class="eyebrow">03 — 用的节省</div><div class="h1">同一个请求，<span class="gold">自动走最划算的路</span></div></div>
+    <svg id="s5svg" class="abs" width="1920" height="1080" style="left:0;top:0"></svg>
+    <div id="reqs"></div>
+    <div class="c" id="router"><div style="position:relative;width:260px;height:260px">
+      <div id="ring" style="position:absolute;inset:0;border-radius:50%;border:2px dashed rgba(255,194,61,.55)"></div>
+      <div style="position:absolute;inset:30px;border-radius:50%;background:radial-gradient(circle at 40% 35%, #2a2210, #120f08);border:1px solid rgba(255,194,61,.5);box-shadow:0 0 80px rgba(255,170,30,.35), inset 0 0 40px rgba(255,194,61,.15);display:flex;flex-direction:column;align-items:center;justify-content:center">
+        <div style="font-size:30px;font-weight:800">智能路由</div>
+        <div style="font-size:18px;color:var(--muted);margin-top:6px">Scene Router</div>
+      </div>
+    </div></div>
+    <div class="c" id="proto"><div class="mono" style="font-size:20px;color:#9fd9ff;white-space:nowrap;padding:10px 18px;border-radius:10px;border:1px solid rgba(90,200,250,.3);background:rgba(90,200,250,.06)"><span id="protot">Anthropic Messages ⇄ OpenAI Chat</span></div></div>
+    <div id="dests"></div>
+    <div class="c" id="chips5"><div style="display:flex;gap:22px">
+      <div class="chip"><i></i>模型名不变</div><div class="chip"><i></i>协议自动转换</div><div class="chip"><i></i>本地优先 · 按任务分型</div>
+    </div></div>
+  </div>
+
+  <!-- ============ S6 · 越用越懂你 ============ -->
+  <div class="scene" id="s6">
+    <div class="header" id="h6"><div class="eyebrow">04 — 越用越懂你</div><div class="h1">从你的习惯里，<span class="gold">长出你的工具箱</span></div></div>
+    <svg id="radar" class="abs" width="900" height="780" style="left:110px;top:290px"></svg>
+    <div id="tags6"></div>
+    <div id="recs"></div>
+  </div>
+
+  <!-- ============ S7 · 闲置赚钱 ============ -->
+  <div class="scene" id="s7">
+    <canvas id="net" class="abs" width="1920" height="1080" style="left:0;top:0"></canvas>
+    <div class="header" id="h7"><div class="eyebrow">05 — 闲置赚钱</div><div class="h1">闲置算力，<span class="gold">变成积分</span></div></div>
+    <div class="c" id="earn"><div class="card" style="width:500px;padding:34px 40px;box-sizing:border-box;border-color:rgba(255,194,61,.3)">
+      <div class="kpi-label">本月贡献收益</div>
+      <div style="display:flex;align-items:baseline;gap:14px;margin-top:8px">
+        <div class="kpi-val gold" style="font-size:78px" id="credits">+0</div><div style="font-size:28px;color:var(--muted)">积分</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px;margin-top:26px;font-size:24px;color:#d8d8e0">
+        <div id="e1" style="display:flex;justify-content:space-between"><span>贡献闲置额度</span><span class="mono" style="color:var(--gold)">+8,420</span></div>
+        <div id="e2" style="display:flex;justify-content:space-between"><span>社区智能体被雇佣</span><span class="mono" style="color:var(--gold)">+3,960</span></div>
+        <div id="e3" style="display:flex;justify-content:space-between"><span>圈子共享</span><span class="mono" style="color:var(--gold)">+480</span></div>
+      </div>
+    </div></div>
+  </div>
+
+  <!-- ============ S8 · 五条主线 ============ -->
+  <div class="scene" id="s8">
+    <div class="c" id="ring8"><div style="width:900px;height:900px;border-radius:50%;border:2px solid rgba(255,194,61,.6);box-shadow:0 0 60px rgba(255,170,30,.35), inset 0 0 60px rgba(255,170,30,.25)"></div></div>
+    <div id="words"></div>
+    <div class="c" id="dots8"><div style="display:flex;gap:18px" id="dots8i"></div></div>
+  </div>
+
+  <!-- ============ S9 · 结尾 ============ -->
+  <div class="scene" id="s9">
+    <div class="c" id="glow9"><div style="width:1100px;height:1100px;border-radius:50%;background:radial-gradient(circle, rgba(255,190,60,.30), rgba(255,150,0,.08) 40%, rgba(0,0,0,0) 70%)"></div></div>
+    <div class="c" id="logo9"><div id="logo9i" style="width:220px;height:220px"></div></div>
+    <div class="c" id="title9"><div style="font-size:128px;font-weight:900;letter-spacing:-.02em;white-space:nowrap">Token <span class="gold">Bank</span></div></div>
+    <div class="c" id="sub9"><div style="font-size:42px;color:#d0d0da;font-weight:500;letter-spacing:.18em;white-space:nowrap">个人 AI 中枢 · Token 管家</div></div>
+    <div class="c" id="plat9"><div style="font-size:26px;color:var(--muted);letter-spacing:.3em;white-space:nowrap">macOS &nbsp;·&nbsp; Windows &nbsp;·&nbsp; CLI &nbsp;·&nbsp; Docker</div></div>
+    <div class="c" id="url9"><div class="mono" style="font-size:30px;color:var(--gold);white-space:nowrap;padding:16px 34px;border:1px solid rgba(255,194,61,.4);border-radius:999px;background:rgba(255,194,61,.06)">github.com/wink-run/tokenbank</div></div>
+  </div>
+
+  <div id="flash"></div>
+  <div id="vignette"></div>
+  <div id="fade"></div>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// Deterministic timeline: window.renderFrame(t) paints the stage at time t (s).
+// No CSS transitions / animations are used, so any frame can be rendered in
+// isolation — render.mjs steps through it at a fixed fps.
+// ---------------------------------------------------------------------------
+const DURATION = 54;
+const W = 1920, H = 1080, CX = 960, CY = 540;
+
+const $ = id => document.getElementById(id);
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, t) => a + (b - a) * t;
+const p = (t, a, b) => clamp((t - a) / (b - a));
+const eo = x => 1 - Math.pow(1 - x, 3);
+const eo5 = x => 1 - Math.pow(1 - x, 5);
+const eio = x => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+const back = x => { const c1 = 1.9, c3 = c1 + 1; return x <= 0 ? 0 : 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); };
+const win = (t, a, b, fi = .45, fo = .45) => Math.min(eo(p(t, a, a + fi)), 1 - eio(p(t, b - fo, b)));
+
+function rng(seed) { return () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }; }
+const fmt = n => Math.round(n).toLocaleString('en-US');
+
+// set transform/opacity. cx/cy: position the element's centre at that point.
+function S(el, o = {}) {
+  const { op = 1, x = 0, y = 0, s = 1, r = 0, blur = 0, cx, cy, extra = '' } = o;
+  el.style.opacity = op;
+  let tr = '';
+  if (cx !== undefined) tr += `translate(${cx}px,${cy}px) translate(-50%,-50%) `;
+  tr += `translate(${x}px,${y}px) scale(${s}) rotate(${r}deg) ${extra}`;
+  el.style.transform = tr;
+  el.style.filter = blur > .05 ? `blur(${blur}px)` : 'none';
+}
+
+// ---------------------------------------------------------------- logo svg
+function logoSVG(id) {
+  return `<svg viewBox="0 0 120 120" width="100%" height="100%" style="overflow:visible">
+  <defs>
+    <radialGradient id="${id}c" cx="40%" cy="35%" r="65%"><stop offset="0%" stop-color="#FFD055"/><stop offset="100%" stop-color="#E08A00"/></radialGradient>
+    <linearGradient id="${id}s" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".75"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    <clipPath id="${id}k"><circle cx="60" cy="60" r="56"/></clipPath>
+  </defs>
+  <circle cx="60" cy="60" r="56" fill="url(#${id}c)"/>
+  <circle cx="60" cy="60" r="56" fill="none" stroke="#C07800" stroke-width="3" opacity=".5"/>
+  <circle cx="60" cy="60" r="51" fill="none" stroke="#FFE07A" stroke-width="1.5" opacity=".55"/>
+  <g class="edges" stroke="#7A4A00" stroke-width="2.5" stroke-linecap="round" opacity=".65">
+    <line x1="60" y1="22" x2="26" y2="72"/><line x1="60" y1="22" x2="94" y2="72"/><line x1="26" y1="72" x2="94" y2="72"/>
+    <line x1="60" y1="22" x2="60" y2="56"/><line x1="26" y1="72" x2="60" y2="56"/><line x1="94" y1="72" x2="60" y2="56"/>
+  </g>
+  <g class="arrows"><polygon points="80,52 88,60 74,63" fill="#7A4A00" opacity=".55"/><polygon points="57,72 67,66 67,78" fill="#7A4A00" opacity=".55"/></g>
+  <g class="nodes">
+    <g><circle cx="60" cy="22" r="9" fill="#FFF0A0" stroke="#7A4A00" stroke-width="2.5"/><circle cx="60" cy="22" r="3.5" fill="#7A4A00"/></g>
+    <g><circle cx="26" cy="72" r="9" fill="#FFF0A0" stroke="#7A4A00" stroke-width="2.5"/><circle cx="26" cy="72" r="3.5" fill="#7A4A00"/></g>
+    <g><circle cx="94" cy="72" r="9" fill="#FFF0A0" stroke="#7A4A00" stroke-width="2.5"/><circle cx="94" cy="72" r="3.5" fill="#7A4A00"/></g>
+  </g>
+  <g class="center"><circle cx="60" cy="56" r="13" fill="#FFD233" stroke="#7A4A00" stroke-width="2.5"/>
+  <text x="60" y="61.5" text-anchor="middle" font-family="Georgia, serif" font-size="14" font-weight="bold" fill="#5C3600">T</text></g>
+  <g clip-path="url(#${id}k)"><rect class="shine" x="-60" y="-20" width="40" height="160" fill="url(#${id}s)" transform="rotate(20 60 60)"/></g>
+</svg>`;
+}
+$('coin').innerHTML = logoSVG('L2');
+$('gwlogo').innerHTML = logoSVG('L3');
+$('logo9i').innerHTML = logoSVG('L9');
+const coinEdges = [...$('coin').querySelectorAll('.edges line')];
+coinEdges.forEach(l => { const len = Math.hypot(l.x2.baseVal.value - l.x1.baseVal.value, l.y2.baseVal.value - l.y1.baseVal.value); l.style.strokeDasharray = len; l.dataset.len = len; });
+const coinNodes = [...$('coin').querySelectorAll('.nodes > g')];
+const coinCenter = $('coin').querySelector('.center');
+const coinArrows = $('coin').querySelector('.arrows');
+const coinShine = $('coin').querySelector('.shine');
+const shine9 = $('logo9i').querySelector('.shine');
+
+// ---------------------------------------------------------------- background
+const bg = $('bg').getContext('2d');
+const dust = (() => { const r = rng(7); return Array.from({ length: 140 }, () => ({ x: r() * W, y: r() * H, z: .3 + r() * .7, ph: r() * 6.28 })); })();
+function drawBg(t, warm, gridA) {
+  bg.fillStyle = '#05050a'; bg.fillRect(0, 0, W, H);
+  // drifting glows
+  const g1x = CX + Math.sin(t * .23) * 420, g1y = 260 + Math.cos(t * .19) * 120;
+  let g = bg.createRadialGradient(g1x, g1y, 0, g1x, g1y, 900);
+  g.addColorStop(0, `rgba(255,176,40,${.16 * warm})`); g.addColorStop(1, 'rgba(255,176,40,0)');
+  bg.fillStyle = g; bg.fillRect(0, 0, W, H);
+  const g2x = 1500 - Math.sin(t * .17) * 300, g2y = 900;
+  g = bg.createRadialGradient(g2x, g2y, 0, g2x, g2y, 800);
+  g.addColorStop(0, `rgba(70,120,255,${.10 * warm})`); g.addColorStop(1, 'rgba(70,120,255,0)');
+  bg.fillStyle = g; bg.fillRect(0, 0, W, H);
+  // perspective floor grid
+  if (gridA > 0.01) {
+    bg.save(); bg.lineWidth = 1;
+    const hy = 640, off = (t * 40) % 60;
+    const vg = bg.createLinearGradient(0, hy, 0, H);
+    vg.addColorStop(0, 'rgba(255,200,90,0)'); vg.addColorStop(1, `rgba(255,200,90,${.08 * gridA})`);
+    bg.strokeStyle = vg;
+    for (let i = -24; i <= 24; i++) { bg.beginPath(); bg.moveTo(CX + i * 18, hy); bg.lineTo(CX + i * 260, H + 40); bg.stroke(); }
+    for (let k = 0; k < 14; k++) { const d = k * 60 + off; const y = hy + Math.pow(d / 840, 2.2) * 460; bg.strokeStyle = `rgba(255,200,90,${.08 * gridA * Math.pow(clamp((y - hy) / (H - hy)), .8)})`; bg.beginPath(); bg.moveTo(0, y); bg.lineTo(W, y); bg.stroke(); }
+    bg.restore();
+  }
+  // dust
+  for (const d of dust) {
+    const y = (d.y - t * 18 * d.z + H * 10) % H, x = d.x + Math.sin(t * .5 + d.ph) * 14;
+    bg.fillStyle = `rgba(255,220,150,${(.10 + .25 * d.z) * (.6 + .4 * Math.sin(t * 2 + d.ph))})`;
+    bg.beginPath(); bg.arc(x, y, 1.2 * d.z + .3, 0, 6.283); bg.fill();
+  }
+}
+
+// ---------------------------------------------------------------- S1 build
+const logLines = (() => {
+  const r = rng(11), apps = ['claude-code', 'codex', 'cursor', 'workbuddy', 'kimi-code', 'openclaw'],
+    models = ['claude-sonnet-4-6', 'gpt-5', 'claude-opus-4', 'kimi-k2', 'deepseek-v3', 'gemini-2.5-pro'];
+  let html = '';
+  const arr = [];
+  for (let i = 0; i < 34; i++) {
+    const tok = Math.floor(r() * 90000 + 800), cost = (tok * (r() * .00006 + .00001)).toFixed(4);
+    const txt = `${apps[i % 6].padEnd(12)} ${models[Math.floor(r() * 6)].padEnd(18)} ${String(tok).padStart(6)} tok  $${cost}`;
+    arr.push({ x: r() * 1700 + 40, y: r() * 1080, v: 30 + r() * 80, a: .05 + r() * .12, red: r() < .25 });
+    html += `<div class="abs mono" style="font-size:20px;white-space:pre;color:${arr[i].red ? '#ff6a6a' : '#9a9aa8'}">${txt}</div>`;
+  }
+  $('s1logs').innerHTML = html;
+  return arr.map((a, i) => ({ ...a, el: $('s1logs').children[i] }));
+})();
+
+// ---------------------------------------------------------------- S3 build
+const APPS = [
+  { n: 'Claude Code', k: 'C', c: '#d97757', how: 'CLI 注入' },
+  { n: 'Codex', k: 'Cx', c: '#3b3b46', how: 'CLI 注入' },
+  { n: 'Cursor', k: 'Cu', c: '#2f3a55', how: '会话接入' },
+  { n: 'WorkBuddy', k: 'W', c: '#2d7ff9', how: '配置热补丁' },
+  { n: 'Kimi Code', k: 'K', c: '#1f1f1f', how: 'CLI 注入' },
+  { n: 'OpenClaw', k: 'O', c: '#e0484f', how: '配置热补丁' },
+];
+const appPos = APPS.map((a, i) => ({ x: i < 3 ? 110 : 1400, y: 400 + (i % 3) * 190 }));
+$('apps').innerHTML = APPS.map((a, i) => `
+  <div class="abs card app" style="left:${appPos[i].x}px;top:${appPos[i].y}px;width:410px;height:120px;display:flex;align-items:center;gap:20px;padding:0 24px;box-sizing:border-box;border-radius:20px">
+    <div class="badge" style="background:${a.c};border:1px solid rgba(255,255,255,.15)">${a.k}</div>
+    <div style="flex:1;min-width:0"><div style="font-size:28px;font-weight:700;white-space:nowrap">${a.n}</div>
+      <div class="st" style="font-size:19px;color:var(--muted);margin-top:4px;white-space:nowrap">${a.how} · 未纳管</div></div>
+    <div class="toggle"><b></b></div>
+  </div>`).join('');
+const appEls = [...document.querySelectorAll('#apps .app')];
+const GW = { x: CX, y: 690, w: 540, h: 230 };
+function bez(P, t) { const u = 1 - t; return [0, 1].map(k => u * u * u * P[0][k] + 3 * u * u * t * P[1][k] + 3 * u * t * t * P[2][k] + t * t * t * P[3][k]); }
+const s3paths = APPS.map((a, i) => {
+  const left = i < 3, sx = left ? appPos[i].x + 410 : appPos[i].x, sy = appPos[i].y + 60;
+  const ex = left ? GW.x - GW.w / 2 : GW.x + GW.w / 2, ey = GW.y - 60 + (i % 3) * 60;
+  const mx = (sx + ex) / 2;
+  return [[sx, sy], [mx, sy], [mx, ey], [ex, ey]];
+});
+$('s3svg').innerHTML = `<defs><filter id="gl"><feGaussianBlur stdDeviation="4"/></filter></defs>` + s3paths.map(P =>
+  `<path d="M${P[0]} C${P[1]} ${P[2]} ${P[3]}" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="2"/>
+   <path class="lit" d="M${P[0]} C${P[1]} ${P[2]} ${P[3]}" fill="none" stroke="#ffc23d" stroke-width="3" stroke-linecap="round"/>`).join('')
+  + APPS.map(() => `<circle class="pk" r="7" fill="#fff4cc" filter="url(#gl)"/><circle class="pk2" r="4" fill="#fff"/>`).join('')
+  + `<rect id="pulse3" fill="none" stroke="#ffc23d" stroke-width="2"/>`;
+const litPaths = [...document.querySelectorAll('#s3svg .lit')];
+litPaths.forEach(el => { const L = el.getTotalLength(); el.style.strokeDasharray = L; el.dataset.len = L; });
+const pk = [...document.querySelectorAll('#s3svg .pk')], pk2 = [...document.querySelectorAll('#s3svg .pk2')];
+const TOG = APPS.map((_, i) => 11.0 + i * .5);
+
+// ---------------------------------------------------------------- S4 build
+const BARN = 24;
+const barH = (() => { const r = rng(21); return Array.from({ length: BARN }, (_, i) => .18 + .8 * Math.pow(Math.sin((i + 2) / BARN * Math.PI), 1.6) * (.55 + .45 * r())); })();
+$('bars').innerHTML = barH.map((h, i) => `<div class="abs bar" style="left:${i * (940 / BARN)}px;bottom:30px;width:${940 / BARN - 12}px;height:${h * 300}px;border-radius:8px 8px 3px 3px;transform-origin:50% 100%;
+  background:linear-gradient(180deg,#ffe29a 0%,#ffb81f 45%,rgba(224,138,0,.25) 100%)"></div>`).join('')
+  + `<div class="abs" style="left:0;right:0;bottom:24px;height:1px;background:var(--line)"></div>`
+  + [0, 6, 12, 18, 23].map(i => `<div class="abs mono" style="left:${i * (940 / BARN)}px;bottom:-8px;font-size:16px;color:var(--muted)">${String(i).padStart(2, '0')}:00</div>`).join('');
+const bars = [...document.querySelectorAll('#bars .bar')];
+const ROWS = (() => {
+  const r = rng(33), apps = [['Claude Code', '#d97757'], ['Codex', '#8e8ea0'], ['Cursor', '#6e8cff'], ['WorkBuddy', '#2d7ff9'], ['Kimi Code', '#c0c0c0'], ['OpenClaw', '#e0484f']],
+    models = ['claude-sonnet-4-6', 'gpt-5', 'llama-3.3-70b', 'qwen3-coder', 'kimi-k2', 'deepseek-v3'];
+  return Array.from({ length: 22 }, (_, i) => { const a = apps[Math.floor(r() * 6)]; return { a, m: models[Math.floor(r() * 6)], tok: Math.floor(r() * 24000 + 600), ms: Math.floor(r() * 2400 + 300), time: (s => `14:${String(30 + Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`)(3 + i * 4 + Math.floor(r() * 3)) }; });
+})();
+$('rows').innerHTML = ROWS.map(R => `<div class="row">
+  <span class="mono" style="color:var(--muted);font-size:17px;width:82px">${R.time}</span>
+  <span class="pill" style="background:${R.a[1]}22;color:${R.a[1]};border:1px solid ${R.a[1]}55">${R.a[0]}</span>
+  <span class="mono" style="flex:1;color:#d8d8e0;font-size:17px;white-space:nowrap;overflow:hidden">${R.m}</span>
+  <span class="mono" style="color:var(--gold);font-size:18px;width:80px;text-align:right">${fmt(R.tok)}</span></div>`).join('');
+const rowEls = [...document.querySelectorAll('#rows .row')];
+
+// ---------------------------------------------------------------- S5 build
+const DEST = [
+  { n: '本地模型', d: 'Ollama · qwen3-coder', tag: '¥0', c: '#34d399' },
+  { n: '免费额度', d: 'Groq · llama-3.3-70b', tag: '免费', c: '#5ac8fa' },
+  { n: '订阅套餐', d: '未用完的月度额度', tag: '已付', c: '#b38cff' },
+  { n: '社区算力', d: 'P2P 共享 · 积分结算', tag: '积分', c: '#ffc23d' },
+];
+const destPos = DEST.map((_, i) => ({ x: 1290, y: 330 + i * 150 }));
+$('dests').innerHTML = DEST.map((d, i) => `<div class="card dest" style="left:${destPos[i].x}px;top:${destPos[i].y}px">
+  <div style="width:14px;height:14px;border-radius:50%;background:${d.c};box-shadow:0 0 14px ${d.c};flex:none"></div>
+  <div style="flex:1"><div style="font-size:30px;font-weight:800">${d.n}</div><div class="mono" style="font-size:19px;color:var(--muted);margin-top:4px">${d.d}</div></div>
+  <div class="pill" style="font-size:22px;padding:8px 16px;background:${d.c}1f;color:${d.c};border:1px solid ${d.c}66">${d.tag}</div></div>`).join('');
+const destEls = [...document.querySelectorAll('#dests .dest')];
+const REQ = [
+  { app: 'Claude Code', m: 'claude-sonnet-4-6', to: 0, real: 'qwen3-coder · 本地', t0: 23.2 },
+  { app: 'Codex', m: 'gpt-5', to: 1, real: 'llama-3.3-70b · 免费', t0: 25.0 },
+  { app: 'Cursor', m: 'claude-opus-4', to: 3, real: '社区节点 · 积分结算', t0: 26.8 },
+];
+const reqPos = REQ.map((_, i) => ({ x: 140, y: 380 + i * 190 }));
+$('reqs').innerHTML = REQ.map((q, i) => `<div class="card abs req" style="left:${reqPos[i].x}px;top:${reqPos[i].y}px;width:470px;height:150px;padding:22px 28px;box-sizing:border-box">
+  <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:26px;font-weight:800">${q.app}</span><span class="mono" style="font-size:16px;color:var(--muted)">POST /v1</span></div>
+  <div class="mono" style="font-size:20px;margin-top:10px;color:#d8d8e0">model: <span style="color:#fff">"${q.m}"</span></div>
+  <div class="mono res" style="font-size:18px;margin-top:10px;color:#34d399;white-space:nowrap">→ ${q.real} · 花费 ¥0.00</div></div>`).join('');
+const reqEls = [...document.querySelectorAll('#reqs .req')];
+const ROUTER = { x: 900, y: 640 };
+const s5paths = REQ.map((q, i) => {
+  const a = [[reqPos[i].x + 470, reqPos[i].y + 75], [760, reqPos[i].y + 75], [760, ROUTER.y], [ROUTER.x - 130, ROUTER.y]];
+  const d = destPos[q.to], b = [[ROUTER.x + 130, ROUTER.y], [1120, ROUTER.y], [1120, d.y + 56], [d.x, d.y + 56]];
+  return [a, b];
+});
+$('s5svg').innerHTML = `<defs><filter id="gl5"><feGaussianBlur stdDeviation="5"/></filter></defs>`
+  + destPos.map(d => { const P = [[ROUTER.x + 130, ROUTER.y], [1120, ROUTER.y], [1120, d.y + 56], [d.x, d.y + 56]]; return `<path d="M${P[0]} C${P[1]} ${P[2]} ${P[3]}" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="2"/>`; }).join('')
+  + s5paths.map(([a, b]) => `<path d="M${a[0]} C${a[1]} ${a[2]} ${a[3]}" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="2"/>
+     <path class="la" d="M${a[0]} C${a[1]} ${a[2]} ${a[3]}" fill="none" stroke="#ffc23d" stroke-width="3" stroke-linecap="round"/>
+     <path class="lb" d="M${b[0]} C${b[1]} ${b[2]} ${b[3]}" fill="none" stroke="#ffc23d" stroke-width="3" stroke-linecap="round"/>`).join('')
+  + REQ.map(() => `<circle class="p5" r="9" fill="#fff2c2" filter="url(#gl5)"/><circle class="p5b" r="5" fill="#fff"/>`).join('');
+const la = [...document.querySelectorAll('#s5svg .la')], lb = [...document.querySelectorAll('#s5svg .lb')];
+[...la, ...lb].forEach(el => { const L = el.getTotalLength(); el.style.strokeDasharray = L; el.dataset.len = L; });
+const p5 = [...document.querySelectorAll('#s5svg .p5')], p5b = [...document.querySelectorAll('#s5svg .p5b')];
+const PROTOS = ['Anthropic Messages ⇄ OpenAI Chat', 'OpenAI Chat ⇄ Codex Responses', 'Codex Responses ⇄ Anthropic Messages'];
+
+// ---------------------------------------------------------------- S6 build
+const AX = ['编码', '调试', '架构', '文档', '数据', '设计'];
+const AV = [.92, .86, .62, .42, .55, .34];
+const RC = { x: 450, y: 370, r: 250 };
+const axPt = (i, v) => { const a = -Math.PI / 2 + i * Math.PI / 3; return [RC.x + Math.cos(a) * RC.r * v, RC.y + Math.sin(a) * RC.r * v]; };
+$('radar').innerHTML = `<defs><radialGradient id="rg"><stop offset="0" stop-color="#ffc23d" stop-opacity=".55"/><stop offset="1" stop-color="#e08a00" stop-opacity=".15"/></radialGradient></defs>`
+  + [.25, .5, .75, 1].map(k => `<polygon class="grid" points="${AX.map((_, i) => axPt(i, k).join(',')).join(' ')}" fill="none" stroke="rgba(255,255,255,.10)" stroke-width="1.5"/>`).join('')
+  + AX.map((_, i) => `<line class="grid" x1="${RC.x}" y1="${RC.y}" x2="${axPt(i, 1)[0]}" y2="${axPt(i, 1)[1]}" stroke="rgba(255,255,255,.08)"/>`).join('')
+  + `<polygon id="rpoly" fill="url(#rg)" stroke="#ffc23d" stroke-width="3" stroke-linejoin="round"/>`
+  + AX.map((_, i) => `<circle class="rdot" r="7" fill="#fff4cc" stroke="#ffc23d" stroke-width="3"/>`).join('')
+  + AX.map((n, i) => { const [x, y] = axPt(i, 1.2); return `<text class="rlab" x="${x}" y="${y + 10}" text-anchor="middle" fill="#d8d8e0" font-size="28" font-weight="600" font-family="Noto Sans SC">${n}</text>`; }).join('')
+  + `<text x="${RC.x}" y="${RC.y + RC.r + 110}" text-anchor="middle" fill="#8b8b98" font-size="24" letter-spacing="6" font-family="Noto Sans SC">工作画像 · 自动提炼</text>`;
+const rdots = [...document.querySelectorAll('#radar .rdot')];
+const TAGS = [{ t: 'TypeScript / React', x: 680, y: 330 }, { t: 'Debug 高频', x: 90, y: 640 }, { t: '长上下文', x: 800, y: 880 }];
+$('tags6').innerHTML = TAGS.map(g => `<div class="abs chip tag" style="left:${g.x}px;top:${g.y}px;font-size:22px;padding:10px 20px">${g.t}</div>`).join('');
+const tagEls = [...document.querySelectorAll('#tags6 .tag')];
+const RECS = [
+  { ty: 'MCP', c: '#5ac8fa', n: 'GitHub', d: 'PR 与 Issue 直接进入上下文', m: 97 },
+  { ty: 'SKILL', c: '#34d399', n: '代码评审', d: '按你的团队规范自动审查', m: 94 },
+  { ty: 'PROMPT', c: '#b38cff', n: '重构助手', d: '从你的高频改动中提炼', m: 91 },
+  { ty: 'AGENT', c: '#ffc23d', n: '测试生成', d: '社区智能体，一键雇佣', m: 88 },
+];
+$('recs').innerHTML = RECS.map((q, i) => `<div class="card rec" style="left:1060px;top:${320 + i * 162}px">
+  <div class="type" style="background:${q.c}1f;color:${q.c};border:1px solid ${q.c}66">${q.ty}</div>
+  <div style="flex:1;min-width:0"><div style="font-size:30px;font-weight:800">${q.n}</div><div style="font-size:21px;color:var(--muted);margin-top:4px;white-space:nowrap">${q.d}</div></div>
+  <div style="text-align:right"><div class="mono" style="font-size:18px;color:var(--muted)">匹配度</div><div class="mono" style="font-size:30px;font-weight:600;color:#fff">${q.m}%</div></div>
+  <div class="add" style="position:relative;width:128px;height:52px;flex:none">
+    <div class="a0" style="position:absolute;inset:0;border-radius:12px;border:1px solid rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:600">+ 添加</div>
+    <div class="a1" style="position:absolute;inset:0;border-radius:12px;background:linear-gradient(180deg,#ffd466,#f0a000);color:#2b1a00;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;opacity:0">✓ 已添加</div>
+  </div></div>`).join('');
+const recEls = [...document.querySelectorAll('#recs .rec')];
+
+// ---------------------------------------------------------------- S7 build
+const net = $('net').getContext('2d');
+const NODES = (() => {
+  const r = rng(77), arr = [];
+  for (let gy = 0; gy < 7; gy++) for (let gx = 0; gx < 13; gx++) {
+    const x = 120 + gx * 140 + (r() - .5) * 90, y = 330 + gy * 110 + (r() - .5) * 70;
+    if (Math.hypot(x - 1440, y - 700) < 300) continue; // keep space for the earnings card
+    if (x < 1000 && y < 360) continue;                   // keep space for the header
+    arr.push({ x, y, s: 3 + r() * 4, ph: r() * 6.28 });
+  }
+  return arr;
+})();
+const YOU = { x: 700, y: 650 };
+NODES.forEach(n => n.d = Math.hypot(n.x - YOU.x, n.y - YOU.y));
+const EDGES = [];
+NODES.forEach((n, i) => {
+  const near = NODES.map((m, j) => [Math.hypot(m.x - n.x, m.y - n.y), j]).filter(q => q[1] !== i).sort((a, b) => a[0] - b[0]).slice(0, 2);
+  near.forEach(([, j]) => { if (!EDGES.some(e => (e[0] === j && e[1] === i))) EDGES.push([i, j]); });
+});
+const HUB = NODES.map((n, i) => [n.d, i]).sort((a, b) => a[0] - b[0]).slice(0, 7).map(q => q[1]);
+function drawNet(t, a) {
+  net.clearRect(0, 0, W, H);
+  if (a <= 0) return;
+  net.globalAlpha = a;
+  const wave = lerp(0, 1500, eio(p(t, 36.7, 40.2)));
+  const lit = n => clamp((wave - n.d) / 120);
+  for (const [i, j] of EDGES) {
+    const A = NODES[i], B = NODES[j], L = Math.min(lit(A), lit(B));
+    net.strokeStyle = L > 0 ? `rgba(255,194,61,${.12 + .45 * L})` : 'rgba(255,255,255,.07)';
+    net.lineWidth = 1.5; net.beginPath(); net.moveTo(A.x, A.y); net.lineTo(B.x, B.y); net.stroke();
+  }
+  HUB.forEach(i => {
+    const B = NODES[i], L = clamp((wave - B.d + 50) / 60);
+    if (L <= 0) return;
+    net.strokeStyle = `rgba(255,210,110,${.55 * L})`; net.lineWidth = 2.5;
+    net.beginPath(); net.moveTo(YOU.x, YOU.y); net.lineTo(B.x, B.y); net.stroke();
+    // packets flowing in towards "you" (credits)
+    for (let k = 0; k < 2; k++) {
+      const f = ((t * .7 + i * .13 + k * .5) % 1);
+      const x = lerp(B.x, YOU.x, f), y = lerp(B.y, YOU.y, f);
+      net.fillStyle = `rgba(255,240,190,${L * (1 - f * .5)})`; net.beginPath(); net.arc(x, y, 4, 0, 6.283); net.fill();
+    }
+  });
+  for (const n of NODES) {
+    const L = lit(n), s = n.s * (1 + .6 * L) * (1 + .12 * Math.sin(t * 3 + n.ph));
+    if (L > 0) { const g = net.createRadialGradient(n.x, n.y, 0, n.x, n.y, s * 5); g.addColorStop(0, `rgba(255,194,61,${.45 * L})`); g.addColorStop(1, 'rgba(255,194,61,0)'); net.fillStyle = g; net.beginPath(); net.arc(n.x, n.y, s * 5, 0, 6.283); net.fill(); }
+    net.fillStyle = L > 0 ? `rgb(255,${Math.round(lerp(255, 205, L))},${Math.round(lerp(255, 90, L))})` : 'rgba(200,200,215,.45)';
+    net.beginPath(); net.arc(n.x, n.y, s, 0, 6.283); net.fill();
+  }
+  // "you" node
+  const pr = eo(p(t, 36.3, 36.9));
+  for (let k = 0; k < 3; k++) { const f = (t * .6 + k / 3) % 1; net.strokeStyle = `rgba(255,194,61,${(1 - f) * .5 * pr})`; net.lineWidth = 2; net.beginPath(); net.arc(YOU.x, YOU.y, 30 + f * 160, 0, 6.283); net.stroke(); }
+  const g = net.createRadialGradient(YOU.x - 8, YOU.y - 8, 2, YOU.x, YOU.y, 32 * pr);
+  g.addColorStop(0, '#fff6d0'); g.addColorStop(.5, '#ffc23d'); g.addColorStop(1, '#e08a00');
+  net.fillStyle = g; net.beginPath(); net.arc(YOU.x, YOU.y, 30 * pr, 0, 6.283); net.fill();
+  net.fillStyle = `rgba(255,255,255,${pr})`; net.font = '700 26px Inter, "Noto Sans SC"'; net.textAlign = 'center';
+  net.fillText('你', YOU.x, YOU.y + 72);
+  net.globalAlpha = 1;
+}
+
+// ---------------------------------------------------------------- S8 build
+const WORDS = [['用的明白', 'SEE CLEARLY'], ['用的节省', 'SPEND LESS'], ['用的简单', 'STAY SIMPLE'], ['越用越懂你', 'SMARTER WITH YOU'], ['闲置赚钱', 'EARN FROM IDLE']];
+$('words').innerHTML = WORDS.map((w, i) => `<div class="wd" style="position:absolute;inset:0;opacity:0"><div class="word ${i % 2 ? '' : 'gold'}">${w[0]}</div><div class="sub-en">${w[1]}</div></div>`).join('');
+const wordEls = [...document.querySelectorAll('#words .wd')];
+$('dots8i').innerHTML = WORDS.map(() => `<div style="width:56px;height:6px;border-radius:3px;background:rgba(255,255,255,.15);overflow:hidden"><div class="df" style="height:100%;width:0;background:#ffc23d"></div></div>`).join('');
+const dfs = [...document.querySelectorAll('#dots8i .df')];
+
+// ---------------------------------------------------------------- render
+function header(el, t, a, b) {
+  const k = eo5(p(t, a, a + .7));
+  const out = eio(p(t, b - .45, b));
+  S(el, { op: k * (1 - out), y: (1 - k) * 40 - out * 20, blur: (1 - k) * 8 });
+}
+
+function renderFrame(t) {
+  // ------------ background
+  const warm = t < 5 ? .35 : (t < 9.5 ? 1.2 : 1);
+  const gridA = (t > 9.5 && t < 42) ? 1 : (t >= 47 ? .8 : 0);
+  drawBg(t, warm, gridA * (t < 5 ? 0 : 1));
+
+  // ------------ S1 (0 – 5)
+  const s1 = $('s1');
+  s1.style.opacity = t < 5.3 ? 1 : 0;
+  if (t < 5.3) {
+    const collapse = eio(p(t, 4.45, 4.95));
+    logLines.forEach(L => {
+      const y = ((L.y - t * L.v) % 1080 + 1080) % 1080;
+      const x = lerp(L.x, CX - 300, collapse), yy = lerp(y, CY, collapse);
+      S(L.el, { op: L.a * eo(p(t, .1, .8)) * (1 + (L.red ? 1.5 * p(t, 1.2, 2.2) : 0)) * (1 - collapse), x, y: yy, s: 1 - collapse * .8 });
+    });
+    const PH = [[.35, 1.25], [1.25, 2.15], [2.15, 3.05], [3.05, 4.6]];
+    PH.forEach(([a, b], i) => {
+      const el = $('ph' + i), k = eo5(p(t, a, a + .28)), last = i === 3;
+      let op = k, s = lerp(1.25, 1, k), blur = (1 - k) * 14;
+      if (!last) { const o = p(t, b - .12, b); op *= 1 - o; s *= 1 - .06 * o; }
+      else { s = lerp(1.25, 1, k) * (1 + .05 * p(t, a, 4.4)); const c = eio(p(t, 4.45, 4.95)); s *= 1 - .97 * c; op *= 1 - p(t, 4.75, 4.95); blur += c * 6; }
+      S(el, { op, s, blur, cx: CX, cy: CY - 20 });
+    });
+    // bill ticker: grows through phrases 1-3
+    const bk = eio(p(t, 1.25, 4.3)), bv = 3862.4 * bk + (bk > 0 && bk < 1 ? (Math.sin(t * 40) * 9) : 0);
+    $('billv').textContent = Math.max(0, bv).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    S($('bill'), { op: win(t, 1.3, 4.6, .3, .3) * .95, cx: CX, cy: 800, s: 1 + .04 * Math.sin(t * 20) * p(t, 2.2, 4.3) });
+    // collapse dot
+    const dk = eo(p(t, 4.75, 5.0)), dz = p(t, 5.0, 5.25);
+    S($('dot'), { op: dk * (1 - dz), s: .3 + dk * .7 + dz * 3, cx: CX, cy: CY - 60 });
+  }
+
+  // ------------ S2 (5 – 9.5)
+  const s2 = $('s2'), s2a = (t > 4.9 && t < 9.6);
+  s2.style.opacity = s2a ? 1 : 0;
+  if (s2a) {
+    const out = eio(p(t, 8.9, 9.5));
+    const pushS = 1 + out * .25;
+    const spin = eo5(p(t, 5.0, 6.6));
+    S($('coinWrap'), { op: clamp(p(t, 5.0, 5.2)) * (1 - out), cx: CX, cy: 390, s: lerp(.2, 1, back(p(t, 5.0, 5.9))) * pushS, blur: out * 10 });
+    $('coin').style.transform = `rotateY(${(1 - spin) * -720}deg)`;
+    coinEdges.forEach((l, i) => { const k = eo(p(t, 5.5 + i * .08, 6.3 + i * .08)); l.style.strokeDashoffset = l.dataset.len * (1 - k); });
+    coinNodes.forEach((g, i) => { const k = back(p(t, 5.9 + i * .1, 6.4 + i * .1)); g.style.transformOrigin = ['60px 22px', '26px 72px', '94px 72px'][i]; g.style.transform = `scale(${k})`; });
+    { const k = back(p(t, 6.3, 6.8)); coinCenter.style.transformOrigin = '60px 56px'; coinCenter.style.transform = `scale(${k})`; coinArrows.style.opacity = p(t, 6.5, 6.9); }
+    coinShine.setAttribute('x', lerp(-60, 160, eio(p(t, 6.9, 7.6))));
+    S($('glow2'), { op: eo(p(t, 5.0, 6.0)) * (.8 + .2 * Math.sin(t * 3)) * (1 - out), cx: CX, cy: 390, s: lerp(.4, 1.1, eo(p(t, 5.0, 7))) });
+    S($('rays'), { op: eo(p(t, 5.3, 6.5)) * .9 * (1 - out), cx: CX, cy: 390, r: t * 6, s: 1 + out * .2 });
+    const tk = eo5(p(t, 6.5, 7.5));
+    S($('title2'), { op: tk * (1 - out), cx: CX, cy: 690, y: (1 - tk) * 30, blur: (1 - tk) * 10 + out * 8, s: pushS });
+    $('title2t').style.letterSpacing = `${lerp(.4, -.02, tk)}em`;
+    const sk = eo(p(t, 7.3, 8.1));
+    S($('sub2'), { op: sk * (1 - out), cx: CX, cy: 800, y: (1 - sk) * 20, s: pushS, blur: out * 8 });
+  }
+
+  // ------------ S3 (9.5 – 16)
+  const s3a = t > 9.4 && t < 16.1;
+  $('s3').style.opacity = s3a ? 1 : 0;
+  if (s3a) {
+    const out = eio(p(t, 15.5, 16.0));
+    header($('h3'), t, 9.55, 16.0);
+    const gk = back(p(t, 9.9, 10.6));
+    let pulseK = 0;
+    let n = 0;
+    appEls.forEach((el, i) => {
+      const k = eo5(p(t, 10.0 + i * .1, 10.7 + i * .1)), left = i < 3;
+      const on = eo5(p(t, TOG[i], TOG[i] + .25));
+      if (t >= TOG[i] + .15) n++;
+      S(el, { op: k * (1 - out), x: (1 - k) * (left ? -120 : 120) + (left ? -1 : 1) * out * 60 });
+      el.style.borderColor = `rgba(255,194,61,${.1 + .45 * on})`;
+      el.style.boxShadow = `0 40px 100px rgba(0,0,0,.55), 0 0 ${40 * on}px rgba(255,170,30,${.25 * on})`;
+      const tg = el.querySelector('.toggle'), kb = tg.querySelector('b');
+      tg.style.background = on > .5 ? '#ffc23d' : '#2a2a33';
+      kb.style.transform = `translateX(${34 * on}px)`;
+      kb.style.background = on > .5 ? '#fff' : '#d8d8e0';
+      el.querySelector('.st').innerHTML = on > .5 ? `${APPS[i].how} · <span style="color:#ffc23d">已纳管</span>` : `${APPS[i].how} · 未纳管`;
+      const L = +litPaths[i].dataset.len, dk = eio(p(t, TOG[i] + .05, TOG[i] + .55));
+      litPaths[i].style.strokeDashoffset = L * (1 - dk);
+      litPaths[i].style.opacity = (1 - out) * .9;
+      const f = ((t - TOG[i] - .55) * .9 + 10) % 1, show = t > TOG[i] + .55 ? 1 - out : 0;
+      const P = bez(s3paths[i], dk < 1 ? dk : f);
+      [pk[i], pk2[i]].forEach(c => { c.setAttribute('cx', P[0]); c.setAttribute('cy', P[1]); c.style.opacity = (dk > 0 && dk < 1 ? 1 : show); });
+      const since = t - (TOG[i] + .55); if (since > 0 && since < .6) pulseK = Math.max(pulseK, 1 - since / .6);
+    });
+    const pc = $('pulse3'), since = TOG.map(x => t - x - .55).filter(x => x >= 0 && x < .7).pop();
+    if (since !== undefined) { const g = eo(since / .7) * 60; pc.setAttribute('x', GW.x - GW.w / 2 - g); pc.setAttribute('y', GW.y - GW.h / 2 - g); pc.setAttribute('width', GW.w + 2 * g); pc.setAttribute('height', GW.h + 2 * g); pc.setAttribute('rx', 22 + g); pc.style.opacity = (1 - since / .7) * .8; } else pc.style.opacity = 0;
+    $('gwn').textContent = n;
+    S($('gw'), { op: clamp(gk * 1.2) * (1 - out), cx: GW.x, cy: GW.y, s: lerp(.7, 1, gk) * (1 + .03 * pulseK) * (1 - out * .1) });
+    $('gw').firstElementChild.style.boxShadow = `0 40px 100px rgba(0,0,0,.55), 0 0 ${60 + 60 * pulseK}px rgba(255,170,30,${.18 + .3 * pulseK + .12 * (n / 6)})`;
+    const ck = eo5(p(t, 14.0, 14.6));
+    S($('chips3'), { op: ck * (1 - out), cx: CX, cy: 960, y: (1 - ck) * 30 });
+  }
+
+  // ------------ S4 (16 – 22.5)
+  const s4a = t > 15.9 && t < 22.6;
+  $('s4').style.opacity = s4a ? 1 : 0;
+  if (s4a) {
+    const out = eio(p(t, 22.0, 22.5));
+    header($('h4'), t, 16.05, 22.5);
+    const dk = eo5(p(t, 16.2, 17.2));
+    S($('dash'), { op: dk * (1 - out), y: (1 - dk) * 120 - out * 30, s: 1 + .025 * p(t, 16.2, 22.5) });
+    $('dashInner').style.transform = `rotateX(${(1 - dk) * 24}deg)`;
+    const kk = eo(p(t, 16.8, 20.8));
+    $('k1').textContent = fmt(2847316 * kk + (t > 20.8 ? (t - 20.8) * 3150 : 0));
+    $('k2').textContent = fmt(1204 * kk + (t > 20.8 ? Math.floor((t - 20.8) * 4) : 0));
+    $('k3').textContent = Math.round(6 * eo(p(t, 16.8, 18.2)));
+    bars.forEach((b, i) => { const k = back(p(t, 16.9 + i * .05, 17.6 + i * .05)); b.style.transform = `scaleY(${Math.max(0, k)})`; b.style.opacity = k > 0 ? 1 : 0; });
+    // rows: newest on top, a new one every .32s
+    const nr = clamp(Math.floor((t - 17.0) / .32) + 1, 0, ROWS.length), frac = eo5(clamp(((t - 17.0) / .32) % 1 * 2.2));
+    rowEls.forEach((el, i) => {
+      if (i >= nr) { el.style.opacity = 0; return; }
+      const slot = nr - 1 - i, isNew = slot === 0;
+      const y = 10 + (slot - (1 - frac)) * 64 + (isNew ? 0 : 0);
+      el.style.top = `${y}px`;
+      el.style.opacity = isNew ? frac : clamp(1 - (slot - 6) * .35);
+      el.style.background = isNew ? `rgba(255,194,61,${.16 * (1 - frac * .5)})` : 'rgba(255,255,255,.03)';
+      el.style.border = isNew ? '1px solid rgba(255,194,61,.35)' : '1px solid rgba(255,255,255,.04)';
+    });
+    $('live').style.opacity = .4 + .6 * (Math.sin(t * 8) > 0 ? 1 : 0);
+  }
+
+  // ------------ S5 (22.5 – 30)
+  const s5a = t > 22.4 && t < 30.1;
+  $('s5').style.opacity = s5a ? 1 : 0;
+  if (s5a) {
+    const out = eio(p(t, 29.5, 30.0));
+    header($('h5'), t, 22.55, 30.0);
+    const rk = back(p(t, 22.8, 23.5));
+    S($('router'), { op: clamp(rk) * (1 - out), cx: ROUTER.x, cy: ROUTER.y, s: lerp(.6, 1, rk) });
+    let spinBoost = 0, hot = -1, hotK = 0;
+    REQ.forEach((q, i) => {
+      const t0 = q.t0, ek = eo5(p(t, t0 - .5, t0));
+      S(reqEls[i], { op: ek * (1 - out), x: (1 - ek) * -80 });
+      const a = eio(p(t, t0, t0 + .55)), b = eio(p(t, t0 + .75, t0 + 1.3));
+      la[i].style.strokeDashoffset = la[i].dataset.len * (1 - a);
+      lb[i].style.strokeDashoffset = lb[i].dataset.len * (1 - b);
+      const dim = t > t0 + 1.8 ? .35 : 1;
+      la[i].style.opacity = lb[i].style.opacity = dim * (1 - out);
+      let P = null;
+      if (a > 0 && a < 1) P = bez(s5paths[i][0], a);
+      else if (b > 0 && b < 1) P = bez(s5paths[i][1], b);
+      else if (a >= 1 && b <= 0) P = [ROUTER.x, ROUTER.y];
+      [p5[i], p5b[i]].forEach(c => { c.style.opacity = P ? 1 - out : 0; if (P) { c.setAttribute('cx', P[0]); c.setAttribute('cy', P[1]); } });
+      if (t > t0 + .5 && t < t0 + .8) spinBoost = 1;
+      if (t > t0 + 1.25) { hot = q.to; hotK = 1 - p(t, t0 + 1.6, t0 + 1.8) * .6; }
+      const res = reqEls[i].querySelector('.res'), rk2 = eo(p(t, t0 + 1.3, t0 + 1.6));
+      res.style.opacity = rk2; res.style.transform = `translateX(${(1 - rk2) * -20}px)`;
+      reqEls[i].style.borderColor = t > t0 && t < t0 + 1.8 ? 'rgba(255,194,61,.5)' : 'rgba(255,255,255,.09)';
+    });
+    $('ring').style.transform = `rotate(${t * 40 + (t > 23 ? (t - 23) * 30 : 0)}deg) scale(${1 + .06 * spinBoost})`;
+    destEls.forEach((el, i) => {
+      const k = eo5(p(t, 23.0 + i * .12, 23.7 + i * .12));
+      const h = i === hot ? hotK : 0;
+      S(el, { op: k * (1 - out), x: (1 - k) * 100, s: 1 + .04 * h });
+      el.style.borderColor = `rgba(255,194,61,${.09 + .6 * h})`;
+      el.style.boxShadow = `0 40px 100px rgba(0,0,0,.55), 0 0 ${50 * h}px rgba(255,170,30,${.35 * h})`;
+    });
+    const pi = clamp(Math.floor((t - 23.0) / 1.8), 0, 2);
+    $('protot').textContent = PROTOS[pi];
+    const pk5 = eo(p(t, 23.4, 23.9));
+    S($('proto'), { op: pk5 * (1 - out) * (.75 + .25 * Math.abs(Math.sin((t - 23) * Math.PI / 1.8))), cx: ROUTER.x, cy: ROUTER.y + 190 });
+    const ck = eo5(p(t, 28.6, 29.1));
+    S($('chips5'), { op: ck * (1 - out), cx: CX, cy: 1000, y: (1 - ck) * 30 });
+  }
+
+  // ------------ S6 (30 – 36)
+  const s6a = t > 29.9 && t < 36.1;
+  $('s6').style.opacity = s6a ? 1 : 0;
+  if (s6a) {
+    const out = eio(p(t, 35.5, 36.0));
+    header($('h6'), t, 30.05, 36.0);
+    const gk = eo(p(t, 30.3, 31.0));
+    S($('radar'), { op: gk * (1 - out), s: lerp(.85, 1, gk) });
+    const vk = eo5(p(t, 30.7, 32.2));
+    const wob = i => 1 + .03 * Math.sin(t * 2.2 + i);
+    const pts = AX.map((_, i) => axPt(i, AV[i] * vk * wob(i)));
+    $('rpoly').setAttribute('points', pts.map(q => q.join(',')).join(' '));
+    rdots.forEach((d, i) => { d.setAttribute('cx', pts[i][0]); d.setAttribute('cy', pts[i][1]); d.style.opacity = vk; });
+    tagEls.forEach((el, i) => { const k = back(p(t, 32.0 + i * .25, 32.5 + i * .25)); S(el, { op: clamp(k) * (1 - out), s: k, y: Math.sin(t * 1.5 + i) * 6 }); });
+    recEls.forEach((el, i) => {
+      const k = eo5(p(t, 31.4 + i * .35, 32.1 + i * .35));
+      S(el, { op: k * (1 - out), x: (1 - k) * 140 });
+      const ak = eo(p(t, 33.6 + i * .3, 33.8 + i * .3));
+      el.querySelector('.a1').style.opacity = ak;
+      el.querySelector('.a0').style.opacity = 1 - ak;
+      el.querySelector('.add').style.transform = `scale(${1 + .12 * Math.sin(Math.PI * ak)})`;
+      el.style.borderColor = `rgba(255,194,61,${.09 + .35 * ak})`;
+    });
+  }
+
+  // ------------ S7 (36 – 42)
+  const s7a = t > 35.9 && t < 42.1;
+  $('s7').style.opacity = s7a ? 1 : 0;
+  if (s7a) {
+    const out = eio(p(t, 41.5, 42.0));
+    header($('h7'), t, 36.05, 42.0);
+    drawNet(t, eo(p(t, 36.0, 36.6)) * (1 - out));
+    const ek = eo5(p(t, 37.4, 38.2));
+    S($('earn'), { op: ek * (1 - out), cx: 1440, cy: 700, y: (1 - ek) * 60 });
+    $('credits').textContent = '+' + fmt(12860 * eo(p(t, 37.8, 40.8)));
+    ['e1', 'e2', 'e3'].forEach((id, i) => { const k = eo(p(t, 38.4 + i * .5, 38.9 + i * .5)); S($(id), { op: k, x: (1 - k) * 30 }); });
+  } else drawNet(t, 0);
+
+  // ------------ S8 (42 – 47)
+  const s8a = t > 41.95 && t < 47.1;
+  $('s8').style.opacity = s8a ? 1 : 0;
+  if (s8a) {
+    wordEls.forEach((el, i) => {
+      const a = 42 + i, k = eo5(p(t, a, a + .3)), o = eio(p(t, a + .82, a + 1));
+      const last = i === 4;
+      S(el, { op: k * (last ? 1 - eio(p(t, 46.75, 47.0)) : 1 - o), s: lerp(1.35, 1, k) * (1 + .04 * p(t, a, a + 1)) * (last ? 1 + eio(p(t, 46.75, 47.0)) * .4 : 1), blur: (1 - k) * 16 + o * 10 });
+    });
+    { const f = (t - 42) % 1, k = eo(f); S($('ring8'), { op: (t < 47 ? (1 - f) * .8 : 0), cx: CX, cy: 520, s: .25 + k * .9 }); }
+    dfs.forEach((d, i) => d.style.width = `${100 * clamp(p(t, 42 + i, 42.35 + i))}%`);
+    S($('dots8'), { op: eo(p(t, 42, 42.3)) * (1 - p(t, 46.7, 47)), cx: CX, cy: 880 });
+  }
+
+  // ------------ S9 (47 – 54)
+  const s9a = t > 46.9;
+  $('s9').style.opacity = s9a ? 1 : 0;
+  if (s9a) {
+    const lk = back(p(t, 47.0, 47.8));
+    S($('glow9'), { op: eo(p(t, 47, 48)) * (.85 + .15 * Math.sin(t * 2)), cx: CX, cy: 360 });
+    S($('logo9'), { op: clamp(p(t, 47.0, 47.25)), cx: CX, cy: 330, s: lerp(.3, 1, lk), extra: `rotateY(${(1 - eo5(p(t, 47, 48.2))) * 360}deg)` });
+    $('logo9').style.transform = `translate(${CX}px,330px) translate(-50%,-50%) perspective(1200px) rotateY(${(1 - eo5(p(t, 47, 48.2))) * 360}deg) scale(${lerp(.3, 1, lk)})`;
+    shine9.setAttribute('x', lerp(-60, 160, eio(p(t, 48.6, 49.3))));
+    const tk = eo5(p(t, 47.5, 48.4));
+    S($('title9'), { op: tk, cx: CX, cy: 560, y: (1 - tk) * 30, blur: (1 - tk) * 10 });
+    const sk = eo5(p(t, 48.1, 48.9));
+    S($('sub9'), { op: sk, cx: CX, cy: 665, y: (1 - sk) * 20 });
+    const pk9 = eo5(p(t, 48.6, 49.4));
+    S($('plat9'), { op: pk9 * .9, cx: CX, cy: 750, y: (1 - pk9) * 16 });
+    const uk = eo5(p(t, 49.0, 49.8));
+    S($('url9'), { op: uk, cx: CX, cy: 860, s: lerp(.9, 1, uk) });
+  }
+
+  // ------------ global flashes & fade
+  const flashes = [[5.0, .55], [47.0, .5], [42, .18], [43, .14], [44, .14], [45, .14], [46, .16]];
+  let fl = 0; flashes.forEach(([a, m]) => { const d = t - a; if (d >= 0 && d < .5) fl = Math.max(fl, m * (1 - eo(d / .5))); });
+  $('flash').style.opacity = fl;
+  $('fade').style.opacity = Math.max(1 - p(t, 0, .25), eio(p(t, 53.0, 54.0)));
+}
+
+window.DURATION = DURATION;
+window.renderFrame = renderFrame;
+window.ready = document.fonts.ready.then(() => { renderFrame(0); return true; });
+// Preview mode: open video.html?play to watch in a browser at real time.
+if (location.search.includes('play')) {
+  const t0 = performance.now();
+  const loop = () => { renderFrame(((performance.now() - t0) / 1000) % DURATION); requestAnimationFrame(loop); };
+  window.ready.then(loop);
+}
+</script>
+</body>
+</html>
