@@ -172,10 +172,48 @@
     <div id="recs"></div>
   </div>
 
+  <!-- ============ SP · 资源投射 ============ -->
+  <div class="scene" id="sp">
+    <div class="header" id="hp"><div class="eyebrow">05 — 资源投射</div><div class="h1">一次沉淀，<span class="gold">投射到每个智能体</span></div></div>
+    <svg id="spsvg" class="abs" width="1920" height="1080" style="left:0;top:0"></svg>
+    <div id="passets"></div>
+    <div class="c" id="gate"><div style="position:relative;width:200px;height:320px">
+      <div style="position:absolute;inset:0;border-radius:28px;border:1px solid rgba(255,194,61,.55);background:linear-gradient(180deg,rgba(255,194,61,.16),rgba(255,194,61,.03));box-shadow:0 0 70px rgba(255,170,30,.28), inset 0 0 40px rgba(255,194,61,.12)"></div>
+      <div id="gateScan" style="position:absolute;left:14px;right:14px;height:3px;border-radius:2px;background:#ffe29a;box-shadow:0 0 18px #ffc23d"></div>
+      <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px">
+        <div style="font-size:30px;font-weight:800">投射门控</div><div style="font-size:18px;color:var(--muted)">已纳管 × 已安装</div>
+      </div></div></div>
+    <div id="ptargets"></div>
+    <div class="c" id="chipsp"><div style="display:flex;gap:22px">
+      <div class="chip"><i></i>只投射到已纳管且已安装的目标</div><div class="chip"><i></i>依赖自动级联</div><div class="chip"><i></i>随时一键取消</div>
+    </div></div>
+  </div>
+
+  <!-- ============ SG · 游乐场 · Agent 聚合编排 ============ -->
+  <div class="scene" id="sg">
+    <div class="header" id="hg"><div class="eyebrow">06 — 游乐场 · 智能体编排</div><div class="h1">一句话，<span class="gold">调度一支智能体团队</span></div></div>
+    <div class="abs card" id="chat" style="left:140px;top:320px;width:820px;height:680px;overflow:hidden">
+      <div style="height:64px;display:flex;align-items:center;gap:14px;padding:0 28px;border-bottom:1px solid var(--line);font-size:22px">
+        <span style="display:flex;gap:8px"><i style="width:12px;height:12px;border-radius:50%;background:#ff5f57;display:inline-block"></i><i style="width:12px;height:12px;border-radius:50%;background:#febc2e;display:inline-block"></i><i style="width:12px;height:12px;border-radius:50%;background:#28c840;display:inline-block"></i></span>
+        <span style="font-weight:700;margin-left:10px">游乐场</span><span style="color:var(--muted)">· 主 Agent：Claude Code</span>
+      </div>
+      <div id="umsg" class="abs" style="right:28px;top:92px;max-width:600px;padding:18px 22px;border-radius:18px 18px 4px 18px;background:linear-gradient(180deg,#ffd466,#f0a000);color:#2b1a00;font-size:25px;font-weight:600;line-height:1.45">
+        <div id="utext"></div>
+        <div id="uimg" style="margin-top:12px;display:flex;align-items:center;gap:10px;font-size:18px;font-weight:600;color:#5c3a00">
+          <span style="width:54px;height:38px;border-radius:6px;background:linear-gradient(135deg,#fff3cf,#e8a830);border:1px solid rgba(0,0,0,.15);display:inline-block"></span>login-error.png</div>
+      </div>
+      <div id="plan" class="abs" style="left:28px;top:262px;font-size:23px;color:#d8d8e0">已拆解为 <b style="color:#fff">3 个子任务</b>，并行派发：</div>
+      <div id="calls"></div>
+      <div id="done" class="abs" style="left:28px;top:604px;font-size:23px;font-weight:700;color:#34d399;display:flex;align-items:center;gap:10px">✓ 全部完成 · 3/3 · 已合并结果</div>
+    </div>
+    <canvas id="orch" class="abs" width="1920" height="1080" style="left:0;top:0"></canvas>
+    <div id="onodes"></div>
+  </div>
+
   <!-- ============ S7 · 闲置赚钱 ============ -->
   <div class="scene" id="s7">
     <canvas id="net" class="abs" width="1920" height="1080" style="left:0;top:0"></canvas>
-    <div class="header" id="h7"><div class="eyebrow">05 — 闲置赚钱</div><div class="h1">闲置算力，<span class="gold">变成积分</span></div></div>
+    <div class="header" id="h7"><div class="eyebrow">07 — 闲置赚钱</div><div class="h1">闲置算力，<span class="gold">变成积分</span></div></div>
     <div class="c" id="earn"><div class="card" style="width:500px;padding:34px 40px;box-sizing:border-box;border-color:rgba(255,194,61,.3)">
       <div class="kpi-label">本月贡献收益</div>
       <div style="display:flex;align-items:baseline;gap:14px;margin-top:8px">
@@ -217,7 +255,9 @@
 // No CSS transitions / animations are used, so any frame can be rendered in
 // isolation — render.mjs steps through it at a fixed fps.
 // ---------------------------------------------------------------------------
-const DURATION = 54;
+const DURATION = 67;
+// Two scenes (资源投射 / 游乐场) are spliced in at 36s; the base timeline resumes at 49s.
+const INS_A = 36, INS_B = 49, INS = INS_B - INS_A;
 const W = 1920, H = 1080, CX = 960, CY = 540;
 
 const $ = id => document.getElementById(id);
@@ -533,11 +573,11 @@ function header(el, t, a, b) {
   S(el, { op: k * (1 - out), y: (1 - k) * 40 - out * 20, blur: (1 - k) * 8 });
 }
 
-function renderFrame(t) {
+function renderBase(t, rt) {
   // ------------ background
   const warm = t < 5 ? .35 : (t < 9.5 ? 1.2 : 1);
   const gridA = (t > 9.5 && t < 42) ? 1 : (t >= 47 ? .8 : 0);
-  drawBg(t, warm, gridA * (t < 5 ? 0 : 1));
+  drawBg(rt, warm, gridA * (t < 5 ? 0 : 1));
 
   // ------------ S1 (0 – 5)
   const s1 = $('s1');
@@ -774,6 +814,171 @@ function renderFrame(t) {
   let fl = 0; flashes.forEach(([a, m]) => { const d = t - a; if (d >= 0 && d < .5) fl = Math.max(fl, m * (1 - eo(d / .5))); });
   $('flash').style.opacity = fl;
   $('fade').style.opacity = Math.max(1 - p(t, 0, .25), eio(p(t, 53.0, 54.0)));
+}
+
+// ---------------------------------------------------------------- SP build (资源投射)
+const PASSETS = [
+  { ty: 'SKILL', c: '#34d399', n: '代码评审' },
+  { ty: 'MCP', c: '#5ac8fa', n: 'GitHub' },
+  { ty: 'PROMPT', c: '#b38cff', n: '重构助手' },
+  { ty: 'AGENT', c: '#ffc23d', n: '测试生成' },
+];
+const paPos = PASSETS.map((_, i) => ({ x: 140, y: 350 + i * 150 }));
+$('passets').innerHTML = PASSETS.map((a, i) => `<div class="card abs pa" style="left:${paPos[i].x}px;top:${paPos[i].y}px;width:440px;height:110px;display:flex;align-items:center;gap:22px;padding:0 26px;box-sizing:border-box">
+  <div class="type" style="background:${a.c}1f;color:${a.c};border:1px solid ${a.c}66">${a.ty}</div>
+  <div style="font-size:30px;font-weight:800;white-space:nowrap">${a.n}</div></div>`).join('');
+const paEls = [...document.querySelectorAll('#passets .pa')];
+const GATE = { x: 900, y: 650 };
+const PT = [
+  { n: 'Claude Code', k: 'C', c: '#d97757', ok: true },
+  { n: 'Codex', k: 'Cx', c: '#3b3b46', ok: true },
+  { n: 'Cursor', k: 'Cu', c: '#2f3a55', ok: true },
+  { n: 'Kimi Code', k: 'K', c: '#1f1f1f', ok: true },
+  { n: 'Trae', k: 'T', c: '#444', ok: false },
+];
+const ptPos = PT.map((_, i) => ({ x: 1300, y: 322 + i * 132 }));
+$('ptargets').innerHTML = PT.map((a, i) => `<div class="card abs pt" style="left:${ptPos[i].x}px;top:${ptPos[i].y}px;width:480px;height:108px;display:flex;align-items:center;gap:20px;padding:0 24px;box-sizing:border-box">
+  <div class="badge" style="background:${a.c};border:1px solid rgba(255,255,255,.15);width:52px;height:52px;font-size:22px">${a.k}</div>
+  <div style="flex:1;min-width:0"><div style="font-size:27px;font-weight:700">${a.n}</div>
+    <div class="ps" style="font-size:18px;color:var(--muted);margin-top:3px;white-space:nowrap">${a.ok ? '已纳管 · 已安装' : '未安装 · 跳过'}</div></div>
+  <div class="pr" style="font-size:22px;font-weight:800;white-space:nowrap;padding:6px 14px;border-radius:10px;${a.ok ? 'color:#2b1a00;background:linear-gradient(180deg,#ffd466,#f0a000)' : 'color:#ff6a6a;border:1px solid rgba(255,106,106,.5)'}">${a.ok ? '+4 资源' : '✕'}</div></div>`).join('');
+const ptEls = [...document.querySelectorAll('#ptargets .pt')];
+const spIn = paPos.map((p, i) => [[p.x + 440, p.y + 55], [720, p.y + 55], [720, GATE.y - 60 + i * 40], [GATE.x - 100, GATE.y - 60 + i * 40]]);
+const spOut = ptPos.map((p, i) => [[GATE.x + 100, GATE.y - 80 + i * 40], [1110, GATE.y - 80 + i * 40], [1110, p.y + 54], [p.x, p.y + 54]]);
+const dpath = P => `M${P[0]} C${P[1]} ${P[2]} ${P[3]}`;
+$('spsvg').innerHTML = `<defs><filter id="glp"><feGaussianBlur stdDeviation="5"/></filter></defs>`
+  + spIn.map(P => `<path d="${dpath(P)}" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="2"/><path class="pin" d="${dpath(P)}" fill="none" stroke="#ffc23d" stroke-width="3" stroke-linecap="round"/>`).join('')
+  + spOut.map((P, i) => `<path d="${dpath(P)}" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="2" ${PT[i].ok ? '' : 'stroke-dasharray="6 8"'}/><path class="pout" d="${dpath(P)}" fill="none" stroke="#ffc23d" stroke-width="3" stroke-linecap="round"/>`).join('')
+  + spOut.map(() => `<circle class="ppk" r="8" fill="#fff2c2" filter="url(#glp)"/>`).join('');
+const pin = [...document.querySelectorAll('#spsvg .pin')], pout = [...document.querySelectorAll('#spsvg .pout')], ppk = [...document.querySelectorAll('#spsvg .ppk')];
+[...pin, ...pout].forEach(el => { const L = el.getTotalLength(); el.style.strokeDasharray = L; el.dataset.len = L; });
+const PIN_T = 37.8, POUT_T = 38.6;
+
+// ---------------------------------------------------------------- SG build (游乐场编排)
+const UTEXT = '修复登录页 Bug，补齐单元测试，再写一份更新日志';
+const CALLS = [
+  { a: 'codex', task: '修复登录 Bug', t: 45.0 },
+  { a: 'kimi-code', task: '补齐单元测试', t: 45.5 },
+  { a: 'community/doc-writer', task: '撰写更新日志', t: 46.0 },
+];
+$('calls').innerHTML = CALLS.map((q, i) => `<div class="abs call mono" style="left:28px;right:28px;top:${316 + i * 92}px;height:76px;border-radius:12px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07);display:flex;align-items:center;gap:14px;padding:0 20px;font-size:19px;box-sizing:border-box">
+  <span style="color:#9fd9ff">tb_dispatch_agent</span><span style="color:#d8d8e0;white-space:nowrap;overflow:hidden;flex:1">("${q.a}", "${q.task}")</span>
+  <span class="cs" style="white-space:nowrap;font-family:Inter,'Noto Sans SC';font-weight:700;font-size:19px"></span></div>`).join('');
+const callEls = [...document.querySelectorAll('#calls .call')];
+const MAIN = { x: 1400, y: 440 };
+const WORK = [
+  { n: 'Codex', k: 'Cx', c: '#3b3b46', d: '修复 Bug', x: 1150, y: 800 },
+  { n: 'Kimi Code', k: 'K', c: '#1f1f1f', d: '单元测试', x: 1400, y: 800 },
+  { n: '社区智能体', k: '☁', c: '#7a4a00', d: '更新日志 · 远端执行', x: 1650, y: 800 },
+];
+const nodeHTML = (n, k, c, d, big) => `<div class="c onode"><div style="display:flex;flex-direction:column;align-items:center;gap:12px">
+  <div style="position:relative;width:${big ? 132 : 104}px;height:${big ? 132 : 104}px">
+    <svg class="ring" width="100%" height="100%" viewBox="0 0 100 100" style="position:absolute;inset:0;transform:rotate(-90deg)"><circle cx="50" cy="50" r="46" fill="none" stroke="rgba(255,255,255,.1)" stroke-width="4"/><circle class="rp" cx="50" cy="50" r="46" fill="none" stroke="#ffc23d" stroke-width="4" stroke-linecap="round" stroke-dasharray="289" stroke-dashoffset="289"/></svg>
+    <div style="position:absolute;inset:12px;border-radius:50%;background:${c};border:1px solid rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:${big ? 34 : 28}px;font-weight:800">${k}</div>
+    <div class="ok" style="position:absolute;right:-6px;top:-6px;width:34px;height:34px;border-radius:50%;background:#34d399;color:#062;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:900;opacity:0">✓</div>
+  </div>
+  <div style="text-align:center"><div style="font-size:${big ? 28 : 24}px;font-weight:800;white-space:nowrap">${n}</div><div style="font-size:18px;color:var(--muted);white-space:nowrap;margin-top:2px">${d}</div></div></div></div>`;
+$('onodes').innerHTML = nodeHTML('Claude Code', 'C', '#d97757', '主 Agent · 编排', true) + WORK.map(w => nodeHTML(w.n, w.k, w.c, w.d, false)).join('');
+const oNodes = [...document.querySelectorAll('#onodes .onode')];
+const orch = $('orch').getContext('2d');
+
+function renderExtra(t) {
+  // ------------ SP 资源投射 (36 – 42.5)
+  const spa = t > 35.95 && t < 42.6;
+  $('sp').style.opacity = spa ? 1 : 0;
+  if (spa) {
+    const out = eio(p(t, 42.0, 42.5));
+    header($('hp'), t, 36.05, 42.5);
+    paEls.forEach((el, i) => { const k = eo5(p(t, 36.4 + i * .12, 37.1 + i * .12)); const glow = eo(p(t, PIN_T + i * .08, PIN_T + .3 + i * .08)) * (1 - p(t, 39.2, 39.8)); S(el, { op: k * (1 - out), x: (1 - k) * -100 }); el.style.borderColor = `rgba(255,194,61,${.09 + .5 * glow})`; });
+    const gk = back(p(t, 36.8, 37.5)), gp = t > 38.4 && t < 39.0 ? 1 - p(t, 38.4, 39.0) : 0;
+    S($('gate'), { op: clamp(gk) * (1 - out), cx: GATE.x, cy: GATE.y, s: lerp(.6, 1, gk) * (1 + .05 * gp) });
+    $('gateScan').style.top = `${20 + 280 * (.5 + .5 * Math.sin(t * 3))}px`;
+    pin.forEach((el, i) => { const k = eio(p(t, PIN_T + i * .08, PIN_T + .6 + i * .08)); el.style.strokeDashoffset = el.dataset.len * (1 - k); el.style.opacity = (1 - out) * (1 - .6 * p(t, 39.6, 40.2)); });
+    ptEls.forEach((el, i) => {
+      const ok = PT[i].ok, k = eo5(p(t, 37.0 + i * .1, 37.7 + i * .1));
+      const d0 = POUT_T + i * .18, dk = eio(p(t, d0, d0 + .6));
+      const hit = eo(p(t, d0 + .55, d0 + .8));
+      S(el, { op: k * (1 - out) * (ok ? 1 : 1 - .45 * hit), x: (1 - k) * 100, s: 1 + (ok ? .04 * Math.sin(Math.PI * hit) : 0) });
+      el.style.borderColor = ok ? `rgba(255,194,61,${.09 + .5 * hit})` : `rgba(255,106,106,${.09 + .4 * hit})`;
+      el.style.boxShadow = ok ? `0 40px 100px rgba(0,0,0,.55), 0 0 ${40 * hit}px rgba(255,170,30,${.25 * hit})` : '0 40px 100px rgba(0,0,0,.55)';
+      const pr = el.querySelector('.pr'); pr.style.opacity = hit; pr.style.transform = `scale(${lerp(.6, 1, back(p(t, d0 + .55, d0 + .95)))})`;
+      // blocked beam stops half-way at the gate side
+      const L = +pout[i].dataset.len, reach = ok ? 1 : .35;
+      pout[i].style.strokeDashoffset = L * (1 - dk * reach);
+      pout[i].style.stroke = ok ? '#ffc23d' : '#ff6a6a';
+      pout[i].style.opacity = (1 - out) * (ok ? 1 : 1 - p(t, d0 + .6, d0 + 1.2));
+      const P = bez(spOut[i], dk * reach);
+      ppk[i].setAttribute('cx', P[0]); ppk[i].setAttribute('cy', P[1]);
+      ppk[i].style.opacity = dk > 0 && dk < 1 ? 1 - out : 0;
+      ppk[i].setAttribute('fill', ok ? '#fff2c2' : '#ff9a9a');
+    });
+    const ck = eo5(p(t, 40.4, 40.9));
+    S($('chipsp'), { op: ck * (1 - out), cx: CX, cy: 1010, y: (1 - ck) * 30 });
+  }
+
+  // ------------ SG 游乐场编排 (42.5 – 49)
+  const sga = t > 42.45 && t < 49.1;
+  $('sg').style.opacity = sga ? 1 : 0;
+  orch.clearRect(0, 0, W, H);
+  if (sga) {
+    const out = eio(p(t, 48.5, 49.0));
+    header($('hg'), t, 42.55, 49.0);
+    const ck = eo5(p(t, 42.8, 43.5));
+    S($('chat'), { op: ck * (1 - out), y: (1 - ck) * 80 });
+    const tk = p(t, 43.4, 44.4), nch = Math.floor(UTEXT.length * tk);
+    $('utext').textContent = UTEXT.slice(0, Math.max(1, nch)) + (tk < 1 && Math.floor(t * 6) % 2 ? '▍' : '');
+    S($('umsg'), { op: eo(p(t, 43.3, 43.5)), y: (1 - eo(p(t, 43.3, 43.6))) * 16 });
+    $('uimg').style.opacity = eo(p(t, 44.3, 44.6));
+    S($('plan'), { op: eo(p(t, 44.6, 44.9)), x: (1 - eo(p(t, 44.6, 44.9))) * -20 });
+    const doneAt = CALLS.map(q => q.t + 1.6);
+    callEls.forEach((el, i) => {
+      const q = CALLS[i], k = eo5(p(t, q.t - .2, q.t + .2)), fin = t >= doneAt[i];
+      S(el, { op: k, x: (1 - k) * -30 });
+      const cs = el.querySelector('.cs');
+      cs.textContent = fin ? '✓ 完成' : (t > q.t ? '运行中…' : '');
+      cs.style.color = fin ? '#34d399' : '#ffc23d';
+      el.style.borderColor = fin ? 'rgba(52,211,153,.35)' : (t > q.t ? 'rgba(255,194,61,.4)' : 'rgba(255,255,255,.07)');
+    });
+    S($('done'), { op: eo(p(t, 47.9, 48.2)), y: (1 - eo(p(t, 47.9, 48.2))) * 12 });
+    // orchestration graph
+    const nk = i => back(p(t, 43.0 + i * .12, 43.6 + i * .12));
+    const posN = [MAIN, ...WORK];
+    oNodes.forEach((el, i) => {
+      const k = nk(i);
+      S(el, { op: clamp(k) * (1 - out), cx: posN[i].x, cy: posN[i].y + (i ? 30 : 0), s: lerp(.5, 1, k) });
+      const rp = el.querySelector('.rp'), ok = el.querySelector('.ok');
+      if (i === 0) { const busy = t > 44.5 && t < 48.0; rp.style.strokeDashoffset = 289 * (1 - (busy ? .25 : (t >= 48 ? 1 : 0))); rp.parentNode.style.transform = `rotate(${-90 + (busy ? t * 360 : 0)}deg)`; ok.style.opacity = eo(p(t, 48.0, 48.2)); }
+      else { const q = CALLS[i - 1], pr = p(t, q.t + .35, doneAt[i - 1]); rp.style.strokeDashoffset = 289 * (1 - pr); ok.style.opacity = eo(p(t, doneAt[i - 1], doneAt[i - 1] + .2)); }
+    });
+    orch.globalAlpha = (1 - out) * eo(p(t, 43.2, 43.8));
+    WORK.forEach((w, i) => {
+      const q = CALLS[i];
+      const A = [MAIN.x, MAIN.y + 118], B = [w.x, w.y - 30];
+      const P = [A, [A[0], A[1] + 100], [B[0], B[1] - 100], B];
+      const active = t > q.t;
+      orch.strokeStyle = active ? 'rgba(255,194,61,.7)' : 'rgba(255,255,255,.12)'; orch.lineWidth = active ? 3 : 2;
+      orch.setLineDash(i === 2 ? [8, 8] : []);
+      orch.beginPath(); orch.moveTo(...P[0]); orch.bezierCurveTo(...P[1], ...P[2], ...P[3]); orch.stroke();
+      orch.setLineDash([]);
+      if (active) {
+        const fin = t >= q.t + 1.6;
+        for (let k = 0; k < 2; k++) {
+          let f = fin ? 1 - ((t * .9 + k * .5) % 1) : ((t - q.t) * 1.1 + k * .5) % 1; // task down, result back up
+          const pt = bez(P, f);
+          orch.fillStyle = fin ? 'rgba(120,240,190,.95)' : 'rgba(255,240,190,.95)';
+          orch.shadowColor = fin ? '#34d399' : '#ffc23d'; orch.shadowBlur = 16;
+          orch.beginPath(); orch.arc(pt[0], pt[1], 6, 0, 6.283); orch.fill(); orch.shadowBlur = 0;
+        }
+      }
+    });
+    orch.globalAlpha = 1;
+  }
+}
+
+function renderFrame(t) {
+  const o = t < INS_A ? t : (t < INS_B ? INS_A : t - INS);
+  renderBase(o, t);
+  renderExtra(t);
 }
 
 window.DURATION = DURATION;

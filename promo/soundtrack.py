@@ -10,7 +10,8 @@ import numpy as np
 from scipy.signal import butter, sosfilt, fftconvolve
 
 SR = 44100
-DUR = 54.0
+DUR = 67.0
+SH = 13.0  # scenes 资源投射 + 游乐场 are spliced in at 36s; later cues shift by SH
 N = int(SR * DUR)
 BEAT = 0.5
 rng = np.random.default_rng(3)
@@ -171,7 +172,7 @@ place(bell(93, 3, 1.4), 6.9, 0.4, rev=0.8)  # coin shine
 place(riser(1.3, 500, 7000), 8.2, 0.35)
 
 # ------------------------------------------------------------------ groove (9.5 - 42)
-g0, g1 = 9.5, 42.0
+g0, g1 = 9.5, 42.0 + SH
 nbeats = int((g1 - g0) / BEAT)
 duck = np.ones(N)  # sidechain envelope for pad/bass
 for b in range(nbeats):
@@ -208,7 +209,7 @@ R += music
 send += music * 0.25
 
 # transitions
-for tc in (16.0, 22.5, 30.0, 36.0):
+for tc in (16.0, 22.5, 30.0, 36.0, 42.5, 36.0 + SH):
     place(whoosh(0.8), tc - 0.55, 0.7, rev=0.3)
     place(impact(1.5) * 0.4, tc, 0.4, rev=0.3)
 # S3 toggles: ascending pentatonic blips
@@ -226,26 +227,41 @@ for t0 in (23.2, 25.0, 26.8):
 # S6 "added" dings
 for k in range(3):
     place(bell(88 + k * 3, 1.0), 33.6 + k * 0.3, 0.4, pan=0.5, rev=0.5)
+# SP 资源投射: beams converge, gate pulse, targets receive, one is skipped
+place(whoosh(0.7), 37.7, 0.45, pan=-0.4, rev=0.3)
+place(bell(81, 1.5, 1.2), 38.45, 0.5, rev=0.6)
+for k in range(4):
+    place(blip([84, 88, 91, 96][k], 0.3), 38.6 + k * 0.18 + 0.6, 0.8, pan=0.5, rev=0.4)
+place(blip(52, 0.35) * 1.5, 38.6 + 4 * 0.18 + 0.6, 0.7, pan=0.5)  # skipped target
+# SG 游乐场: typing, dispatches, completions
+for k in range(20):
+    place(hat() * 0.8, 43.4 + k * 0.05, 0.5, pan=-0.3)
+for k, td in enumerate((45.0, 45.5, 46.0)):
+    place(whoosh(0.4), td, 0.4, pan=0.4)
+    place(blip(79 + k * 5, 0.25), td, 0.6, pan=0.3, rev=0.3)
+    place(bell(88 + k * 2, 1.0), td + 1.6, 0.4, pan=0.4, rev=0.5)
+for k, n in enumerate([81, 85, 88]):
+    place(bell(n, 1.6), 48.0 + k * 0.06, 0.35, rev=0.6)
 # S7 coins
 for k in range(14):
-    place(bell(100 + (k % 4), 0.4, 1.5), 37.9 + k * 0.2, 0.18, pan=0.4 * np.sin(k), rev=0.4)
-place(riser(1.6), 40.4, 0.6, rev=0.3)
+    place(bell(100 + (k % 4), 0.4, 1.5), 37.9 + SH + k * 0.2, 0.18, pan=0.4 * np.sin(k), rev=0.4)
+place(riser(1.6), 40.4 + SH, 0.6, rev=0.3)
 
 # ------------------------------------------------------------------ S8 montage (42 - 47)
 for k in range(5):
-    tb = 42.0 + k
+    tb = 42.0 + SH + k
     place(impact(1.4), tb, 0.75, rev=0.5)
     place(pad(CHORDS[[0, 1, 2, 3, 0][k]], 0.95, 3200), tb, 0.35, rev=0.5)
     place(kick(), tb + 0.5, 0.8)
     place(clap(), tb + 0.5, 0.6, rev=0.3)
-place(riser(0.9, 600, 10000), 46.1, 0.6)
+place(riser(0.9, 600, 10000), 46.1 + SH, 0.6)
 
 # ------------------------------------------------------------------ S9 finale (47 - 54)
-place(impact(4.0), 47.0, 1.0, rev=0.7)
-place(pad([45, 57, 64, 69, 71, 76], 6.8, 2200), 47.0, 0.34, rev=0.8)
+place(impact(4.0), 47.0 + SH, 1.0, rev=0.7)
+place(pad([45, 57, 64, 69, 71, 76], 6.8, 2200), 47.0 + SH, 0.34, rev=0.8)
 for k, n in enumerate([81, 88, 84, 93]):
-    place(bell(n, 3.0), 47.2 + k * 0.3, 0.5, pan=(-0.3 + 0.2 * k), rev=0.7)
-place(bell(96, 3.5, 1.4), 48.6, 0.35, rev=0.8)
+    place(bell(n, 3.0), 47.2 + SH + k * 0.3, 0.5, pan=(-0.3 + 0.2 * k), rev=0.7)
+place(bell(96, 3.5, 1.4), 48.6 + SH, 0.35, rev=0.8)
 
 # ------------------------------------------------------------------ reverb + master
 ir_t = tt(2.6)
@@ -257,7 +273,7 @@ wetR = fftconvolve(send, ir[1])[:N]
 mixL = hp(L + wetL, 25)
 mixR = hp(R + wetR, 25)
 fade = np.ones(N)
-fs, fe = int(52.2 * SR), N
+fs, fe = int((52.2 + SH) * SR), N
 fade[fs:fe] = np.linspace(1, 0, fe - fs) ** 2
 mix = np.stack([mixL, mixR]) * fade
 mix /= np.abs(mix).max()
