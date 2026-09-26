@@ -86,6 +86,8 @@
   html.en .word { font-size: 160px; }
   html.en .sub-en { display: none; }
   html.en .pain > div > div:first-child { font-size: 112px !important; }
+  html.cine #cam { position: absolute; inset: 0; transform-origin: 50% 50%; filter: contrast(1.12) saturate(.88) brightness(.97); }
+  html.cine #bg { filter: contrast(1.15) saturate(.8) brightness(.85); }
   #fade { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; }
 </style>
 </head>
@@ -1122,6 +1124,7 @@ function renderAssets(t) {
 }
 
 function renderFrame(t) {
+  if (CINE) renderCine(t);
   const u = t - INTRO;
   $('wm').style.opacity = .85 * win(u, 9.8, 64.5, .6, .5);
   const o = u < INS_A ? u : (u < INS_B ? INS_A : u - INS);
@@ -1218,6 +1221,82 @@ function renderMarket(t) {
 }
 
 if (EN) translateDOM($('stage'));  // after every scene has been built
+
+// ---------------------------------------------------------------- cinematic mode (?cine)
+// Trailer look on top of the same timeline: 2.39:1 letterbox, a virtual camera (push-in,
+// 3D dolly on UI shots, handheld drift), teal/orange grade, film grain, foreground bokeh,
+// anamorphic flares and hard dips to black between sections.
+const CINE = new URLSearchParams(location.search).has('cine');
+const BAR = Math.round((1080 - 1920 / 2.39) / 2);
+// [start, end, kind] in real (output) time
+const SHOTS = [[0, 7, 'text'], [7, 11.5, 'logo'], [11.5, 18, 'ui'], [18, 24.5, 'ui'], [24.5, 32, 'ui'], [32, 38, 'ui'], [38, 44.5, 'ui'],
+  [44.5, 51, 'ui'], [51, 57.5, 'ui'], [57.5, 66.5, 'ui'], [66.5, 71.5, 'text'], [71.5, 78.5, 'logo']];
+const DIPS = [11.5, 18, 24.5, 32, 38, 44.5, 51, 57.5, 66.5];
+const FLARES = [[7.0, 410, 1], [8.9, 410, .6], [66.5, 500, .7], [67.5, 500, .5], [68.5, 500, .5], [69.5, 500, .5], [70.5, 500, .6], [71.5, 342, 1], [73.3, 342, .5]];
+let cam, grainCtx, grainImg, bokehCtx;
+const BOKEH = (() => { const r = rng(123); return Array.from({ length: 9 }, () => ({ x: r() * 1920, y: 150 + r() * 780, r: 30 + r() * 110, v: 8 + r() * 22, warm: r() < .7, a: .05 + r() * .09, ph: r() * 6.28 })); })();
+if (CINE) {
+  document.documentElement.classList.add('cine');
+  const stage = $('stage');
+  cam = document.createElement('div'); cam.id = 'cam';
+  stage.insertBefore(cam, stage.querySelector('.scene'));
+  [...stage.querySelectorAll(':scope > .scene')].forEach(el => cam.appendChild(el));
+  const add = (tag, id, z) => { const el = document.createElement(tag); el.id = id; el.style.cssText = `position:absolute;inset:0;pointer-events:none;z-index:${z}`; stage.appendChild(el); return el; };
+  const bk = add('canvas', 'bokeh', 1); bk.width = 1920; bk.height = 1080; bokehCtx = bk.getContext('2d');
+  add('div', 'grade', 2).style.cssText += ';mix-blend-mode:soft-light;background:radial-gradient(ellipse at 50% 45%, rgba(255,170,80,.28) 0%, rgba(128,128,128,0) 45%, rgba(0,80,110,.55) 100%)';
+  const fl = add('div', 'flares', 3); fl.style.mixBlendMode = 'screen';
+  fl.innerHTML = `<div id="flWide" style="position:absolute;left:0;right:0;height:120px;background:radial-gradient(ellipse at center, rgba(255,200,120,.55), rgba(90,170,255,.18) 35%, rgba(0,0,0,0) 70%);filter:blur(10px)"></div>
+    <div id="flLine" style="position:absolute;left:60px;right:60px;height:5px;border-radius:3px;background:linear-gradient(90deg, rgba(0,0,0,0), rgba(110,180,255,.9) 38%, #ffffff 50%, rgba(110,180,255,.9) 62%, rgba(0,0,0,0));box-shadow:0 0 18px 4px rgba(110,180,255,.6)"></div>`;
+  $('vignette').style.zIndex = 4;
+  $('vignette').style.background = 'radial-gradient(ellipse at center, rgba(0,0,0,0) 45%, rgba(0,0,0,.8) 100%)';
+  const gr = add('canvas', 'grain', 5); gr.width = 480; gr.height = 270; gr.style.width = '1920px'; gr.style.height = '1080px';
+  gr.style.mixBlendMode = 'overlay'; gr.style.opacity = .35; grainCtx = gr.getContext('2d'); grainImg = grainCtx.createImageData(480, 270);
+  add('div', 'barT', 6).style.cssText += `;bottom:auto;height:${BAR}px;background:#000`;
+  add('div', 'barB', 6).style.cssText += `;top:auto;height:${BAR}px;background:#000`;
+  add('div', 'dip', 7).style.cssText += ';background:#000;opacity:0';
+  $('wm').style.zIndex = 8; $('wm').style.bottom = `${(BAR - 32) / 2}px`;
+  $('flash').style.zIndex = 3; $('fade').style.zIndex = 9;
+}
+
+function renderCine(t) {
+  // camera
+  const si = Math.max(0, SHOTS.findIndex(([a, b]) => t >= a && t < b)), [a, b, kind] = SHOTS[si === -1 ? SHOTS.length - 1 : si];
+  const k = clamp((t - a) / (b - a)), ui = kind === 'ui', dir = si % 2 ? 1 : -1;
+  const base = ui ? .8 : .86, push = 1 + (ui ? .045 : .06) * eio(k);
+  const rx = ui ? lerp(8, 3, eo(k)) : 0, ry = ui ? lerp(-4.5, 4.5, eio(k)) * dir : 0;
+  const hx = Math.sin(t * .9) * 2.2 + Math.sin(t * 2.3 + 1) * 1.1, hy = Math.cos(t * .7) * 1.8 + Math.sin(t * 1.9) * .9;  // handheld
+  const dx = (ui ? lerp(-26, 26, eio(k)) * dir : 0) + hx, dy = hy + (ui ? lerp(12, -6, eio(k)) : 0);
+  cam.style.transform = `perspective(2400px) translate(${dx}px,${dy}px) rotateX(${rx}deg) rotateY(${ry}deg) scale(${base * push})`;
+  // letterbox opens at the head, closes at the tail
+  const open = eio(p(t, 0, .6)) * (1 - eio(p(t, 77.4, 78.4)));
+  const bh = lerp(540, BAR, open);
+  $('barT').style.height = $('barB').style.height = `${bh}px`;
+  // dips to black between sections
+  let d = 0; DIPS.forEach(x => { d = Math.max(d, 1 - Math.abs(t - x) / .2); });
+  $('dip').style.opacity = clamp(d);
+  // anamorphic flares
+  let fs = 0, fy = 500;
+  FLARES.forEach(([x, y, m]) => { const q = t - x; if (q >= 0 && q < 1.6) { const e = m * Math.min(1, q / .12) * Math.exp(-q * 2.2); if (e > fs) { fs = e; fy = y; } } });
+  $('flWide').style.top = `${fy - 60}px`; $('flLine').style.top = `${fy - 2}px`;
+  $('flares').style.opacity = fs;
+  $('flLine').style.transform = `scaleX(${.6 + .5 * fs})`;
+  // foreground bokeh
+  const bc = bokehCtx; bc.clearRect(0, 0, 1920, 1080);
+  bc.filter = 'blur(14px)';
+  for (const o of BOKEH) {
+    const x = (o.x + t * o.v) % 2160 - 120, y = o.y + Math.sin(t * .3 + o.ph) * 30;
+    const g = bc.createRadialGradient(x, y, 0, x, y, o.r);
+    const c = o.warm ? '255,190,110' : '90,180,230';
+    g.addColorStop(0, `rgba(${c},${o.a * (.7 + .3 * Math.sin(t + o.ph))})`); g.addColorStop(.7, `rgba(${c},${o.a * .6})`); g.addColorStop(1, `rgba(${c},0)`);
+    bc.fillStyle = g; bc.beginPath(); bc.arc(x, y, o.r, 0, 6.283); bc.fill();
+  }
+  bc.filter = 'none';
+  // film grain (deterministic per frame)
+  const r = rng(1 + Math.floor(t * 30) * 7919), px = grainImg.data;
+  for (let i = 0; i < px.length; i += 4) { const v = 128 + (r() - .5) * 150; px[i] = px[i + 1] = px[i + 2] = v; px[i + 3] = 255; }
+  grainCtx.putImageData(grainImg, 0, 0);
+}
+
 
 window.DURATION = DURATION;
 window.renderFrame = renderFrame;

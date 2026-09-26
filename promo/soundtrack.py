@@ -147,6 +147,38 @@ def bass(note, d):
     return s * np.minimum(1, t * 300) * np.exp(-t * 3) * np.minimum(1, (d - t) * 60)
 
 
+# cinematic trailer variant (CINE=1): taiko instead of kick/clap, braams on every section
+# hit, legato strings instead of the synth pad, 16th cello ostinato, longer reverb.
+CINE = bool(os.environ.get('CINE'))
+
+
+def taiko(level=1.0):
+    t = tt(1.2)
+    f = 55 + 60 * np.exp(-t * 18)
+    body = np.sin(2 * np.pi * np.cumsum(f) / SR) * np.exp(-t * 4.5)
+    skin = lp(rng.standard_normal(len(t)), 900) * np.exp(-t * 22) * 0.6
+    return np.tanh((body * 1.4 + skin) * 1.5) * level
+
+
+def braam(root=33, d=3.5):
+    t = tt(d)
+    s = sum(saw(hz(n), t, 0.006) for n in (root, root + 12, root + 19, root + 24)) / 4
+    swell = np.minimum(1, t / 0.35)  # filter opens as it swells
+    s = lp(s, 250) * (1 - swell * 0.7) + lp(s, 1600) * swell * 0.7
+    env = np.minimum(1, t / 0.08) * np.exp(-t * 0.9)
+    return np.tanh(s * env * 3.0) * 0.9
+
+
+def strings(notes, d):
+    t = tt(d)
+    s = lp(sum(saw(hz(n), t, 0.005) for n in notes) / len(notes), 2200)
+    return s * np.minimum(1, t / 0.7) * np.minimum(1, (d - t) / 0.8)
+
+
+if CINE:
+    kick = taiko
+    clap = lambda: np.zeros(1)  # noqa: E731
+
 # chords (A minor): Am, F, C, G
 CHORDS = [[57, 60, 64, 71], [53, 57, 60, 67], [55, 60, 64, 67], [55, 59, 62, 69]]
 ROOTS = [33, 29, 36, 31]
@@ -183,14 +215,20 @@ nbeats = int((g1 - g0) / BEAT)
 duck = np.ones(N)  # sidechain envelope for pad/bass
 for b in range(nbeats):
     tb = g0 + b * BEAT
-    place(kick(), tb, 0.95)
+    if not CINE or b % 4 == 0:
+        place(kick(), tb, 0.95)
+    elif b % 4 == 2:
+        place(kick(0.6), tb, 0.8)
+    if CINE and b % 16 == 15:  # taiko fill into the next phrase
+        for q in range(4):
+            place(taiko(0.45), tb + q * 0.125, 0.6, pan=0.3 * (-1) ** q)
     i = int((tb + OFF) * SR)
     dt = np.arange(int(0.3 * SR)) / SR
-    seg = 1 - 0.75 * np.exp(-dt * 14)
+    seg = 1 - (0.35 if CINE else 0.75) * np.exp(-dt * 14)
     duck[i:i + len(seg)] = np.minimum(duck[i:i + len(seg)], seg[: max(0, N - i)])
     if b % 2 == 1:
         place(clap(), tb, 0.9, rev=0.25)
-    place(hat(), tb + 0.25, 0.8, pan=0.25)
+    place(hat(), tb + 0.25, 0.35 if CINE else 0.8, pan=0.25)
     if b % 4 == 3:
         place(hat(True), tb + 0.25, 0.6, pan=-0.2)
 music = np.zeros(N)
@@ -198,13 +236,14 @@ bar = 2.0
 for k in range(int((g1 - g0) / bar)):
     tb = g0 + k * bar
     ci = k % 4
-    seg = pad(CHORDS[ci], bar + 0.1, 1400 + 600 * (k % 2))
+    seg = strings([n - 12 for n in CHORDS[ci]] + CHORDS[ci], bar + 0.6) if CINE else pad(CHORDS[ci], bar + 0.1, 1400 + 600 * (k % 2))
     i = int((tb + OFF) * SR)
     music[i:i + len(seg)] += seg[: N - i] * 0.30
-    for e in range(8):  # 8th-note bass
-        bs = bass(ROOTS[ci] + (12 if e % 4 == 3 else 0), 0.24)
-        j = int((tb + OFF + e * 0.25) * SR)
-        music[j:j + len(bs)] += bs * 0.33
+    steps, step = (16, 0.125) if CINE else (8, 0.25)  # cello ostinato vs 8th-note synth bass
+    for e in range(steps):
+        bs = bass(ROOTS[ci] + (12 if e % 4 == 3 else 0), step * 0.96)
+        j = int((tb + OFF + e * step) * SR)
+        music[j:j + len(bs)] += bs * (0.24 if CINE else 0.33)
     # arpeggio on the upper chord tones
     for e in range(8):
         n = CHORDS[ci][[0, 1, 2, 3, 2, 1, 3, 2][e]] + 12
@@ -218,6 +257,9 @@ send += music * 0.25
 for tc in (16.0, 22.5, 30.0, 36.0, 42.5, 42.5 + D2, 49.0 + D2):
     place(whoosh(0.8), tc - 0.55, 0.7, rev=0.3)
     place(impact(1.5) * 0.4, tc, 0.4, rev=0.3)
+if CINE:  # braams on every section hit
+    for tb in (4.5 - OFF, 5.0, 9.5, 16.0, 22.5, 30.0, 36.0, 42.5, 42.5 + D2, 49.0 + D2):
+        place(braam(33), tb, 0.5, rev=0.5)
 # S3 toggles: ascending pentatonic blips
 for k, n in enumerate([81, 84, 86, 88, 91, 93]):
     place(blip(n, 0.25), 11.0 + k * 0.5, 0.9, pan=(-0.5 if k < 3 else 0.5), rev=0.4)
@@ -273,6 +315,8 @@ place(riser(1.6), 56.4 + D2, 0.6, rev=0.3)
 # ------------------------------------------------------------------ S8 montage (42 - 47)
 for k in range(5):
     tb = 42.0 + SH + k
+    if CINE:
+        place(braam([33, 29, 36, 31, 33][k], 1.4), tb, 0.55, rev=0.5)
     place(impact(1.4), tb, 0.75, rev=0.5)
     place(pad(CHORDS[[0, 1, 2, 3, 0][k]], 0.95, 3200), tb, 0.35, rev=0.5)
     place(kick(), tb + 0.5, 0.8)
@@ -281,14 +325,16 @@ place(riser(0.9, 600, 10000), 46.1 + SH, 0.6)
 
 # ------------------------------------------------------------------ S9 finale (47 - 54)
 place(impact(4.0), 47.0 + SH, 1.0, rev=0.7)
+if CINE:
+    place(braam(33, 6.0), 47.0 + SH, 0.7, rev=0.7)
 place(pad([45, 57, 64, 69, 71, 76], 6.8, 2200), 47.0 + SH, 0.34, rev=0.8)
 for k, n in enumerate([81, 88, 84, 93]):
     place(bell(n, 3.0), 47.2 + SH + k * 0.3, 0.5, pan=(-0.3 + 0.2 * k), rev=0.7)
 place(bell(96, 3.5, 1.4), 48.6 + SH, 0.35, rev=0.8)
 
 # ------------------------------------------------------------------ reverb + master
-ir_t = tt(2.6)
-ir = rng.standard_normal((2, len(ir_t))) * np.exp(-ir_t * 2.4)
+ir_t = tt(3.8 if CINE else 2.6)
+ir = rng.standard_normal((2, len(ir_t))) * np.exp(-ir_t * (1.6 if CINE else 2.4))
 ir = np.array([lp(ch, 5000) for ch in ir])
 ir /= np.abs(ir).sum(axis=1, keepdims=True) ** 0.5 * 30
 wetL = fftconvolve(send, ir[0])[:N]
@@ -303,7 +349,7 @@ mix /= np.abs(mix).max()
 mix = np.tanh(mix * 1.5) / np.tanh(1.5) * 0.66  # ~ -14 LUFS for web platforms
 
 os.makedirs(os.path.join(os.path.dirname(__file__), 'out'), exist_ok=True)
-path = os.path.join(os.path.dirname(__file__), 'out', 'soundtrack.wav')
+path = os.path.join(os.path.dirname(__file__), 'out', 'soundtrack-cine.wav' if CINE else 'soundtrack.wav')
 with wave.open(path, 'wb') as w:
     w.setnchannels(2)
     w.setsampwidth(2)

@@ -35,6 +35,7 @@ FFMPEG=/path/to/ffmpeg node render.mjs   # -> out/tokenbank-promo.mp4（需 libx
 ```
 
 - 浏览器实时预览：用本地静态服务器打开 `video.html?play`（英文版 `video.html?lang=en&play`）。
+- 电影感版本：`CINE=1 python3 soundtrack.py && CINE=1 node render.mjs` → `out/tokenbank-promo-cine.mp4`。在同一时间轴上叠加 2.39:1 宽银幕黑边、虚拟摄影机（推镜 / UI 镜头 3D 横移 / 手持微晃）、青橙调色、胶片颗粒、前景光斑、变形镜头光晕与段落间黑场硬切；配乐换成太鼓 + braam + 弦乐的预告片风格。可与 `LANG_EN=1` 叠加。
 - 英文版：`LANG_EN=1 node render.mjs` → `out/tokenbank-promo-en.mp4`（`LANG_EN=1 node render.mjs --stills` 导出英文关键帧）。文案对照表在 `video.html` 的 `I18N` 中。
 - 需要 Playwright（Chromium）；ffmpeg 需带 libx264，可用 `pip install imageio-ffmpeg` 获取。
 - 修改文案 / 时长：编辑 `video.html` 中对应场景的 DOM 与 `renderFrame` 分段；配乐的 cue 点在 `soundtrack.py` 中与之对齐。
