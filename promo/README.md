@@ -1,6 +1,6 @@
 # Token Bank 宣传视频
 
-`tokenbank-promo.mp4`（中文）/ `tokenbank-promo-en.mp4`（英文）：78.5 秒 · 1920×1080 · 30fps · H.264 + AAC，配乐为代码合成（无版权素材）。
+成片：`server/static/video/tokenbank-promo.mp4`（中文）/ `tokenbank-promo-en.mp4`（英文，官网 `#film` 区块直接播放），电影感版 `promo/tokenbank-promo-cine.mp4`。78.5 秒 · 1920×1080 · 30fps · H.264 + AAC，配乐为代码合成（无版权素材）。
 
 ## 分镜
 
