@@ -38,7 +38,7 @@ if (stills) {
   const audio = path.join(out, 'soundtrack.wav');
   const args = ['-y', '-f', 'image2pipe', '-framerate', String(FPS), '-c:v', 'mjpeg', '-i', '-'];
   if (existsSync(audio)) args.push('-i', audio, '-c:a', 'aac', '-b:a', '192k', '-shortest');
-  args.push('-c:v', 'libx264', '-preset', 'slow', '-crf', '18', '-pix_fmt', 'yuv420p', '-movflags', '+faststart',
+  args.push('-c:v', 'libx264', '-preset', 'slow', '-crf', '20', '-pix_fmt', 'yuv420p', '-movflags', '+faststart',
     path.join(out, 'tokenbank-promo.mp4'));
   const ff = spawn(FFMPEG, args, { stdio: ['pipe', 'inherit', 'inherit'] });
   const total = Math.round(duration * FPS);
