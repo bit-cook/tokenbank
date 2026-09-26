@@ -16,7 +16,7 @@
 | 42.5–49s | 06 游乐场 · 智能体编排 | 一句话任务（含截图）交给主 Agent，经 `tb_dispatch_agent` 并行派发给 Codex、Kimi Code 与远端执行的社区智能体，结果回流合并 | 打字声 + 派发 zap + 完成铃音 |
 | 49–55s | 07 闲置赚钱 | P2P 网络由“你”向外点亮，积分实时增长 | 金币音 + riser |
 | 55–60s | 五条主线 | 用的明白 · 用的节省 · 用的简单 · 越用越懂你 · 闲置赚钱（中英双语，每秒一击） | 每词一次重击 |
-| 60–67s | 结尾 | Logo + Slogan + 平台 + `github.com/wink-run/tokenbank` | 终章 impact，淡出 |
+| 60–67s | 结尾 | Logo + Slogan + 平台 + 官网 `tokenbank.wink.run` + GitHub `github.com/wink-run/tokenbank`（正片期间右下角常驻官网水印） | 终章 impact，淡出 |
 
 画面中的用量、积分等数字均为演示用示意数据。
 

@@ -241,9 +241,16 @@
     <div class="c" id="title9"><div style="font-size:128px;font-weight:900;letter-spacing:-.02em;white-space:nowrap">Token <span class="gold">Bank</span></div></div>
     <div class="c" id="sub9"><div style="font-size:42px;color:#d0d0da;font-weight:500;letter-spacing:.18em;white-space:nowrap">个人 AI 中枢 · Token 管家</div></div>
     <div class="c" id="plat9"><div style="font-size:26px;color:var(--muted);letter-spacing:.3em;white-space:nowrap">macOS &nbsp;·&nbsp; Windows &nbsp;·&nbsp; CLI &nbsp;·&nbsp; Docker</div></div>
-    <div class="c" id="url9"><div class="mono" style="font-size:30px;color:var(--gold);white-space:nowrap;padding:16px 34px;border:1px solid rgba(255,194,61,.4);border-radius:999px;background:rgba(255,194,61,.06)">github.com/wink-run/tokenbank</div></div>
+    <div class="c" id="url9"><div style="display:flex;gap:26px;align-items:center">
+      <div id="web9" style="display:flex;align-items:center;gap:14px;font-size:32px;font-weight:800;color:#2b1a00;white-space:nowrap;padding:18px 38px;border-radius:999px;background:linear-gradient(180deg,#ffd466,#f0a000);box-shadow:0 0 50px rgba(255,170,30,.35)">
+        <span style="font-size:20px;font-weight:700;opacity:.75">官网</span><span style="font-family:'JetBrains Mono',monospace">tokenbank.wink.run</span></div>
+      <div id="gh9" style="display:flex;align-items:center;gap:14px;font-size:30px;color:var(--gold);white-space:nowrap;padding:18px 36px;border:1px solid rgba(255,194,61,.45);border-radius:999px;background:rgba(255,194,61,.06)">
+        <span style="font-size:20px;font-weight:700;color:var(--muted)">GitHub</span><span style="font-family:'JetBrains Mono',monospace">github.com/wink-run/tokenbank</span></div>
+    </div></div>
   </div>
 
+  <div id="wm" class="abs" style="right:56px;bottom:34px;display:flex;align-items:center;gap:12px;font-size:22px;color:rgba(255,255,255,.55);opacity:0">
+    <div id="wmlogo" style="width:30px;height:30px"></div><span style="font-family:'JetBrains Mono',monospace">tokenbank.wink.run</span></div>
   <div id="flash"></div>
   <div id="vignette"></div>
   <div id="fade"></div>
@@ -313,6 +320,7 @@ function logoSVG(id) {
 $('coin').innerHTML = logoSVG('L2');
 $('gwlogo').innerHTML = logoSVG('L3');
 $('logo9i').innerHTML = logoSVG('L9');
+$('wmlogo').innerHTML = logoSVG('LW');
 const coinEdges = [...$('coin').querySelectorAll('.edges line')];
 coinEdges.forEach(l => { const len = Math.hypot(l.x2.baseVal.value - l.x1.baseVal.value, l.y2.baseVal.value - l.y1.baseVal.value); l.style.strokeDasharray = len; l.dataset.len = len; });
 const coinNodes = [...$('coin').querySelectorAll('.nodes > g')];
@@ -806,7 +814,10 @@ function renderBase(t, rt) {
     const pk9 = eo5(p(t, 48.6, 49.4));
     S($('plat9'), { op: pk9 * .9, cx: CX, cy: 750, y: (1 - pk9) * 16 });
     const uk = eo5(p(t, 49.0, 49.8));
-    S($('url9'), { op: uk, cx: CX, cy: 860, s: lerp(.9, 1, uk) });
+    S($('url9'), { op: uk, cx: CX, cy: 870, s: lerp(.9, 1, uk) });
+    const wk = eo5(p(t, 49.0, 49.7)), gk2 = eo5(p(t, 49.25, 49.95));
+    S($('web9'), { op: wk, x: (1 - wk) * -40 });
+    S($('gh9'), { op: gk2, x: (1 - gk2) * 40 });
   }
 
   // ------------ global flashes & fade
@@ -976,6 +987,7 @@ function renderExtra(t) {
 }
 
 function renderFrame(t) {
+  $('wm').style.opacity = .85 * win(t, 9.8, 55.0, .6, .5);
   const o = t < INS_A ? t : (t < INS_B ? INS_A : t - INS);
   renderBase(o, t);
   renderExtra(t);
