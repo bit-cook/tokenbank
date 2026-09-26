@@ -1,6 +1,6 @@
 # Token Bank 宣传视频
 
-`tokenbank-promo.mp4`：67 秒 · 1920×1080 · 30fps · H.264 + AAC，配乐为代码合成（无版权素材）。
+`tokenbank-promo.mp4`：70 秒 · 1920×1080 · 30fps · H.264 + AAC，配乐为代码合成（无版权素材）。
 
 ## 分镜
 
@@ -14,9 +14,9 @@
 | 30–36s | 04 越用越懂你 | 工作画像雷达图生长，MCP / Skill / Prompt / Agent 个性化推荐一键添加 | 添加提示音 |
 | 36–42.5s | 05 资源投射 | Skill / MCP / Prompt / Agent 经「投射门控」投射到已纳管且已安装的 Claude Code / Codex / Cursor / Kimi Code，未安装的 Trae 被跳过 | 汇聚 whoosh + 门控铃音 + 逐个命中 |
 | 42.5–49s | 06 游乐场 · 智能体编排 | 一句话任务（含截图）交给主 Agent，经 `tb_dispatch_agent` 并行派发给 Codex、Kimi Code 与远端执行的社区智能体，结果回流合并 | 打字声 + 派发 zap + 完成铃音 |
-| 49–55s | 07 闲置赚钱 | P2P 网络由“你”向外点亮，积分实时增长 | 金币音 + riser |
-| 55–60s | 五条主线 | 用的明白 · 用的节省 · 用的简单 · 越用越懂你 · 闲置赚钱（中英双语，每秒一击） | 每词一次重击 |
-| 60–67s | 结尾 | Logo + Slogan + 平台 + 官网 `tokenbank.wink.run` + GitHub `github.com/wink-run/tokenbank`（正片期间右下角常驻官网水印） | 终章 impact，淡出 |
+| 49–58s | 07 共享市场 · 闲置赚钱 | 双边市场：出租方上架闲置订阅额度 / 内网私有模型 / 智能体（只公开名片），API Key、Skill、Prompt、配置锁在「本机保险箱」、任务在本机执行只回传结果；使用方按次付积分租用稀有模型、雇佣智能体解决问题；出租方积分实时增长 | 任务 / 结果往返 whoosh + 保险箱微光 + 金币音 |
+| 58–63s | 五条主线 | 用的明白 · 用的节省 · 用的简单 · 越用越懂你 · 闲置赚钱（中英双语，每秒一击） | 每词一次重击 |
+| 63–70s | 结尾 | Logo + Slogan + 平台 + 官网 `tokenbank.wink.run` + GitHub `github.com/wink-run/tokenbank`（正片期间右下角常驻官网水印） | 终章 impact，淡出 |
 
 画面中的用量、积分等数字均为演示用示意数据。
 

@@ -10,8 +10,8 @@ import numpy as np
 from scipy.signal import butter, sosfilt, fftconvolve
 
 SR = 44100
-DUR = 67.0
-SH = 13.0  # scenes 资源投射 + 游乐场 are spliced in at 36s; later cues shift by SH
+DUR = 70.0
+SH = 16.0  # 资源投射 / 游乐场 / 共享市场 (36-58s) replace the old 36-42s scene; montage + finale shift by SH
 N = int(SR * DUR)
 BEAT = 0.5
 rng = np.random.default_rng(3)
@@ -209,7 +209,7 @@ R += music
 send += music * 0.25
 
 # transitions
-for tc in (16.0, 22.5, 30.0, 36.0, 42.5, 36.0 + SH):
+for tc in (16.0, 22.5, 30.0, 36.0, 42.5, 49.0):
     place(whoosh(0.8), tc - 0.55, 0.7, rev=0.3)
     place(impact(1.5) * 0.4, tc, 0.4, rev=0.3)
 # S3 toggles: ascending pentatonic blips
@@ -242,10 +242,16 @@ for k, td in enumerate((45.0, 45.5, 46.0)):
     place(bell(88 + k * 2, 1.0), td + 1.6, 0.4, pan=0.4, rev=0.5)
 for k, n in enumerate([81, 85, 88]):
     place(bell(n, 1.6), 48.0 + k * 0.06, 0.35, rev=0.6)
-# S7 coins
-for k in range(14):
-    place(bell(100 + (k % 4), 0.4, 1.5), 37.9 + SH + k * 0.2, 0.18, pan=0.4 * np.sin(k), rev=0.4)
-place(riser(1.6), 40.4 + SH, 0.6, rev=0.3)
+# SM 共享市场: task goes out, runs in the lender's vault, result comes back, credits land
+for t0 in (50.4, 52.7):
+    place(blip(84, 0.2), t0, 0.5, pan=0.5, rev=0.3)
+    place(whoosh(0.6), t0 + 0.3, 0.45, pan=0.3)            # task -> lender
+    place(pad([69, 76, 81], 0.9, 2600), t0 + 0.9, 0.12, pan=-0.5, rev=0.6)  # vault shimmer
+    place(whoosh(0.6), t0 + 1.5, 0.45, pan=-0.3)           # result -> renter
+    place(bell(91, 1.2), t0 + 2.1, 0.4, pan=0.5, rev=0.5)
+    for k in range(5):                                     # coins
+        place(bell(100 + (k % 3), 0.35, 1.5), t0 + 2.1 + k * 0.08, 0.15, pan=-0.5, rev=0.4)
+place(riser(1.6), 56.4, 0.6, rev=0.3)
 
 # ------------------------------------------------------------------ S8 montage (42 - 47)
 for k in range(5):

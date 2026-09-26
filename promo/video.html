@@ -210,6 +210,36 @@
     <div id="onodes"></div>
   </div>
 
+  <!-- ============ SM · 共享市场（出租 / 租用 模型与智能体） ============ -->
+  <div class="scene" id="sm">
+    <div class="header" id="hm"><div class="eyebrow">07 — 共享市场 · 闲置赚钱</div><div class="h1">出租闲置模型与智能体，<span class="gold">人人用上稀缺能力</span></div></div>
+    <canvas id="mk" class="abs" width="1920" height="1080" style="left:0;top:0"></canvas>
+    <div class="abs card" id="lend" style="left:120px;top:310px;width:600px;height:690px;box-sizing:border-box;padding:28px 30px">
+      <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:30px;font-weight:900">出租方 <span style="font-size:22px;color:var(--muted);font-weight:500">· 你的设备</span></div><div class="pill" style="font-size:18px;background:rgba(255,194,61,.12);color:#ffc23d;border:1px solid rgba(255,194,61,.4)">闲置中 → 赚钱中</div></div>
+      <div style="font-size:18px;color:var(--muted);margin:22px 0 10px;letter-spacing:.1em">上架出租 · 对外只公开名片</div>
+      <div id="lrows"></div>
+      <div id="vault" style="position:absolute;left:30px;right:30px;top:378px;height:180px;border-radius:16px;border:1px dashed rgba(255,194,61,.45);background:rgba(255,194,61,.05);padding:18px 22px;box-sizing:border-box">
+        <div style="display:flex;align-items:center;gap:12px;font-size:23px;font-weight:800"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#ffc23d" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7.5a4 4 0 0 1 8 0V11"/></svg>本机保险箱 <span id="vaultTag" style="margin-left:auto;font-size:18px;font-weight:700;color:#34d399">✓ 未外传</span></div>
+        <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap">
+          <span class="pill mono" style="font-size:17px;background:rgba(255,255,255,.05);color:#d8d8e0;border:1px solid rgba(255,255,255,.12)">API Key ••••••3f9a</span>
+          <span class="pill" style="font-size:17px;background:rgba(255,255,255,.05);color:#d8d8e0;border:1px solid rgba(255,255,255,.12)">Skill</span>
+          <span class="pill" style="font-size:17px;background:rgba(255,255,255,.05);color:#d8d8e0;border:1px solid rgba(255,255,255,.12)">Prompt</span>
+          <span class="pill" style="font-size:17px;background:rgba(255,255,255,.05);color:#d8d8e0;border:1px solid rgba(255,255,255,.12)">智能体配置</span>
+        </div>
+        <div style="font-size:18px;color:var(--muted);margin-top:14px">任务在本机执行，只回传结果</div></div>
+      <div style="position:absolute;left:30px;right:30px;bottom:28px;display:flex;align-items:baseline;gap:14px">
+        <div style="font-size:22px;color:var(--muted)">本月出租收益</div><div class="gold" id="lcred" style="font-size:60px;font-weight:900;margin-left:auto;font-variant-numeric:tabular-nums">+0</div><div style="font-size:24px;color:var(--muted)">积分</div></div>
+    </div>
+    <div class="abs card" id="rent" style="left:1200px;top:310px;width:600px;height:690px;box-sizing:border-box;padding:28px 30px">
+      <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:30px;font-weight:900">使用方 <span style="font-size:22px;color:var(--muted);font-weight:500">· 社区用户</span></div><div class="pill" style="font-size:18px;background:rgba(90,200,250,.1);color:#9fd9ff;border:1px solid rgba(90,200,250,.35)">按次 · 积分支付</div></div>
+      <div id="rreqs"></div>
+      <div id="rsum" style="position:absolute;left:30px;right:30px;bottom:28px;font-size:22px;color:#d8d8e0;line-height:1.6">
+        <div>✓ 没有订阅，也能用上稀有模型</div><div>✓ 雇佣专家智能体，直接解决问题</div></div>
+    </div>
+    <div class="c" id="tunLabel"><div style="text-align:center;white-space:nowrap"><div style="font-size:24px;font-weight:800">Token Bank 共享网络</div></div></div>
+    <div class="c" id="tunSub"><div style="text-align:center;white-space:nowrap;font-size:18px;color:var(--muted);line-height:1.6">只传任务与结果<br>出站连接 · 无需开放端口</div></div>
+  </div>
+
   <!-- ============ S7 · 闲置赚钱 ============ -->
   <div class="scene" id="s7">
     <canvas id="net" class="abs" width="1920" height="1080" style="left:0;top:0"></canvas>
@@ -262,9 +292,9 @@
 // No CSS transitions / animations are used, so any frame can be rendered in
 // isolation — render.mjs steps through it at a fixed fps.
 // ---------------------------------------------------------------------------
-const DURATION = 67;
+const DURATION = 70;
 // Two scenes (资源投射 / 游乐场) are spliced in at 36s; the base timeline resumes at 49s.
-const INS_A = 36, INS_B = 49, INS = INS_B - INS_A;
+const INS_A = 36, INS_B = 58, INS = 16;  // base resumes at its 42s (montage) at real 58s; base S7 is dropped
 const W = 1920, H = 1080, CX = 960, CY = 540;
 
 const $ = id => document.getElementById(id);
@@ -815,7 +845,7 @@ function renderBase(t, rt) {
     S($('plat9'), { op: pk9 * .9, cx: CX, cy: 750, y: (1 - pk9) * 16 });
     const uk = eo5(p(t, 49.0, 49.8));
     S($('url9'), { op: uk, cx: CX, cy: 870, s: lerp(.9, 1, uk) });
-    const wk = eo5(p(t, 49.0, 49.7)), gk2 = eo5(p(t, 49.25, 49.95));
+    const wk = eo5(p(t, 49.0, 49.7)), gk2 = eo5(p(t, 49.25, 49.95));  // base-timeline times
     S($('web9'), { op: wk, x: (1 - wk) * -40 });
     S($('gh9'), { op: gk2, x: (1 - gk2) * 40 });
   }
@@ -987,10 +1017,97 @@ function renderExtra(t) {
 }
 
 function renderFrame(t) {
-  $('wm').style.opacity = .85 * win(t, 9.8, 55.0, .6, .5);
+  $('wm').style.opacity = .85 * win(t, 9.8, 58.0, .6, .5);
   const o = t < INS_A ? t : (t < INS_B ? INS_A : t - INS);
   renderBase(o, t);
   renderExtra(t);
+  renderMarket(t);
+}
+
+// ---------------------------------------------------------------- SM build (共享市场)
+const LROWS = [
+  { ty: 'MODEL', c: '#5ac8fa', n: 'claude-opus-4', d: '闲置订阅额度' },
+  { ty: 'MODEL', c: '#5ac8fa', n: 'qwen3-coder-480b', d: '内网私有部署' },
+  { ty: 'AGENT', c: '#ffc23d', n: '测试生成专家', d: '已投射智能体' },
+];
+$('lrows').innerHTML = LROWS.map((r, i) => `<div class="lrow" style="display:flex;align-items:center;gap:16px;height:66px;padding:0 16px;margin-bottom:10px;border-radius:12px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07)">
+  <div class="type" style="width:78px;font-size:16px;background:${r.c}1f;color:${r.c};border:1px solid ${r.c}66">${r.ty}</div>
+  <div class="mono" style="font-size:22px;font-weight:600;flex:1;white-space:nowrap">${r.n}</div>
+  <div style="font-size:18px;color:var(--muted);white-space:nowrap">${r.d}</div></div>`).join('');
+const lrowEls = [...document.querySelectorAll('#lrows .lrow')];
+const RREQ = [
+  { k: '租用稀有模型', q: '用 claude-opus-4 审查整个仓库的架构', res: '✓ 已获得回答 · 消耗 86 积分', row: 0, t: 50.4 },
+  { k: '雇佣智能体', q: '「测试生成专家」为支付模块补齐测试', res: '✓ 已生成 42 个用例 · 消耗 120 积分', row: 2, t: 52.7 },
+];
+$('rreqs').innerHTML = RREQ.map((r, i) => `<div class="rreq" style="position:absolute;left:30px;right:30px;top:${104 + i * 196}px;height:176px;border-radius:16px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.08);padding:18px 22px;box-sizing:border-box">
+  <div style="font-size:18px;font-weight:700;color:#9fd9ff;letter-spacing:.08em">${r.k}</div>
+  <div style="font-size:24px;font-weight:700;margin-top:8px;line-height:1.4">${r.q}</div>
+  <div class="rres" style="font-size:20px;font-weight:700;color:#34d399;margin-top:12px"></div></div>`).join('');
+const rreqEls = [...document.querySelectorAll('#rreqs .rreq')];
+const mk = $('mk').getContext('2d');
+const TUN = { x0: 740, x1: 1180, y: 640 };
+const legs = r => ({ req: [r.t + .3, r.t + .9], exec: [r.t + .9, r.t + 1.5], res: [r.t + 1.5, r.t + 2.1] });
+
+function renderMarket(t) {
+  const sma = t > 48.95 && t < 58.1;
+  $('sm').style.opacity = sma ? 1 : 0;
+  mk.clearRect(0, 0, W, H);
+  if (!sma) return;
+  const out = eio(p(t, 57.5, 58.0));
+  header($('hm'), t, 49.05, 58.0);
+  const lk = eo5(p(t, 49.3, 50.0)), rk = eo5(p(t, 49.45, 50.15));
+  S($('lend'), { op: lk * (1 - out), x: (1 - lk) * -100 });
+  S($('rent'), { op: rk * (1 - out), x: (1 - rk) * 100 });
+  const tk = eo(p(t, 49.7, 50.3));
+  S($('tunLabel'), { op: tk * (1 - out), cx: (TUN.x0 + TUN.x1) / 2, cy: TUN.y - 90 });
+  S($('tunSub'), { op: tk * (1 - out) * .9, cx: (TUN.x0 + TUN.x1) / 2, cy: TUN.y + 90 });
+  // tunnel
+  mk.globalAlpha = tk * (1 - out);
+  const g = mk.createLinearGradient(TUN.x0, 0, TUN.x1, 0);
+  g.addColorStop(0, 'rgba(255,194,61,.5)'); g.addColorStop(.5, 'rgba(90,200,250,.35)'); g.addColorStop(1, 'rgba(90,200,250,.5)');
+  mk.strokeStyle = g; mk.lineWidth = 2;
+  [TUN.y - 26, TUN.y + 26].forEach(y => { mk.beginPath(); mk.moveTo(TUN.x0 - 20, y); mk.lineTo(TUN.x1 + 20, y); mk.stroke(); });
+  mk.setLineDash([4, 10]); mk.lineDashOffset = -t * 40; mk.strokeStyle = 'rgba(255,255,255,.18)';
+  mk.beginPath(); mk.moveTo(TUN.x0, TUN.y); mk.lineTo(TUN.x1, TUN.y); mk.stroke(); mk.setLineDash([]);
+  let vaultPulse = 0, credits = 0;
+  RREQ.forEach((r, i) => {
+    const L = legs(r), el = rreqEls[i];
+    const ek = eo5(p(t, r.t - .3, r.t + .1));
+    S(el, { op: ek, y: (1 - ek) * 20 });
+    const running = t > r.t && t < L.res[1];
+    el.style.borderColor = t >= L.res[1] ? 'rgba(52,211,153,.4)' : (running ? 'rgba(90,200,250,.45)' : 'rgba(255,255,255,.08)');
+    const rres = el.querySelector('.rres');
+    rres.textContent = t >= L.res[1] ? r.res : (running ? '处理中…' : '');
+    rres.style.color = t >= L.res[1] ? '#34d399' : '#9fd9ff';
+    // request packet: right -> left (upper lane), result packet: left -> right (lower lane)
+    const pk = (f, y, col, label) => {
+      const x = lerp(TUN.x1 + 20, TUN.x0 - 20, f);
+      mk.shadowColor = col; mk.shadowBlur = 20; mk.fillStyle = col;
+      mk.beginPath(); mk.roundRect(x - 44, y - 15, 88, 30, 15); mk.fill(); mk.shadowBlur = 0;
+      mk.fillStyle = '#10131a'; mk.font = '700 16px Inter, "Noto Sans SC"'; mk.textAlign = 'center'; mk.fillText(label, x, y + 6);
+    };
+    const a = p(t, ...L.req), b = p(t, ...L.res);
+    if (a > 0 && a < 1) pk(eio(a), TUN.y - 26, '#9fd9ff', '任务');
+    if (b > 0 && b < 1) pk(1 - eio(b), TUN.y + 26, '#ffd466', '结果');
+    const ex = t > L.exec[0] - .1 && t < L.res[0] + .2;
+    const row = lrowEls[r.row];
+    if (ex) { row.style.borderColor = 'rgba(255,194,61,.6)'; row.style.background = 'rgba(255,194,61,.1)'; }
+    const vp = t > L.exec[0] && t < L.exec[1] + .6 ? Math.sin(Math.PI * p(t, L.exec[0], L.exec[1] + .6)) : 0;
+    vaultPulse = Math.max(vaultPulse, vp);
+    credits += (i === 0 ? 86 : 120) * eo(p(t, L.res[1], L.res[1] + .5));
+  });
+  lrowEls.forEach((row, j) => {
+    const busy = RREQ.some(r => { const L = legs(r); return r.row === j && t > L.exec[0] - .1 && t < L.res[0] + .2; });
+    if (!busy) { row.style.borderColor = 'rgba(255,255,255,.07)'; row.style.background = 'rgba(255,255,255,.035)'; }
+  });
+  const vault = $('vault');
+  vault.style.boxShadow = `0 0 ${50 * vaultPulse}px rgba(255,194,61,${.45 * vaultPulse}), inset 0 0 ${30 * vaultPulse}px rgba(255,194,61,${.2 * vaultPulse})`;
+  vault.style.borderColor = `rgba(255,194,61,${.45 + .5 * vaultPulse})`;
+  $('vaultTag').style.transform = `scale(${1 + .15 * vaultPulse})`;
+  $('lcred').textContent = '+' + fmt(12434 + credits);
+  const sk = eo(p(t, 55.2, 55.8));
+  S($('rsum'), { op: sk, y: (1 - sk) * 16 });
+  mk.globalAlpha = 1;
 }
 
 window.DURATION = DURATION;
