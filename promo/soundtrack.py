@@ -10,7 +10,9 @@ import numpy as np
 from scipy.signal import butter, sosfilt, fftconvolve
 
 SR = 44100
-DUR = 76.5
+DUR = 78.5
+OFF = 0.0  # set to INTRO after the intro block: every later cue is placed INTRO seconds later
+INTRO = 2.0  # intro grew from 5s to 7s
 SH = 22.5  # 资产纳管 / 资源投射 / 游乐场 / 共享市场 (36-64.5s) replace the old 36-42s scene; montage + finale shift by SH
 D2 = 6.5   # 资产纳管 (36-42.5s) pushes 投射 / 游乐场 / 共享市场 back by D2
 N = int(SR * DUR)
@@ -28,7 +30,7 @@ def hz(note):
 
 
 def place(sig, t, gain=1.0, pan=0.0, rev=0.0):
-    i = int(t * SR)
+    i = int((t + OFF) * SR)
     if i >= N:
         return
     sig = sig[: N - i]
@@ -149,20 +151,23 @@ def bass(note, d):
 CHORDS = [[57, 60, 64, 71], [53, 57, 60, 67], [55, 60, 64, 67], [55, 59, 62, 69]]
 ROOTS = [33, 29, 36, 31]
 
-# ------------------------------------------------------------------ S1 intro (0 - 5): tension
-t = tt(5.0)
+# ------------------------------------------------------------------ S1 intro (0 - 7): six pain points, then the answer
+t = tt(7.0)
 raw = saw(hz(33), t, 0.003) + saw(hz(45), t, 0.004) * 0.5
-open_ = (t / 5) ** 2  # filter opens as tension builds
+open_ = (t / 7) ** 2  # filter opens as tension builds
 drone = (lp(raw, 180) * (1 - open_) + lp(raw, 900) * open_) * np.minimum(1, t / 0.8)
 place(drone, 0, 0.35, rev=0.2)
-for i in range(int(4.5 / 0.125)):  # clock ticks, accelerating feel via accent
-    tk = 0.5 + i * 0.125
+for i in range(int(6.2 / 0.125)):  # clock ticks
+    tk = 0.3 + i * 0.125
     place(hat(), tk, 0.5 + 0.5 * (i % 4 == 0), pan=0.3 * (-1) ** i)
-for tp in (0.35, 1.25, 2.15, 3.05):  # phrase slams
+for tp in (0.3, 1.0, 1.7, 2.4, 3.1, 3.8):  # one slam per pain point
     place(kick(0.9), tp, 0.8)
-    place(impact(1.2) * 0.5, tp, 0.45, rev=0.35)
-place(riser(1.9), 3.1, 0.55, rev=0.3)
-place(whoosh(0.5)[::-1], 4.5, 0.8)
+    place(impact(1.2) * 0.5, tp, 0.42, rev=0.35)
+place(impact(2.0), 4.5, 0.75, rev=0.5)  # "你的 AI，该有个管家了"
+place(pad([57, 64, 69, 72], 2.0, 1600), 4.5, 0.22, rev=0.6)
+place(riser(1.9), 5.1, 0.55, rev=0.3)
+place(whoosh(0.5)[::-1], 6.5, 0.8)
+OFF = INTRO
 
 # ------------------------------------------------------------------ S2 logo (5 - 9.5)
 place(impact(3.5), 5.0, 1.0, rev=0.6)
@@ -179,7 +184,7 @@ duck = np.ones(N)  # sidechain envelope for pad/bass
 for b in range(nbeats):
     tb = g0 + b * BEAT
     place(kick(), tb, 0.95)
-    i = int(tb * SR)
+    i = int((tb + OFF) * SR)
     dt = np.arange(int(0.3 * SR)) / SR
     seg = 1 - 0.75 * np.exp(-dt * 14)
     duck[i:i + len(seg)] = np.minimum(duck[i:i + len(seg)], seg[: max(0, N - i)])
@@ -194,11 +199,11 @@ for k in range(int((g1 - g0) / bar)):
     tb = g0 + k * bar
     ci = k % 4
     seg = pad(CHORDS[ci], bar + 0.1, 1400 + 600 * (k % 2))
-    i = int(tb * SR)
+    i = int((tb + OFF) * SR)
     music[i:i + len(seg)] += seg[: N - i] * 0.30
     for e in range(8):  # 8th-note bass
         bs = bass(ROOTS[ci] + (12 if e % 4 == 3 else 0), 0.24)
-        j = int((tb + e * 0.25) * SR)
+        j = int((tb + OFF + e * 0.25) * SR)
         music[j:j + len(bs)] += bs * 0.33
     # arpeggio on the upper chord tones
     for e in range(8):
@@ -291,7 +296,7 @@ wetR = fftconvolve(send, ir[1])[:N]
 mixL = hp(L + wetL, 25)
 mixR = hp(R + wetR, 25)
 fade = np.ones(N)
-fs, fe = int((52.2 + SH) * SR), N
+fs, fe = int((52.2 + SH + OFF) * SR), N
 fade[fs:fe] = np.linspace(1, 0, fe - fs) ** 2
 mix = np.stack([mixL, mixR]) * fade
 mix /= np.abs(mix).max()
