@@ -10,8 +10,9 @@ import numpy as np
 from scipy.signal import butter, sosfilt, fftconvolve
 
 SR = 44100
-DUR = 70.0
-SH = 16.0  # 资源投射 / 游乐场 / 共享市场 (36-58s) replace the old 36-42s scene; montage + finale shift by SH
+DUR = 76.5
+SH = 22.5  # 资产纳管 / 资源投射 / 游乐场 / 共享市场 (36-64.5s) replace the old 36-42s scene; montage + finale shift by SH
+D2 = 6.5   # 资产纳管 (36-42.5s) pushes 投射 / 游乐场 / 共享市场 back by D2
 N = int(SR * DUR)
 BEAT = 0.5
 rng = np.random.default_rng(3)
@@ -209,7 +210,7 @@ R += music
 send += music * 0.25
 
 # transitions
-for tc in (16.0, 22.5, 30.0, 36.0, 42.5, 49.0):
+for tc in (16.0, 22.5, 30.0, 36.0, 42.5, 42.5 + D2, 49.0 + D2):
     place(whoosh(0.8), tc - 0.55, 0.7, rev=0.3)
     place(impact(1.5) * 0.4, tc, 0.4, rev=0.3)
 # S3 toggles: ascending pentatonic blips
@@ -227,23 +228,34 @@ for t0 in (23.2, 25.0, 26.8):
 # S6 "added" dings
 for k in range(3):
     place(bell(88 + k * 3, 1.0), 33.6 + k * 0.3, 0.4, pan=0.5, rev=0.5)
+# SA 资产纳管: scattered files glitch, then snap into the library
+for k in range(14):
+    place(blip(60 + (k * 7) % 13, 0.08) * 0.8, 36.2 + k * 0.06, 0.5, pan=np.sin(k * 1.7) * 0.7)
+for k in range(10):
+    place(hp(rng.standard_normal(int(0.05 * SR)), 3000) * 0.3, 36.9 + k * 0.13, 0.4, pan=np.cos(k) * 0.6)  # glitch
+place(riser(0.9, 400, 6000), 37.4, 0.4)
+place(whoosh(0.7), 38.2, 0.7, rev=0.3)
+place(impact(1.2) * 0.5, 38.9, 0.5, rev=0.4)
+for k in range(8):
+    place(blip([81, 84, 86, 88, 91, 93, 96, 98][k], 0.15), 39.2 + k * 0.07, 0.45, pan=-0.5 + k * 0.14, rev=0.3)
+place(bell(88, 1.2), 41.0, 0.35, rev=0.5)
 # SP 资源投射: beams converge, gate pulse, targets receive, one is skipped
-place(whoosh(0.7), 37.7, 0.45, pan=-0.4, rev=0.3)
-place(bell(81, 1.5, 1.2), 38.45, 0.5, rev=0.6)
+place(whoosh(0.7), 37.7 + D2, 0.45, pan=-0.4, rev=0.3)
+place(bell(81, 1.5, 1.2), 38.45 + D2, 0.5, rev=0.6)
 for k in range(4):
-    place(blip([84, 88, 91, 96][k], 0.3), 38.6 + k * 0.18 + 0.6, 0.8, pan=0.5, rev=0.4)
-place(blip(52, 0.35) * 1.5, 38.6 + 4 * 0.18 + 0.6, 0.7, pan=0.5)  # skipped target
+    place(blip([84, 88, 91, 96][k], 0.3), 38.6 + D2 + k * 0.18 + 0.6, 0.8, pan=0.5, rev=0.4)
+place(blip(52, 0.35) * 1.5, 38.6 + D2 + 4 * 0.18 + 0.6, 0.7, pan=0.5)  # skipped target
 # SG 游乐场: typing, dispatches, completions
 for k in range(20):
-    place(hat() * 0.8, 43.4 + k * 0.05, 0.5, pan=-0.3)
-for k, td in enumerate((45.0, 45.5, 46.0)):
+    place(hat() * 0.8, 43.4 + D2 + k * 0.05, 0.5, pan=-0.3)
+for k, td in enumerate((45.0 + D2, 45.5 + D2, 46.0 + D2)):
     place(whoosh(0.4), td, 0.4, pan=0.4)
     place(blip(79 + k * 5, 0.25), td, 0.6, pan=0.3, rev=0.3)
     place(bell(88 + k * 2, 1.0), td + 1.6, 0.4, pan=0.4, rev=0.5)
 for k, n in enumerate([81, 85, 88]):
-    place(bell(n, 1.6), 48.0 + k * 0.06, 0.35, rev=0.6)
+    place(bell(n, 1.6), 48.0 + D2 + k * 0.06, 0.35, rev=0.6)
 # SM 共享市场: task goes out, runs in the lender's vault, result comes back, credits land
-for t0 in (50.4, 52.7):
+for t0 in (50.4 + D2, 52.7 + D2):
     place(blip(84, 0.2), t0, 0.5, pan=0.5, rev=0.3)
     place(whoosh(0.6), t0 + 0.3, 0.45, pan=0.3)            # task -> lender
     place(pad([69, 76, 81], 0.9, 2600), t0 + 0.9, 0.12, pan=-0.5, rev=0.6)  # vault shimmer
@@ -251,7 +263,7 @@ for t0 in (50.4, 52.7):
     place(bell(91, 1.2), t0 + 2.1, 0.4, pan=0.5, rev=0.5)
     for k in range(5):                                     # coins
         place(bell(100 + (k % 3), 0.35, 1.5), t0 + 2.1 + k * 0.08, 0.15, pan=-0.5, rev=0.4)
-place(riser(1.6), 56.4, 0.6, rev=0.3)
+place(riser(1.6), 56.4 + D2, 0.6, rev=0.3)
 
 # ------------------------------------------------------------------ S8 montage (42 - 47)
 for k in range(5):

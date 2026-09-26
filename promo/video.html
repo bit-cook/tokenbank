@@ -107,7 +107,7 @@
 
   <!-- ============ S3 · 一键纳管 ============ -->
   <div class="scene" id="s3">
-    <div class="header" id="h3"><div class="eyebrow">01 — 一键纳管</div><div class="h1">零侵入，一键接入<span class="gold">所有 AI 工具</span></div></div>
+    <div class="header" id="h3"><div class="eyebrow">01 — 一键纳管</div><div class="h1">你在用的 AI 工具，<span class="gold">一键全接入</span></div></div>
     <svg id="s3svg" class="abs" width="1920" height="1080" style="left:0;top:0"></svg>
     <div id="apps"></div>
     <div class="c" id="gw"><div class="card" style="width:540px;height:230px;padding:34px 38px;box-sizing:border-box;border-color:rgba(255,194,61,.35)">
@@ -128,7 +128,7 @@
 
   <!-- ============ S4 · 全链路 Trace ============ -->
   <div class="scene" id="s4">
-    <div class="header" id="h4"><div class="eyebrow">02 — 用的明白</div><div class="h1">每一个 Token，<span class="gold">都有据可查</span></div></div>
+    <div class="header" id="h4"><div class="eyebrow">02 — 用的明白</div><div class="h1">你的每一个 Token，<span class="gold">都有据可查</span></div></div>
     <div class="abs" id="dash" style="left:140px;top:330px;width:1640px;height:680px;perspective:1600px">
       <div id="dashInner" class="card" style="position:absolute;inset:0;transform-origin:50% 100%">
         <div class="abs" style="left:48px;top:40px;display:flex;gap:80px">
@@ -147,7 +147,7 @@
 
   <!-- ============ S5 · 智能路由 ============ -->
   <div class="scene" id="s5">
-    <div class="header" id="h5"><div class="eyebrow">03 — 用的节省</div><div class="h1">同一个请求，<span class="gold">自动走最划算的路</span></div></div>
+    <div class="header" id="h5"><div class="eyebrow">03 — 用的节省</div><div class="h1">同样的活，<span class="gold">自动走最省钱的路</span></div></div>
     <svg id="s5svg" class="abs" width="1920" height="1080" style="left:0;top:0"></svg>
     <div id="reqs"></div>
     <div class="c" id="router"><div style="position:relative;width:260px;height:260px">
@@ -172,9 +172,26 @@
     <div id="recs"></div>
   </div>
 
+  <!-- ============ SA · AI 资产一处纳管 ============ -->
+  <div class="scene" id="sa">
+    <div class="header" id="ha"><div class="eyebrow">05 — AI 资产 · 一处纳管</div><div class="h1">散落各处的 AI 资产，<span class="gold">一处纳管</span></div></div>
+    <div class="abs card" id="lib" style="left:300px;top:310px;width:1320px;height:600px;box-sizing:border-box;padding:26px 30px">
+      <div style="display:flex;align-items:center;gap:16px">
+        <div style="flex:1;height:54px;border-radius:14px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);display:flex;align-items:center;padding:0 20px;font-size:22px;color:var(--muted)"><span id="libq"></span></div>
+        <div style="font-size:20px;color:var(--muted);white-space:nowrap">共 <b id="libn" style="color:#fff;font-size:26px">0</b> 项资产</div>
+      </div>
+      <div id="libtabs" style="display:flex;gap:12px;margin-top:20px"></div>
+      <div id="libgrid" style="position:relative;margin-top:22px;height:390px"></div>
+    </div>
+    <div id="mess"></div>
+    <div class="c" id="chipsa"><div style="display:flex;gap:22px">
+      <div class="chip"><i></i>MCP / Skill / Prompt / Agent 统一收纳</div><div class="chip"><i></i>按类型分类 · 一搜即得</div><div class="chip"><i></i>一处修改，处处生效</div>
+    </div></div>
+  </div>
+
   <!-- ============ SP · 资源投射 ============ -->
   <div class="scene" id="sp">
-    <div class="header" id="hp"><div class="eyebrow">05 — 资源投射</div><div class="h1">一次沉淀，<span class="gold">投射到每个智能体</span></div></div>
+    <div class="header" id="hp"><div class="eyebrow">06 — 资源投射</div><div class="h1">一次沉淀，<span class="gold">投射到每个智能体</span></div></div>
     <svg id="spsvg" class="abs" width="1920" height="1080" style="left:0;top:0"></svg>
     <div id="passets"></div>
     <div class="c" id="gate"><div style="position:relative;width:200px;height:320px">
@@ -191,7 +208,7 @@
 
   <!-- ============ SG · 游乐场 · Agent 聚合编排 ============ -->
   <div class="scene" id="sg">
-    <div class="header" id="hg"><div class="eyebrow">06 — 游乐场 · 智能体编排</div><div class="h1">一句话，<span class="gold">调度一支智能体团队</span></div></div>
+    <div class="header" id="hg"><div class="eyebrow">07 — 游乐场 · 智能体编排</div><div class="h1">一句话，<span class="gold">调度一支智能体团队</span></div></div>
     <div class="abs card" id="chat" style="left:140px;top:320px;width:820px;height:680px;overflow:hidden">
       <div style="height:64px;display:flex;align-items:center;gap:14px;padding:0 28px;border-bottom:1px solid var(--line);font-size:22px">
         <span style="display:flex;gap:8px"><i style="width:12px;height:12px;border-radius:50%;background:#ff5f57;display:inline-block"></i><i style="width:12px;height:12px;border-radius:50%;background:#febc2e;display:inline-block"></i><i style="width:12px;height:12px;border-radius:50%;background:#28c840;display:inline-block"></i></span>
@@ -212,7 +229,7 @@
 
   <!-- ============ SM · 共享市场（出租 / 租用 模型与智能体） ============ -->
   <div class="scene" id="sm">
-    <div class="header" id="hm"><div class="eyebrow">07 — 共享市场 · 闲置赚钱</div><div class="h1">出租闲置模型与智能体，<span class="gold">人人用上稀缺能力</span></div></div>
+    <div class="header" id="hm"><div class="eyebrow">08 — 共享市场 · 闲置赚钱</div><div class="h1">出租闲置模型与智能体，<span class="gold">人人用上稀缺能力</span></div></div>
     <canvas id="mk" class="abs" width="1920" height="1080" style="left:0;top:0"></canvas>
     <div class="abs card" id="lend" style="left:120px;top:310px;width:600px;height:690px;box-sizing:border-box;padding:28px 30px">
       <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:30px;font-weight:900">出租方 <span style="font-size:22px;color:var(--muted);font-weight:500">· 你的设备</span></div><div class="pill" style="font-size:18px;background:rgba(255,194,61,.12);color:#ffc23d;border:1px solid rgba(255,194,61,.4)">闲置中 → 赚钱中</div></div>
@@ -270,10 +287,10 @@
     <div class="c" id="logo9"><div id="logo9i" style="width:220px;height:220px"></div></div>
     <div class="c" id="title9"><div style="font-size:128px;font-weight:900;letter-spacing:-.02em;white-space:nowrap">Token <span class="gold">Bank</span></div></div>
     <div class="c" id="sub9"><div style="font-size:42px;color:#d0d0da;font-weight:500;letter-spacing:.18em;white-space:nowrap">个人 AI 中枢 · Token 管家</div></div>
-    <div class="c" id="plat9"><div style="font-size:26px;color:var(--muted);letter-spacing:.3em;white-space:nowrap">macOS &nbsp;·&nbsp; Windows &nbsp;·&nbsp; CLI &nbsp;·&nbsp; Docker</div></div>
+    <div class="c" id="plat9"><div style="text-align:center;white-space:nowrap"><div style="font-size:30px;color:#ffe2a0;font-weight:600;letter-spacing:.12em">开源 · 不改使用习惯 · 随时一键还原</div><div style="font-size:22px;color:var(--muted);letter-spacing:.3em;margin-top:14px">macOS &nbsp;·&nbsp; Windows &nbsp;·&nbsp; CLI &nbsp;·&nbsp; Docker</div></div></div>
     <div class="c" id="url9"><div style="display:flex;gap:26px;align-items:center">
       <div id="web9" style="display:flex;align-items:center;gap:14px;font-size:32px;font-weight:800;color:#2b1a00;white-space:nowrap;padding:18px 38px;border-radius:999px;background:linear-gradient(180deg,#ffd466,#f0a000);box-shadow:0 0 50px rgba(255,170,30,.35)">
-        <span style="font-size:20px;font-weight:700;opacity:.75">官网</span><span style="font-family:'JetBrains Mono',monospace">tokenbank.wink.run</span></div>
+        <span style="font-size:24px;font-weight:900">免费下载</span><span style="opacity:.5">·</span><span style="font-family:'JetBrains Mono',monospace">tokenbank.wink.run</span></div>
       <div id="gh9" style="display:flex;align-items:center;gap:14px;font-size:30px;color:var(--gold);white-space:nowrap;padding:18px 36px;border:1px solid rgba(255,194,61,.45);border-radius:999px;background:rgba(255,194,61,.06)">
         <span style="font-size:20px;font-weight:700;color:var(--muted)">GitHub</span><span style="font-family:'JetBrains Mono',monospace">github.com/wink-run/tokenbank</span></div>
     </div></div>
@@ -292,9 +309,9 @@
 // No CSS transitions / animations are used, so any frame can be rendered in
 // isolation — render.mjs steps through it at a fixed fps.
 // ---------------------------------------------------------------------------
-const DURATION = 70;
+const DURATION = 76.5;
 // Two scenes (资源投射 / 游乐场) are spliced in at 36s; the base timeline resumes at 49s.
-const INS_A = 36, INS_B = 58, INS = 16;  // base resumes at its 42s (montage) at real 58s; base S7 is dropped
+const INS_A = 36, INS_B = 64.5, INS = 22.5, D2 = 6.5;  // base resumes at its 42s (montage) at real 58s; base S7 is dropped
 const W = 1920, H = 1080, CX = 960, CY = 540;
 
 const $ = id => document.getElementById(id);
@@ -833,18 +850,18 @@ function renderBase(t, rt) {
   $('s9').style.opacity = s9a ? 1 : 0;
   if (s9a) {
     const lk = back(p(t, 47.0, 47.8));
-    S($('glow9'), { op: eo(p(t, 47, 48)) * (.85 + .15 * Math.sin(t * 2)), cx: CX, cy: 360 });
-    S($('logo9'), { op: clamp(p(t, 47.0, 47.25)), cx: CX, cy: 330, s: lerp(.3, 1, lk), extra: `rotateY(${(1 - eo5(p(t, 47, 48.2))) * 360}deg)` });
-    $('logo9').style.transform = `translate(${CX}px,330px) translate(-50%,-50%) perspective(1200px) rotateY(${(1 - eo5(p(t, 47, 48.2))) * 360}deg) scale(${lerp(.3, 1, lk)})`;
+    S($('glow9'), { op: eo(p(t, 47, 48)) * (.85 + .15 * Math.sin(t * 2)), cx: CX, cy: 340 });
+    S($('logo9'), { op: clamp(p(t, 47.0, 47.25)), cx: CX, cy: 310, s: lerp(.3, 1, lk), extra: `rotateY(${(1 - eo5(p(t, 47, 48.2))) * 360}deg)` });
+    $('logo9').style.transform = `translate(${CX}px,310px) translate(-50%,-50%) perspective(1200px) rotateY(${(1 - eo5(p(t, 47, 48.2))) * 360}deg) scale(${lerp(.3, 1, lk)})`;
     shine9.setAttribute('x', lerp(-60, 160, eio(p(t, 48.6, 49.3))));
     const tk = eo5(p(t, 47.5, 48.4));
-    S($('title9'), { op: tk, cx: CX, cy: 560, y: (1 - tk) * 30, blur: (1 - tk) * 10 });
+    S($('title9'), { op: tk, cx: CX, cy: 545, y: (1 - tk) * 30, blur: (1 - tk) * 10 });
     const sk = eo5(p(t, 48.1, 48.9));
-    S($('sub9'), { op: sk, cx: CX, cy: 665, y: (1 - sk) * 20 });
+    S($('sub9'), { op: sk, cx: CX, cy: 648, y: (1 - sk) * 20 });
     const pk9 = eo5(p(t, 48.6, 49.4));
-    S($('plat9'), { op: pk9 * .9, cx: CX, cy: 750, y: (1 - pk9) * 16 });
+    S($('plat9'), { op: pk9, cx: CX, cy: 762, y: (1 - pk9) * 16 });
     const uk = eo5(p(t, 49.0, 49.8));
-    S($('url9'), { op: uk, cx: CX, cy: 870, s: lerp(.9, 1, uk) });
+    S($('url9'), { op: uk, cx: CX, cy: 900, s: lerp(.9, 1, uk) * (1 + .025 * Math.sin(Math.max(0, t - 50) * 4) * p(t, 50, 50.5)) });
     const wk = eo5(p(t, 49.0, 49.7)), gk2 = eo5(p(t, 49.25, 49.95));  // base-timeline times
     S($('web9'), { op: wk, x: (1 - wk) * -40 });
     S($('gh9'), { op: gk2, x: (1 - gk2) * 40 });
@@ -1016,12 +1033,68 @@ function renderExtra(t) {
   }
 }
 
+// ---------------------------------------------------------------- SA build (AI 资产一处纳管)
+const MESS = [
+  ['#d97757', '~/.claude/skills/code-review/', '重复 ×3'], ['#6e8cff', '.cursor/mcp.json', ''], ['#8e8ea0', '~/.codex/prompts/fix-bug.md', '版本不一致'],
+  ['#d97757', 'CLAUDE.md', ''], ['#2d7ff9', 'workbuddy/skills/sql-tuning', ''], ['#c0c0c0', '~/.kimi/mcp.json', '重复 ×2'],
+  ['#8e8ea0', 'AGENTS.md', ''], ['#6e8cff', '.cursor/rules/refactor.mdc', ''], ['#999', 'prompts-final-v3(1).txt', '忘了放哪'],
+  ['#d97757', '~/.claude/mcp.json', ''], ['#999', 'github-mcp (copy)', '重复'], ['#ffc23d', 'test-gen-agent.yaml', ''],
+  ['#8e8ea0', '~/.codex/config.toml', ''], ['#6e8cff', '.cursor/prompts/review.md', '版本不一致'],
+];
+const messPos = (() => { const r = rng(91); return MESS.map((_, i) => ({ x: 170 + (i % 4) * 400 + (r() - .5) * 120, y: 330 + Math.floor(i / 4) * 170 + (r() - .5) * 70, r: (r() - .5) * 14, ph: r() * 6.28 })); })();
+$('mess').innerHTML = MESS.map(m => `<div class="c mchip"><div style="display:flex;align-items:center;gap:10px;padding:12px 18px;border-radius:12px;background:rgba(30,30,38,.92);border:1px solid rgba(255,255,255,.12);box-shadow:0 12px 30px rgba(0,0,0,.4);white-space:nowrap">
+  <i style="width:10px;height:10px;border-radius:50%;background:${m[0]};display:inline-block"></i><span class="mono" style="font-size:19px;color:#d8d8e0">${m[1]}</span>
+  ${m[2] ? `<span style="font-size:15px;font-weight:700;color:#ff6a6a;border:1px solid rgba(255,106,106,.5);border-radius:6px;padding:2px 8px">${m[2]}</span>` : ''}</div></div>`).join('');
+const messEls = [...document.querySelectorAll('#mess .mchip')];
+const TABS = [['全部', 72], ['MCP', 12], ['Skill', 18], ['Prompt', 36], ['Agent', 6]];
+$('libtabs').innerHTML = TABS.map((tb, i) => `<div class="tab" style="padding:10px 20px;border-radius:12px;font-size:21px;font-weight:700;${i === 0 ? 'background:linear-gradient(180deg,#ffd466,#f0a000);color:#2b1a00' : 'background:rgba(255,255,255,.05);color:#d8d8e0;border:1px solid rgba(255,255,255,.08)'}">${tb[0]} <span style="opacity:.7">${tb[1]}</span></div>`).join('');
+const tabEls = [...document.querySelectorAll('#libtabs .tab')];
+const LIB = [
+  ['MCP', '#5ac8fa', 'GitHub', ['#d97757', '#6e8cff', '#c0c0c0']], ['SKILL', '#34d399', '代码评审', ['#d97757', '#2d7ff9']],
+  ['PROMPT', '#b38cff', '修复 Bug', ['#8e8ea0', '#6e8cff']], ['AGENT', '#ffc23d', '测试生成', ['#d97757']],
+  ['MCP', '#5ac8fa', 'PostgreSQL', ['#8e8ea0', '#6e8cff']], ['SKILL', '#34d399', 'SQL 调优', ['#2d7ff9']],
+  ['PROMPT', '#b38cff', '重构助手', ['#6e8cff', '#d97757']], ['PROMPT', '#b38cff', '团队规范', ['#d97757', '#8e8ea0', '#c0c0c0']],
+];
+$('libgrid').innerHTML = LIB.map((a, i) => `<div class="lc" style="position:absolute;left:${(i % 4) * 318}px;top:${Math.floor(i / 4) * 196}px;width:296px;height:176px;border-radius:16px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);padding:20px 22px;box-sizing:border-box">
+  <div class="type" style="width:auto;display:inline-block;font-size:15px;background:${a[1]}1f;color:${a[1]};border:1px solid ${a[1]}66">${a[0]}</div>
+  <div style="font-size:28px;font-weight:800;margin-top:14px">${a[2]}</div>
+  <div style="display:flex;align-items:center;gap:6px;margin-top:14px;font-size:17px;color:var(--muted)">${a[3].map(c => `<i style="width:12px;height:12px;border-radius:50%;background:${c};display:inline-block;border:1px solid rgba(255,255,255,.3)"></i>`).join('')}<span style="margin-left:6px">已用于 ${a[3].length} 个应用</span></div></div>`).join('');
+const lcEls = [...document.querySelectorAll('#libgrid .lc')];
+
+function renderAssets(t) {
+  const saa = t > 35.95 && t < 42.6;
+  $('sa').style.opacity = saa ? 1 : 0;
+  if (!saa) return;
+  const out = eio(p(t, 42.0, 42.5));
+  header($('ha'), t, 36.05, 42.5);
+  const LIBC = { x: 960, y: 610 };
+  messEls.forEach((el, i) => {
+    const P = messPos[i], ik = eo5(p(t, 36.2 + i * .06, 36.6 + i * .06));
+    const fly = eio(p(t, 38.2 + i * .04, 38.9 + i * .04));
+    const jit = (1 - fly) * p(t, 36.8, 37.6);
+    const x = lerp(P.x + Math.sin(t * 7 + P.ph) * 6 * jit, LIBC.x - 120 + (i % 4) * 80, fly);
+    const y = lerp(P.y + Math.cos(t * 6 + P.ph) * 5 * jit, LIBC.y, fly);
+    S(el, { op: ik * (1 - p(t, 38.6 + i * .04, 38.95 + i * .04)), cx: x + 180, cy: y, r: P.r * (1 - fly) + Math.sin(t * 5 + P.ph) * 2 * jit, s: lerp(1, .4, fly) });
+  });
+  const lk = eo5(p(t, 38.6, 39.3));
+  S($('lib'), { op: lk * (1 - out), s: lerp(.92, 1, lk) });
+  $('lib').style.boxShadow = `0 40px 100px rgba(0,0,0,.55), 0 0 ${80 * (1 - p(t, 39.0, 40.0)) * lk}px rgba(255,170,30,.35)`;
+  const q = '搜索：代码评审、GitHub、测试…', qk = p(t, 40.4, 41.2);
+  $('libq').textContent = qk > 0 ? q.slice(0, Math.ceil(q.length * qk)) : '搜索全部 AI 资产';
+  $('libn').textContent = Math.round(72 * eo(p(t, 39.0, 40.2)));
+  tabEls.forEach((el, i) => { const k = eo5(p(t, 39.0 + i * .07, 39.4 + i * .07)); S(el, { op: k, y: (1 - k) * 12 }); });
+  lcEls.forEach((el, i) => { const k = back(p(t, 39.2 + i * .07, 39.7 + i * .07)); S(el, { op: clamp(k), s: lerp(.7, 1, k) }); el.style.borderColor = qk > 0 && [0, 1, 3].includes(i) ? 'rgba(255,194,61,.55)' : 'rgba(255,255,255,.08)'; });
+  const ck = eo5(p(t, 40.6, 41.1));
+  S($('chipsa'), { op: ck * (1 - out), cx: CX, cy: 990, y: (1 - ck) * 30 });
+}
+
 function renderFrame(t) {
-  $('wm').style.opacity = .85 * win(t, 9.8, 58.0, .6, .5);
+  $('wm').style.opacity = .85 * win(t, 9.8, 64.5, .6, .5);
   const o = t < INS_A ? t : (t < INS_B ? INS_A : t - INS);
   renderBase(o, t);
-  renderExtra(t);
-  renderMarket(t);
+  renderAssets(t);
+  renderExtra(t - D2);
+  renderMarket(t - D2);
 }
 
 // ---------------------------------------------------------------- SM build (共享市场)
