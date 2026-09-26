@@ -1,6 +1,6 @@
 # Token Bank 宣传视频
 
-`tokenbank-promo.mp4`：78.5 秒 · 1920×1080 · 30fps · H.264 + AAC，配乐为代码合成（无版权素材）。
+`tokenbank-promo.mp4`（中文）/ `tokenbank-promo-en.mp4`（英文）：78.5 秒 · 1920×1080 · 30fps · H.264 + AAC，配乐为代码合成（无版权素材）。
 
 ## 分镜
 
@@ -34,6 +34,7 @@ node render.mjs --stills         # 可选：导出关键帧预览 -> out/stills/
 FFMPEG=/path/to/ffmpeg node render.mjs   # -> out/tokenbank-promo.mp4（需 libx264）
 ```
 
-- 浏览器实时预览：用本地静态服务器打开 `video.html?play`。
+- 浏览器实时预览：用本地静态服务器打开 `video.html?play`（英文版 `video.html?lang=en&play`）。
+- 英文版：`LANG_EN=1 node render.mjs` → `out/tokenbank-promo-en.mp4`（`LANG_EN=1 node render.mjs --stills` 导出英文关键帧）。文案对照表在 `video.html` 的 `I18N` 中。
 - 需要 Playwright（Chromium）；ffmpeg 需带 libx264，可用 `pip install imageio-ffmpeg` 获取。
 - 修改文案 / 时长：编辑 `video.html` 中对应场景的 DOM 与 `renderFrame` 分段；配乐的 cue 点在 `soundtrack.py` 中与之对齐。

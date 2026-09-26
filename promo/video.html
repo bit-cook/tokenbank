@@ -78,6 +78,14 @@
     background: radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(0,0,0,.65) 100%); }
   #flash { position: absolute; inset: 0; opacity: 0; pointer-events: none;
     background: radial-gradient(circle at 50% 50%, rgba(255,226,150,.95), rgba(255,170,30,.35) 35%, rgba(0,0,0,0) 70%); }
+  html.en .h1 { font-size: 70px; }
+  html.en .rsub { display: none; }
+  html.en #gw span { white-space: nowrap; }
+  html.en #router div[style*='font-size:30px'] { white-space: nowrap; font-size: 28px !important; }
+  html.en #phEnd > div { font-size: 124px !important; }
+  html.en .word { font-size: 160px; }
+  html.en .sub-en { display: none; }
+  html.en .pain > div > div:first-child { font-size: 112px !important; }
   #fade { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; }
 </style>
 </head>
@@ -158,7 +166,7 @@
       <div id="ring" style="position:absolute;inset:0;border-radius:50%;border:2px dashed rgba(255,194,61,.55)"></div>
       <div style="position:absolute;inset:30px;border-radius:50%;background:radial-gradient(circle at 40% 35%, #2a2210, #120f08);border:1px solid rgba(255,194,61,.5);box-shadow:0 0 80px rgba(255,170,30,.35), inset 0 0 40px rgba(255,194,61,.15);display:flex;flex-direction:column;align-items:center;justify-content:center">
         <div style="font-size:30px;font-weight:800">智能路由</div>
-        <div style="font-size:18px;color:var(--muted);margin-top:6px">Scene Router</div>
+        <div class="rsub" style="font-size:18px;color:var(--muted);margin-top:6px">Scene Router</div>
       </div>
     </div></div>
     <div class="c" id="proto"><div class="mono" style="font-size:20px;color:#9fd9ff;white-space:nowrap;padding:10px 18px;border-radius:10px;border:1px solid rgba(90,200,250,.3);background:rgba(90,200,250,.06)"><span id="protot">Anthropic Messages ⇄ OpenAI Chat</span></div></div>
@@ -313,6 +321,24 @@
 // No CSS transitions / animations are used, so any frame can be rendered in
 // isolation — render.mjs steps through it at a fixed fps.
 // ---------------------------------------------------------------------------
+const EN = new URLSearchParams(location.search).get('lang') === 'en';
+// English copy: exact / longest-substring replacement over every text node, plus L() for text set at render time.
+const I18N = {"AI 工具越装越多": "Too many AI tools", "配置各管各，切换全靠手改": "Each configured differently, switched by hand", "账单越来越长": "Bills keep growing", "Token 花在哪，说不清": "No idea where the tokens went", "额度月底清零": "Quota expires unused", "免费额度闲着，付费却在涨": "Free tiers sit idle while paid usage climbs", "Skill / MCP 越装越乱": "Skills & MCPs everywhere", "复制粘贴，版本对不上": "Copy-pasted, out of sync", "好模型用不起": "Top models out of reach", "稀缺模型、专家智能体，够不着": "Rare models and expert agents feel unreachable", "闲置能力白白浪费": "Idle capacity wasted", "订阅用不完，本地模型吃灰": "Unused subscriptions, local models gathering dust", "你的 AI，": "Your AI ", "该有个管家了": "needs a manager.", "本月账单": "This month", "你的个人 AI 中枢": "YOUR PERSONAL AI HUB", "01 — 一键纳管": "01 — ONE-CLICK ONBOARDING", "你在用的 AI 工具，": "All your AI tools, ", "一键全接入": "one click away", "本地网关运行中": "Gateway running", "已接入": "Connected", "不改客户端": "No client changes", "不改命令": "No command changes", "一键还原": "One-click revert", "CLI 注入": "CLI", "会话接入": "Sessions", "配置热补丁": "Config", "· 未纳管": "· off", "02 — 用的明白": "02 — SEE CLEARLY", "你的每一个 Token，": "Every token, ", "都有据可查": "fully traceable", "今日 Token": "Tokens today", "请求数": "Requests", "接入应用": "Apps connected", "实时 Trace": "Live Trace", "03 — 用的节省": "03 — SPEND LESS", "同样的活，": "Same work, ", "自动走最省钱的路": "on the cheapest route", "智能路由": "Smart Router", "模型名不变": "Model names unchanged", "协议自动转换": "Automatic protocol conversion", "本地优先 · 按任务分型": "Local-first · task-aware", "本地模型": "Local model", "订阅套餐": "Subscription", "未用完的月度额度": "Unused monthly quota", "已付": "Prepaid", "社区算力": "Community", "P2P 共享 · 积分结算": "P2P sharing · credits", "qwen3-coder · 本地": "qwen3-coder · local", "llama-3.3-70b · 免费": "llama-3.3-70b · free", "社区节点 · 积分结算": "community node · credits", "· 花费 ¥0.00": "· cost $0.00", "免费额度": "Free tier", "免费": "Free", "¥0": "$0", "04 — 越用越懂你": "04 — SMARTER WITH YOU", "从你的习惯里，": "From your habits, ", "长出你的工具箱": "your own toolkit", "编码": "Coding", "调试": "Debug", "架构": "Architecture", "文档": "Docs", "数据": "Data", "设计": "Design", "工作画像 · 自动提炼": "WORK PORTRAIT · AUTO-GENERATED", "Debug 高频": "Heavy debugging", "长上下文": "Long context", "PR 与 Issue 直接进入上下文": "PRs & issues straight into context", "按你的团队规范自动审查": "Reviews by your team's rules", "从你的高频改动中提炼": "Learned from your frequent edits", "社区智能体，一键雇佣": "Community agent, hire in one click", "匹配度": "Match", "+ 添加": "+ Add", "✓ 已添加": "✓ Added", "05 — AI 资产 · 一处纳管": "05 — ALL YOUR AI ASSETS", "散落各处的 AI 资产，": "AI assets everywhere? ", "一处纳管": "One home.", "共": "Total", "项资产": "assets", "MCP / Skill / Prompt / Agent 统一收纳": "MCP / Skill / Prompt / Agent, all in one", "按类型分类 · 一搜即得": "Sorted by type · instant search", "一处修改，处处生效": "Edit once, apply everywhere", "重复 ×3": "dup ×3", "重复 ×2": "dup ×2", "版本不一致": "version drift", "忘了放哪": "lost", "重复": "dup", "全部": "All", "SQL 调优": "SQL tuning", "团队规范": "Team rules", "搜索：代码评审、GitHub、测试…": "Search: code review, GitHub, tests…", "搜索全部 AI 资产": "Search all AI assets", "06 — 资源投射": "06 — PROJECTION", "一次沉淀，": "Build once, ", "投射到每个智能体": "project to every agent", "投射门控": "Gate", "已纳管 × 已安装": "managed × installed", "已纳管 · 已安装": "Managed · installed", "未安装 · 跳过": "Not installed · skipped", "+4 资源": "+4 assets", "只投射到已纳管且已安装的目标": "Only to managed & installed targets", "依赖自动级联": "Dependencies cascade", "随时一键取消": "Undo anytime", "已纳管": "Managed", "07 — 游乐场 · 智能体编排": "07 — PLAYGROUND · ORCHESTRATION", "一句话，": "One sentence, ", "调度一支智能体团队": "a whole agent team", "游乐场": "Playground", "· 主 Agent：Claude Code": "· Lead agent: Claude Code", "已拆解为": "Split into", "3 个子任务": "3 subtasks", "，并行派发：": ", dispatched in parallel:", "✓ 全部完成 · 3/3 · 已合并结果": "✓ All done · 3/3 · results merged", "修复登录页 Bug，补齐单元测试，再写一份更新日志": "Fix the login bug, add unit tests, then write a changelog", "修复登录 Bug": "Fix login bug", "补齐单元测试": "Add unit tests", "撰写更新日志": "Write changelog", "修复 Bug": "Fix bugs", "单元测试": "Unit tests", "更新日志 · 远端执行": "Changelog · runs remotely", "主 Agent · 编排": "Lead agent · orchestrates", "✓ 完成": "✓ Done", "运行中…": "Running…", "08 — 共享市场 · 闲置赚钱": "08 — SHARING MARKET · EARN FROM IDLE", "出租闲置模型与智能体，": "Rent out idle AI. ", "人人用上稀缺能力": "Rent rare AI.", "出租方": "Lender", "· 你的设备": "· your device", "闲置中 → 赚钱中": "Idle → Earning", "上架出租 · 对外只公开名片": "FOR RENT · PUBLIC CARD ONLY", "本机保险箱": "Local vault", "✓ 未外传": "✓ Never leaves", "智能体配置": "Config", "任务在本机执行，只回传结果": "Tasks run here; only results go back", "本月出租收益": "This month", "使用方": "Renter", "· 社区用户": "· community user", "按次 · 积分支付": "Pay per use · credits", "✓ 没有订阅，也能用上稀有模型": "✓ Rare models, no subscription needed", "✓ 雇佣专家智能体，直接解决问题": "✓ Hire expert agents to get it done", "Token Bank 共享网络": "Token Bank sharing network", "只传任务与结果": "Only tasks & results cross", "出站连接 · 无需开放端口": "Outbound only · no open ports", "闲置订阅额度": "idle subscription", "内网私有部署": "private deployment", "测试生成专家": "Test-gen expert", "已投射智能体": "projected agent", "租用稀有模型": "RENT A RARE MODEL", "雇佣智能体": "HIRE AN AGENT", "用 claude-opus-4 审查整个仓库的架构": "Use claude-opus-4 to review the whole repo", "「测试生成专家」为支付模块补齐测试": "\"Test-gen expert\" writes tests for payments", "✓ 已获得回答 · 消耗 86 积分": "✓ Answer received · 86 credits", "✓ 已生成 42 个用例 · 消耗 120 积分": "✓ 42 test cases generated · 120 credits", "处理中…": "Processing…", "任务": "TASK", "结果": "RESULT", "积分": "credits", "代码评审": "Code review", "重构助手": "Refactor helper", "测试生成": "Test generator", "社区智能体": "Community agent", "用的明白": "See clearly", "用的节省": "Spend less", "用的简单": "Stay simple", "越用越懂你": "Smarter with you", "闲置赚钱": "Earn from idle", "个人 AI 中枢 · Token 管家": "Personal AI hub · Your token manager", "开源 · 不改使用习惯 · 随时一键还原": "Open source · Keep your workflow · One-click revert", "免费下载": "Free download"};
+const I18N_KEYS = Object.keys(I18N).sort((a, b) => b.length - a.length);
+const L = z => (EN ? (I18N[z] ?? z) : z);
+const tr = L;  // alias for scopes that shadow L with a local (path length / legs())
+function translateDOM(root) {
+  const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const nodes = []; while (w.nextNode()) nodes.push(w.currentNode);
+  for (const n of nodes) {
+    let v = n.nodeValue.replace(/\u00a0/g, ' ');
+    if (!/[\u4e00-\u9fff¥]/.test(v)) continue;
+    v = v.replace(/已用于 (\d+) 个应用/g, (_, k) => `Used in ${k} app${k === '1' ? '' : 's'}`);
+    for (const k of I18N_KEYS) if (v.includes(k)) v = v.split(k).join(I18N[k]);
+    n.nodeValue = v.replace(/¥/g, '$');
+  }
+}
+if (EN) document.documentElement.classList.add('en');
 const DURATION = 78.5;
 const INTRO = 2;  // intro grew from 5s to 7s; everything after it shifts by INTRO
 // Two scenes (资源投射 / 游乐场) are spliced in at 36s; the base timeline resumes at 49s.
@@ -656,7 +682,7 @@ function renderBase(t, rt, t1 = rt) {
       S(el, { op: k * (1 - o), s: lerp(1.22, 1, k) * (1 - .05 * o), blur: (1 - k) * 12, cx: CX, cy: CY - 30 });
     });
     const pi = PAIN_T.findIndex((a, i) => t1 >= a && t1 < a + .7);
-    $('painN').firstElementChild.textContent = pi >= 0 ? `痛点 ${pi + 1} / 6` : '';
+    $('painN').firstElementChild.textContent = pi >= 0 ? `${EN ? 'PAIN POINT' : '痛点'} ${pi + 1} / 6` : '';
     S($('painN'), { op: pi >= 0 ? .85 : 0, cx: CX, cy: 250 });
     const ek = eo5(p(t1, 4.5, 4.8)), c = eio(p(t1, 6.45, 6.95));
     S($('phEnd'), { op: ek * (1 - p(t1, 6.75, 6.95)), s: lerp(1.25, 1, ek) * (1 + .05 * p(t1, 4.5, 6.4)) * (1 - .97 * c), blur: (1 - ek) * 14 + c * 6, cx: CX, cy: CY - 20 });
@@ -710,7 +736,7 @@ function renderBase(t, rt, t1 = rt) {
       tg.style.background = on > .5 ? '#ffc23d' : '#2a2a33';
       kb.style.transform = `translateX(${34 * on}px)`;
       kb.style.background = on > .5 ? '#fff' : '#d8d8e0';
-      el.querySelector('.st').innerHTML = on > .5 ? `${APPS[i].how} · <span style="color:#ffc23d">已纳管</span>` : `${APPS[i].how} · 未纳管`;
+      el.querySelector('.st').innerHTML = on > .5 ? `${tr(APPS[i].how)} · <span style="color:#ffc23d">${tr('已纳管')}</span>` : `${tr(APPS[i].how)} ${tr('· 未纳管')}`;
       const L = +litPaths[i].dataset.len, dk = eio(p(t, TOG[i] + .05, TOG[i] + .55));
       litPaths[i].style.strokeDashoffset = L * (1 - dk);
       litPaths[i].style.opacity = (1 - out) * .9;
@@ -990,8 +1016,8 @@ function renderExtra(t) {
     header($('hg'), t, 42.55, 49.0);
     const ck = eo5(p(t, 42.8, 43.5));
     S($('chat'), { op: ck * (1 - out), y: (1 - ck) * 80 });
-    const tk = p(t, 43.4, 44.4), nch = Math.floor(UTEXT.length * tk);
-    $('utext').textContent = UTEXT.slice(0, Math.max(1, nch)) + (tk < 1 && Math.floor(t * 6) % 2 ? '▍' : '');
+    const tk = p(t, 43.4, 44.4), nch = Math.floor(L(UTEXT).length * tk);
+    $('utext').textContent = L(UTEXT).slice(0, Math.max(1, nch)) + (tk < 1 && Math.floor(t * 6) % 2 ? '▍' : '');
     S($('umsg'), { op: eo(p(t, 43.3, 43.5)), y: (1 - eo(p(t, 43.3, 43.6))) * 16 });
     $('uimg').style.opacity = eo(p(t, 44.3, 44.6));
     S($('plan'), { op: eo(p(t, 44.6, 44.9)), x: (1 - eo(p(t, 44.6, 44.9))) * -20 });
@@ -1000,7 +1026,7 @@ function renderExtra(t) {
       const q = CALLS[i], k = eo5(p(t, q.t - .2, q.t + .2)), fin = t >= doneAt[i];
       S(el, { op: k, x: (1 - k) * -30 });
       const cs = el.querySelector('.cs');
-      cs.textContent = fin ? '✓ 完成' : (t > q.t ? '运行中…' : '');
+      cs.textContent = fin ? L('✓ 完成') : (t > q.t ? L('运行中…') : '');
       cs.style.color = fin ? '#34d399' : '#ffc23d';
       el.style.borderColor = fin ? 'rgba(52,211,153,.35)' : (t > q.t ? 'rgba(255,194,61,.4)' : 'rgba(255,255,255,.07)');
     });
@@ -1086,8 +1112,8 @@ function renderAssets(t) {
   const lk = eo5(p(t, 38.6, 39.3));
   S($('lib'), { op: lk * (1 - out), s: lerp(.92, 1, lk) });
   $('lib').style.boxShadow = `0 40px 100px rgba(0,0,0,.55), 0 0 ${80 * (1 - p(t, 39.0, 40.0)) * lk}px rgba(255,170,30,.35)`;
-  const q = '搜索：代码评审、GitHub、测试…', qk = p(t, 40.4, 41.2);
-  $('libq').textContent = qk > 0 ? q.slice(0, Math.ceil(q.length * qk)) : '搜索全部 AI 资产';
+  const q = L('搜索：代码评审、GitHub、测试…'), qk = p(t, 40.4, 41.2);
+  $('libq').textContent = qk > 0 ? q.slice(0, Math.ceil(q.length * qk)) : L('搜索全部 AI 资产');
   $('libn').textContent = Math.round(72 * eo(p(t, 39.0, 40.2)));
   tabEls.forEach((el, i) => { const k = eo5(p(t, 39.0 + i * .07, 39.4 + i * .07)); S(el, { op: k, y: (1 - k) * 12 }); });
   lcEls.forEach((el, i) => { const k = back(p(t, 39.2 + i * .07, 39.7 + i * .07)); S(el, { op: clamp(k), s: lerp(.7, 1, k) }); el.style.borderColor = qk > 0 && [0, 1, 3].includes(i) ? 'rgba(255,194,61,.55)' : 'rgba(255,255,255,.08)'; });
@@ -1158,7 +1184,7 @@ function renderMarket(t) {
     const running = t > r.t && t < L.res[1];
     el.style.borderColor = t >= L.res[1] ? 'rgba(52,211,153,.4)' : (running ? 'rgba(90,200,250,.45)' : 'rgba(255,255,255,.08)');
     const rres = el.querySelector('.rres');
-    rres.textContent = t >= L.res[1] ? r.res : (running ? '处理中…' : '');
+    rres.textContent = t >= L.res[1] ? tr(r.res) : (running ? tr('处理中…') : '');
     rres.style.color = t >= L.res[1] ? '#34d399' : '#9fd9ff';
     // request packet: right -> left (upper lane), result packet: left -> right (lower lane)
     const pk = (f, y, col, label) => {
@@ -1168,8 +1194,8 @@ function renderMarket(t) {
       mk.fillStyle = '#10131a'; mk.font = '700 16px Inter, "Noto Sans SC"'; mk.textAlign = 'center'; mk.fillText(label, x, y + 6);
     };
     const a = p(t, ...L.req), b = p(t, ...L.res);
-    if (a > 0 && a < 1) pk(eio(a), TUN.y - 26, '#9fd9ff', '任务');
-    if (b > 0 && b < 1) pk(1 - eio(b), TUN.y + 26, '#ffd466', '结果');
+    if (a > 0 && a < 1) pk(eio(a), TUN.y - 26, '#9fd9ff', tr('任务'));
+    if (b > 0 && b < 1) pk(1 - eio(b), TUN.y + 26, '#ffd466', tr('结果'));
     const ex = t > L.exec[0] - .1 && t < L.res[0] + .2;
     const row = lrowEls[r.row];
     if (ex) { row.style.borderColor = 'rgba(255,194,61,.6)'; row.style.background = 'rgba(255,194,61,.1)'; }
@@ -1190,6 +1216,8 @@ function renderMarket(t) {
   S($('rsum'), { op: sk, y: (1 - sk) * 16 });
   mk.globalAlpha = 1;
 }
+
+if (EN) translateDOM($('stage'));  // after every scene has been built
 
 window.DURATION = DURATION;
 window.renderFrame = renderFrame;
