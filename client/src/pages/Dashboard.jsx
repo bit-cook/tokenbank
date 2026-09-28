@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { enrichDashboardBilling, enrichTrendWithSubscriptionCost, enrichAppsUsageBilling, enrichModelCostBilling, resolveBillableSubscriptions } from '../utils/billing-cost';
 import { loadUserAccounts } from '../api/userAccounts';
 import { useLang } from '../store/lang';
@@ -593,55 +592,6 @@ function TrendBars({ mode = 'hourly', data = [], t, fmtCost, fmtN }) {
   );
 }
 
-/**
- * 「帮你省了多少」：免费 / 本地来源承接的调用（按原本请求模型的刊例价估算）+ 无损压缩节省。
- * 没有调用时不显示；有调用但还没省下钱时，引导去网关把应用路由到本地或免费来源。
- */
-function SavingsBanner({ routing, compressionUsd, totalCalls, rangeLabel, fmtCost, t }) {
-  const navigate = useNavigate();
-  const routingUsd = routing?.usd || 0;
-  const total = routingUsd + (compressionUsd || 0);
-  if (!totalCalls) return null;
-  if (total <= 0) {
-    return (
-      <div className="tb-soft-card rounded-2xl px-4 py-3 flex items-center gap-3 flex-wrap">
-        <span className="text-lg">💡</span>
-        <div className="min-w-0 flex-1">
-          <div className="text-xs font-semibold text-zinc-800 dark:text-zinc-100">{t('dashboard.savings.emptyTitle')}</div>
-          <div className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">{t('dashboard.savings.emptyHint')}</div>
-        </div>
-        <button onClick={() => navigate('/gateway')}
-          className="text-xs px-3 py-1.5 rounded-lg bg-blue-500 hover:bg-blue-600 dark:bg-[#3f6699] dark:hover:bg-[#4a73a8] text-white font-medium transition-colors shrink-0">
-          {t('dashboard.savings.goRoute')}
-        </button>
-      </div>
-    );
-  }
-  return (
-    <div className="rounded-2xl px-5 py-4 border border-emerald-200/80 dark:border-emerald-800/50 bg-gradient-to-r from-emerald-50 to-amber-50/60 dark:from-emerald-900/20 dark:to-amber-900/10 flex items-center gap-5 flex-wrap">
-      <div>
-        <div className="text-[11px] text-emerald-700/80 dark:text-emerald-300/80">{t('dashboard.savings.title', { range: rangeLabel })}</div>
-        <div className="text-[2rem] font-bold leading-none tabular-nums tracking-tight mt-1.5 text-emerald-600 dark:text-emerald-400">{fmtCost(total)}</div>
-      </div>
-      <div className="flex gap-5 flex-wrap text-[11px] text-zinc-600 dark:text-zinc-300">
-        {routingUsd > 0 && (
-          <div>
-            <div className="font-semibold tabular-nums text-sm text-zinc-800 dark:text-zinc-100">{fmtCost(routingUsd)}</div>
-            <div className="mt-0.5">{t('dashboard.savings.routing', { n: (routing?.calls || 0).toLocaleString() })}</div>
-          </div>
-        )}
-        {compressionUsd > 0 && (
-          <div>
-            <div className="font-semibold tabular-nums text-sm text-zinc-800 dark:text-zinc-100">{fmtCost(compressionUsd)}</div>
-            <div className="mt-0.5">{t('dashboard.savings.compression')}</div>
-          </div>
-        )}
-      </div>
-      <div className="ml-auto text-[10.5px] text-zinc-400 dark:text-zinc-500 max-w-[280px] leading-snug">{t('dashboard.savings.note')}</div>
-    </div>
-  );
-}
-
 export default function Dashboard() {
   const { t } = useLang();
   const { fmtCost } = useCurrency();
@@ -797,15 +747,6 @@ export default function Dashboard() {
         </div>
         <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5">{t('dashboard.subtitle')}</p>
       </div>
-
-      <SavingsBanner
-        routing={localData?.routing_savings}
-        compressionUsd={compStats?.saved_usd || 0}
-        totalCalls={totalCalls}
-        rangeLabel={rangeLabel}
-        fmtCost={fmtCost}
-        t={t}
-      />
 
       {/* Summary cards — 5列 */}
       <div className="grid grid-cols-5 gap-2.5">

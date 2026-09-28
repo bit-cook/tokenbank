@@ -15,7 +15,7 @@ let _insertToolCallStmt = null;
 let _deleteToolCallsByPathStmt = null;
 
 // 盘点费用口径：仅 api-key 计费 + provider 刊例价（无刊例价则为 0）
-const { estimatePaygCost, estimateCost, estimateListCost } = require('./pricing');
+const { estimatePaygCost, estimateCost } = require('./pricing');
 const { resolvePricingProviderId } = require('./billing-config');
 const { filterRankableModels } = require('../shared/model-rank');
 
@@ -64,36 +64,6 @@ function _queryPaygCostMaps(where, params) {
     return { total, byModel, byProviderTier };
   } catch (e) {
     console.error('[local-stats] _queryPaygCostMaps failed:', e.message);
-    return empty;
-  }
-}
-
-/**
- * 路由节省：由免费 / 本地来源承接的网关请求，按客户端原本请求的模型刊例价估算
- * （老数据没有 requested_model 时退回实际模型）。认不出刊例价的模型按 0 计。
- */
-function _queryRoutingSavings(since) {
-  const empty = { usd: 0, calls: 0, tokens: 0 };
-  if (!db) return empty;
-  try {
-    const rows = db.prepare(
-      `SELECT requested_model, model, COUNT(*) AS calls,
-        SUM(input_tokens) AS inTok, SUM(output_tokens) AS outTok,
-        SUM(cache_create_tokens) AS cCreate, SUM(cache_read_tokens) AS cRead
-       FROM requests WHERE ts >= ? AND tier = 'free' AND data_source = 'proxy'
-         AND (status_code IS NULL OR status_code < 400)
-       GROUP BY requested_model, model`
-    ).all(since);
-    let usd = 0, calls = 0, tokens = 0;
-    for (const r of rows) {
-      const ref = r.requested_model || r.model;
-      usd += estimateListCost(ref, r.inTok || 0, r.outTok || 0, r.cCreate || 0, r.cRead || 0);
-      calls += r.calls || 0;
-      tokens += (r.inTok || 0) + (r.outTok || 0) + (r.cCreate || 0) + (r.cRead || 0);
-    }
-    return { usd, calls, tokens };
-  } catch (e) {
-    console.error('[local-stats] _queryRoutingSavings failed:', e.message);
     return empty;
   }
 }
@@ -1318,7 +1288,6 @@ function queryDashboard(days = 1) {
       cost_usd: paygAll.byProviderTier[`${r.provider_id}|${r.tier || ''}`] || 0,
     })),
     payg_usage_cost: paygAll.total,
-    routing_savings: _queryRoutingSavings(since),
     avg_latency_ms: latRow?.avg_ms ? Math.round(latRow.avg_ms) : null,
     model_provider_latency: queryModelProviderLatency(since),
   };
@@ -1332,7 +1301,6 @@ function _empty() {
     daily: [],
     models: [], keys: [], providers: [], agent_sources: [],
     payg_usage_cost: 0,
-    routing_savings: { usd: 0, calls: 0, tokens: 0 },
     avg_latency_ms: null,
     model_provider_latency: {},
   };
