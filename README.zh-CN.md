@@ -6,9 +6,9 @@
 >
 > 开源 · 不改使用习惯 · 随时一键还原
 
-[官网](https://tokenbank.wink.run) · [免费下载](https://github.com/wink-run/tokenbank/releases/latest) · [▶ 78 秒宣传片](./server/static/video/tokenbank-promo.mp4) · [English](./README.md) · [架构文档](./DESIGN.md) · [隐私政策](./docs/PRIVACY_POLICY.md)
+[官网](https://tokenbank.wink.run) · [免费下载](https://github.com/wink-run/tokenbank/releases/latest) · [▶ YouTube 观看](https://www.youtube.com/watch?v=AYLIdneVEgc) · [English](./README.md) · [架构文档](./DESIGN.md) · [隐私政策](./docs/PRIVACY_POLICY.md)
 
-[![78 秒看懂 Token Bank](./server/static/video/tokenbank-promo-poster.jpg)](./server/static/video/tokenbank-promo.mp4)
+<iframe width="560" height="315" src="https://www.youtube.com/embed/AYLIdneVEgc?si=d2wfuuvXrKem73oy" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
 
 ---
 

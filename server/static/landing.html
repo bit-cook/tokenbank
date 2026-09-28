@@ -304,10 +304,7 @@
           <h2 data-i18n="film.title" style="margin:0;font-family:'Playfair Display','Noto Serif SC',serif;font-weight:400;font-size:34px;line-height:1.2;color:#fff;">Token Bank in 78 seconds.</h2>
           <span data-i18n="film.sub" style="font-size:14px;color:#9a9a9a;">Six pain points, eight features, one hub.</span>
         </div>
-        <video id="tb-film" controls playsinline preload="none" poster="/static/video/tokenbank-promo-en-poster.jpg" src="/static/video/tokenbank-promo-en.mp4"
-          data-src-en="/static/video/tokenbank-promo-en.mp4" data-src-zh="/static/video/tokenbank-promo.mp4"
-          data-poster-en="/static/video/tokenbank-promo-en-poster.jpg" data-poster-zh="/static/video/tokenbank-promo-poster.jpg"
-          style="display:block;width:100%;aspect-ratio:16/9;border-radius:22px;background:#111;"></video>
+        <iframe width="560" height="315" src="https://www.youtube.com/embed/AYLIdneVEgc?si=d2wfuuvXrKem73oy" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen style="display:block;width:100%;height:auto;aspect-ratio:16/9;border:0;border-radius:22px;background:#111;"></iframe>
       </div>
     </div>
   </section>
@@ -1341,11 +1338,6 @@ class Component extends DCLogic {
       if (isHtml) el.innerHTML = val; else el.textContent = val;
     });
     try { root.setAttribute('lang', lang === 'zh' ? 'zh-CN' : 'en'); } catch (e) {}
-    const film = root.querySelector('#tb-film');
-    if (film) {
-      const want = lang === 'zh' ? film.dataset.srcZh : film.dataset.srcEn;
-      if (film.getAttribute('src') !== want) { film.setAttribute('src', want); film.setAttribute('poster', lang === 'zh' ? film.dataset.posterZh : film.dataset.posterEn); }
-    }
     const heroImg = root.querySelector('#tb-hero-dashboard[data-src-zh]');
     if (heroImg) heroImg.src = lang === 'zh' ? heroImg.dataset.srcZh : heroImg.dataset.srcEn;
     // 预览区说明随语言刷新（保持当前 tab）
