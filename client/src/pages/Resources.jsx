@@ -9,8 +9,10 @@ import ResourceAssetCard, {
   ASSET_BTN_MANAGED,
   ASSET_BTN_PRIMARY,
   AssetLogo,
+  AssetMoreMenu,
   buildPreviewText,
   resourceDescription,
+  shortenHomePath,
 } from '../components/ResourceAssetCard';
 import { useLang } from '../store/lang';
 import { getSyncServerBase } from '../config';
@@ -2360,47 +2362,30 @@ export default function Resources() {
     || typeFilter === 'assistant';
 
   /** 已纳管列表上方的主公筛选：图标 + 名称（Skill / Prompt / 智能体） */
+  /** 来源应用筛选：紧凑下拉（原整行应用胶囊），与类型 / 排序同一行 */
   function renderAppFilter() {
     if (!showAppFilterBar || appFilterOptions.length <= 1) return null;
+    const current = appFilterOptions.find(o => (o.id || '') === (effectiveAppFilter || ''));
     return (
-      <div className="flex flex-wrap gap-2">
-          {appFilterOptions.map(opt => {
-            const active = effectiveAppFilter === opt.id;
-            return (
-              <button
-                key={opt.id || 'all'}
-                type="button"
-                onClick={() => changeAppFilter(opt.id)}
-                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full transition-colors ${
-                  active
-                    ? 'tb-soft-bubble !rounded-full text-zinc-900 dark:text-zinc-100'
-                    : 'tb-soft-tile !rounded-full'
-                }`}
-              >
-                {opt.id ? (
-                  <ServiceIcon
-                    id={opt.id}
-                    name={opt.label}
-                    boxClass="w-5 h-5"
-                    imgClass="w-3 h-3"
-                    className="!rounded-md"
-                  />
-                ) : (
-                  <ServiceIcon
-                    icon="◫"
-                    name={opt.label}
-                    boxClass="w-5 h-5"
-                    imgClass="w-3 h-3"
-                    className="!rounded-md"
-                  />
-                )}
-                <span className={`text-xs font-medium ${active ? 'text-sky-800 dark:text-sky-200' : 'text-zinc-700 dark:text-zinc-300'}`}>
-                  {opt.label}
-                </span>
-              </button>
-            );
-          })}
-      </div>
+      <label className={`tb-glass-chip inline-flex items-center gap-1.5 rounded-lg pl-2 pr-1 py-0.5 ${effectiveAppFilter ? 'ring-1 ring-sky-300/70 dark:ring-sky-700/70' : ''}`}>
+        <ServiceIcon
+          {...(current?.id ? { id: current.id } : { icon: '◫' })}
+          name={current?.label || ''}
+          boxClass="w-4 h-4"
+          imgClass="w-2.5 h-2.5"
+          className="!rounded"
+        />
+        <select
+          value={effectiveAppFilter || ''}
+          onChange={e => changeAppFilter(e.target.value)}
+          aria-label={t('resources.appFilterLabel')}
+          className="bg-transparent text-xs text-zinc-700 dark:text-zinc-200 py-1 pr-1 focus:outline-none cursor-pointer"
+        >
+          {appFilterOptions.map(opt => (
+            <option key={opt.id || 'all'} value={opt.id || ''}>{opt.label}</option>
+          ))}
+        </select>
+      </label>
     );
   }
 
@@ -2450,7 +2435,11 @@ export default function Resources() {
   function renderTagFilter() {
     if (availableTags.length === 0 && purposeOther <= 0) return null;
     return (
-      <div className="flex flex-wrap items-center gap-1.5" title={t('resources.tagFilterHint')}>
+      <div
+        className="flex flex-nowrap items-center gap-1.5 overflow-x-auto -mx-1 px-1 pb-0.5 [&>button]:shrink-0 [&>button]:whitespace-nowrap"
+        style={{ scrollbarWidth: 'none', maskImage: 'linear-gradient(to right, #000 92%, transparent)', WebkitMaskImage: 'linear-gradient(to right, #000 92%, transparent)' }}
+        title={t('resources.tagFilterHint')}
+      >
         <button
           type="button"
           onClick={() => setTagFilter('')}
@@ -2574,13 +2563,22 @@ export default function Resources() {
                   title={item.authorityPath}
                   onClick={() => handleOpenPath(item.authorityPath)}
                 >
-                  {item.authorityPath}
+                  {shortenHomePath(item.authorityPath)}
                 </button>
               </p>
             )}
-            {/* 用途：扫描后自动打标，此处仅展示并可点选筛选 */}
-            {purposes.length > 0 && (
-              <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
+            {/* 投射到的应用 + 用途（点选即筛选）合并一行，减少卡片高度 */}
+            {(item.resourceId || purposes.length > 0) && (
+              <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                {item.resourceId && renderProjections({
+                  id: item.resourceId,
+                  type: 'skill',
+                  projections: item.projections,
+                  authorityPath: item.authorityPath,
+                }, { inline: true })}
+                {purposes.length > 0 && item.resourceId && (
+                  <span className="w-px h-3 bg-zinc-200 dark:bg-zinc-700 mx-0.5" aria-hidden />
+                )}
                 {purposes.map(slug => (
                   <button
                     key={slug}
@@ -2594,31 +2592,10 @@ export default function Resources() {
                 ))}
               </div>
             )}
-            {item.resourceId && renderProjections({
-              id: item.resourceId,
-              type: 'skill',
-              projections: item.projections,
-              authorityPath: item.authorityPath,
-            })}
           </>
         )}
         actions={item.resourceId ? (
           <>
-            <button
-              type="button"
-              disabled={!!busy && busy !== `rec-${item.resourceId}` && busy !== item.resourceId}
-              onClick={() => handleRecommendToCommunity(item)}
-              className={ASSET_BTN_GHOST}
-              title={isPushedToCommunity(item, catalog) || isPushedToCommunity(resourcesById.get(item.resourceId), catalog)
-                ? t('resources.pushedCommunityHint')
-                : t('resources.recommendHint')}
-            >
-              {busy === `rec-${item.resourceId}`
-                ? t('resources.busy')
-                : (isPushedToCommunity(item, catalog) || isPushedToCommunity(resourcesById.get(item.resourceId), catalog)
-                  ? t('resources.pushedCommunity')
-                  : t('resources.recommendCommunity'))}
-            </button>
             <button
               type="button"
               disabled={!!busy && busy !== item.resourceId}
@@ -2627,32 +2604,52 @@ export default function Resources() {
             >
               {busy === item.resourceId ? t('resources.busy') : t('resources.project')}
             </button>
-            <button
-              type="button"
-              disabled={!!busy && busy !== item.resourceId}
-              onClick={() => handleUninstallSkill(item)}
-              className="text-xs px-3 py-1.5 rounded-lg border border-red-200/90 text-red-600 hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-950/30 disabled:opacity-45 transition active:scale-[0.98]"
-              title={hasProjectedLinks(item.projections, item.authorityPath || getSkillLocation(item))
-                ? t('resources.uninstallForceConfirm', { name: item.display_name || item.name })
-                : undefined}
-            >
-              {busy === item.resourceId ? t('resources.busy') : t('resources.uninstall')}
-            </button>
+            <AssetMoreMenu
+              label={t('resources.moreActions')}
+              items={[
+                {
+                  key: 'rec',
+                  label: busy === `rec-${item.resourceId}`
+                    ? t('resources.busy')
+                    : (isPushedToCommunity(item, catalog) || isPushedToCommunity(resourcesById.get(item.resourceId), catalog)
+                      ? t('resources.pushedCommunity')
+                      : t('resources.recommendCommunity')),
+                  title: isPushedToCommunity(item, catalog) || isPushedToCommunity(resourcesById.get(item.resourceId), catalog)
+                    ? t('resources.pushedCommunityHint')
+                    : t('resources.recommendHint'),
+                  disabled: !!busy && busy !== `rec-${item.resourceId}` && busy !== item.resourceId,
+                  onClick: () => handleRecommendToCommunity(item),
+                },
+                item.authorityPath && {
+                  key: 'open',
+                  label: t('resources.openFolder'),
+                  onClick: () => handleOpenPath(item.authorityPath),
+                },
+                {
+                  key: 'uninstall',
+                  label: t('resources.uninstall'),
+                  danger: true,
+                  disabled: !!busy && busy !== item.resourceId,
+                  onClick: () => handleUninstallSkill(item),
+                },
+              ]}
+            />
           </>
         ) : null}
       />
     );
   }
 
-  function renderProjections(resource) {
+  function renderProjections(resource, { inline = false } = {}) {
     // 只展示真实 Agent 应用的投射；.agents / custom 等公共目录不显示为应用标签
     const projs = (resource.projections || []).filter(p => isAgentAppId(p.agentId));
     const authorityPath = resource.authorityPath || getSkillLocation(resource);
     if (!projs.length) {
       return <span className="text-[10px] text-zinc-400">{t('resources.notProjected')}</span>;
     }
+    const Wrap = inline ? React.Fragment : 'div';
     return (
-      <div className="flex flex-wrap gap-1.5 mt-1">
+      <Wrap {...(inline ? {} : { className: 'flex flex-wrap gap-1.5 mt-1' })}>
         {projs.map(p => {
           // 权威源唯一不可取消；其它软链/副本/多余实体均可 ×
           const canUnproject = canUnprojectProjection(p, authorityPath);
@@ -2704,7 +2701,7 @@ export default function Resources() {
             </span>
           );
         })}
-      </div>
+      </Wrap>
     );
   }
 
@@ -2790,13 +2787,7 @@ export default function Resources() {
                   </span>
                 );
               }
-              if (life.layer === 'shelf') {
-                return (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-400 whitespace-nowrap">
-                    {t('resources.layer.shelf')}
-                  </span>
-                );
-              }
+              // shelf（未投射）不再单独标：下方投射行已显示「未投射到应用」
               return null;
             })()}
             {/* 智能体声明的 prompt 目录与本机均无 → 依赖缺失（skill 可执行时自装，不标） */}
@@ -2824,16 +2815,21 @@ export default function Resources() {
                     title={loc}
                     onClick={() => handleOpenPath(loc)}
                   >
-                    {loc}
+                    {shortenHomePath(loc)}
                   </button>
                 ) : (
                   t('resources.skillLocationPending')
                 )}
               </p>
             )}
-            {purposesOf(resource).length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-2.5">
-                {purposesOf(resource).map(slug => (
+            {(!catalogMode || purposesOf(resource).length > 0) && (
+            <div className="flex flex-wrap items-center gap-1.5 mt-2">
+              {!catalogMode && renderProjections(resource, { inline: true })}
+              {!catalogMode && purposesOf(resource).length > 0 && (
+                <span className="w-px h-3 bg-zinc-200 dark:bg-zinc-700 mx-0.5" aria-hidden />
+              )}
+              {purposesOf(resource).length > 0 && (
+                purposesOf(resource).map(slug => (
                   <button
                     key={slug}
                     type="button"
@@ -2843,10 +2839,10 @@ export default function Resources() {
                   >
                     {purposeLabel(slug)}
                   </button>
-                ))}
-              </div>
+                ))
+              )}
+            </div>
             )}
-            {!catalogMode && renderProjections(resource)}
           </>
         )}
         actions={catalogMode ? (
@@ -2864,34 +2860,6 @@ export default function Resources() {
           </button>
         ) : (
           <>
-            {(resource.type === 'skill' || resource.type === 'prompt' || resource.type === 'assistant')
-              && resource.source !== 'builtin'
-              && !resource.metadata?.builtin
-              && !isBuiltinResource(resource) && (
-              <button
-                type="button"
-                className={ASSET_BTN_GHOST}
-                disabled={!!busy && busy !== `rec-${resource.id}`}
-                onClick={() => handleRecommendToCommunity(resource)}
-                title={isPushedToCommunity(resource, catalog)
-                  ? t('resources.pushedCommunityHint')
-                  : t('resources.recommendHint')}
-              >
-                {busy === `rec-${resource.id}`
-                  ? t('resources.busy')
-                  : (isPushedToCommunity(resource, catalog)
-                    ? t('resources.pushedCommunity')
-                    : t('resources.recommendCommunity'))}
-              </button>
-            )}
-            <button
-              type="button"
-              className={ASSET_BTN_GHOST}
-              onClick={() => openEditEditor(resource)}
-              disabled={busy === 'editor' || busy === 'cleanup'}
-            >
-              {t('resources.edit')}
-            </button>
             <button
               type="button"
               disabled={!!busy && busy !== resource.id}
@@ -2900,19 +2868,46 @@ export default function Resources() {
             >
               {busy === resource.id ? t('resources.busy') : t('resources.project')}
             </button>
-            {resource.source !== 'builtin' && !resource.metadata?.builtin && (
-              <button
-                type="button"
-                disabled={!!busy && busy !== resource.id}
-                onClick={() => handleDelete(resource)}
-                className="text-xs px-3 py-1.5 rounded-lg border border-red-200/90 text-red-600 hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-950/30 disabled:opacity-45 transition active:scale-[0.98]"
-                title={resource.type === 'assistant' && hasProjectedLinks(resource.projections, resource.authorityPath || getSkillLocation(resource))
-                  ? t('resources.deleteNeedUnproject')
-                  : undefined}
-              >
-                {t('resources.delete')}
-              </button>
-            )}
+            <AssetMoreMenu
+              label={t('resources.moreActions')}
+              items={[
+                {
+                  key: 'edit',
+                  label: t('resources.edit'),
+                  disabled: busy === 'editor' || busy === 'cleanup',
+                  onClick: () => openEditEditor(resource),
+                },
+                (resource.type === 'skill' || resource.type === 'prompt' || resource.type === 'assistant')
+                  && !builtin && resource.source !== 'builtin' && !resource.metadata?.builtin && {
+                  key: 'rec',
+                  label: busy === `rec-${resource.id}`
+                    ? t('resources.busy')
+                    : (isPushedToCommunity(resource, catalog)
+                      ? t('resources.pushedCommunity')
+                      : t('resources.recommendCommunity')),
+                  title: isPushedToCommunity(resource, catalog)
+                    ? t('resources.pushedCommunityHint')
+                    : t('resources.recommendHint'),
+                  disabled: !!busy && busy !== `rec-${resource.id}`,
+                  onClick: () => handleRecommendToCommunity(resource),
+                },
+                loc && {
+                  key: 'open',
+                  label: t('resources.openFolder'),
+                  onClick: () => handleOpenPath(loc),
+                },
+                resource.source !== 'builtin' && !resource.metadata?.builtin && {
+                  key: 'delete',
+                  label: t('resources.delete'),
+                  danger: true,
+                  title: resource.type === 'assistant' && hasProjectedLinks(resource.projections, resource.authorityPath || getSkillLocation(resource))
+                    ? t('resources.deleteNeedUnproject')
+                    : undefined,
+                  disabled: !!busy && busy !== resource.id,
+                  onClick: () => handleDelete(resource),
+                },
+              ]}
+            />
           </>
         )}
       />
@@ -3010,7 +3005,6 @@ export default function Resources() {
       if (showAppFilterBar && effectiveAppFilter && (discovered.length > 0 || resources.length > 0)) {
         return (
           <div className="space-y-3">
-            {renderAppFilter()}
             <div className="text-center py-10 space-y-2">
               <p className="text-xs text-zinc-400">{t('resources.emptyDiscoveredFiltered')}</p>
               <button type="button" onClick={() => changeAppFilter('')} className="text-xs text-blue-600 hover:underline">
@@ -3023,7 +3017,6 @@ export default function Resources() {
       if (tagFilter && (discovered.length > 0 || resources.length > 0)) {
         return (
           <div className="space-y-3">
-            {showAppFilterBar && renderAppFilter()}
             <div className="text-center py-10 space-y-2">
               <p className="text-xs text-zinc-400">{t('resources.emptyTagFiltered')}</p>
               <button type="button" onClick={() => setTagFilter('')} className="text-xs text-blue-600 hover:underline">
@@ -3037,7 +3030,6 @@ export default function Resources() {
       if (layerFilter && resourcesInType.length > 0) {
         return (
           <div className="space-y-3">
-            {showAppFilterBar && renderAppFilter()}
             <div className="text-center py-10 space-y-2">
               <p className="text-xs text-zinc-400">{t('resources.emptyLayerFiltered')}</p>
               <button type="button" onClick={() => changeLayerFilter('')} className="text-xs text-blue-600 hover:underline">
@@ -3049,7 +3041,6 @@ export default function Resources() {
       }
       return (
         <div className="space-y-3">
-          {showAppFilterBar && renderAppFilter()}
           <div className="text-center py-10 space-y-2">
             <p className="text-xs text-zinc-400">{t('resources.emptyManaged')}</p>
             <button type="button" onClick={() => changeViewTab('recommend')} className="text-xs text-blue-600 hover:underline">
@@ -3062,20 +3053,16 @@ export default function Resources() {
 
     return (
       <div className="space-y-3">
-        {showAppFilterBar && renderAppFilter()}
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          {showSkills && scanStats ? (
-            <p className="text-[11px] text-zinc-400">
-              {t('resources.syncSummary', { n: scanStats.totalOnDisk })}
-              {effectiveAppFilter && (
-                <span className="ml-2 opacity-80">
-                  {t('resources.discoveredFilteredCount', { n: skillRows.length })}
-                </span>
-              )}
-            </p>
-          ) : <span />}
-          {renderListSort()}
-        </div>
+        {showSkills && scanStats && (
+          <p className="text-[11px] text-zinc-400">
+            {t('resources.syncSummary', { n: scanStats.totalOnDisk })}
+            {effectiveAppFilter && (
+              <span className="ml-2 opacity-80">
+                {t('resources.discoveredFilteredCount', { n: skillRows.length })}
+              </span>
+            )}
+          </p>
+        )}
         <div className="space-y-3">
           {[
             ...managedRows.map((item) => ({
@@ -3212,54 +3199,6 @@ export default function Resources() {
       </header>
 
       <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3.5 space-y-3.5">
-        {/* 类型筛选：与 Playground 分段同系 */}
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="tb-glass-chip inline-flex flex-wrap rounded-2xl p-1 gap-0.5">
-            {TYPE_OPTIONS.map(opt => (
-              <button
-                key={opt.id || 'all'}
-                type="button"
-                onClick={() => {
-                  changeTypeFilter(opt.id);
-                  if (opt.id !== 'prompt') setPromptKindFilter('');
-                }}
-                className={`tb-press text-xs px-3 py-1.5 rounded-xl transition-colors ${
-                  typeFilter === opt.id
-                    ? 'bg-white/80 dark:bg-white/10 text-zinc-900 dark:text-zinc-100 shadow-sm'
-                    : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
-                }`}
-              >
-                {t(opt.labelKey)}
-              </button>
-            ))}
-          </div>
-          {/* 提示词：文本 / 图片 子分类 */}
-          {typeFilter === 'prompt' && (
-            <div className="tb-glass-chip inline-flex rounded-lg p-0.5 gap-0.5">
-              {[
-                { id: '', labelKey: 'resources.promptKind.all' },
-                { id: 'text', labelKey: 'resources.promptKind.text' },
-                { id: 'image', labelKey: 'resources.promptKind.image' },
-              ].map(opt => (
-                <button
-                  key={opt.id || 'kind-all'}
-                  type="button"
-                  onClick={() => setPromptKindFilter(opt.id)}
-                  className={`tb-press text-xs px-2.5 py-1.5 rounded-md transition-colors ${
-                    promptKindFilter === opt.id
-                      ? 'bg-white/80 dark:bg-white/10 text-zinc-900 dark:text-zinc-100 font-semibold'
-                      : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-100'
-                  }`}
-                >
-                  {t(opt.labelKey)}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        {/* 标签筛选：目录 + 已纳管聚合 */}
-        {renderTagFilter()}
-
         {/* 子 Tab + 搜索 + 操作 */}
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-2">
@@ -3279,11 +3218,11 @@ export default function Resources() {
                   }`}
                 >
                   {tab.label}
-                  {tab.count != null && <span className="ml-1 opacity-60">({tab.count})</span>}
+                  {tab.count != null && <span className="ml-1 opacity-60 tabular-nums">{tab.count}</span>}
                 </button>
               ))}
             </div>
-            <div className="relative flex-1 min-w-[160px] max-w-xs">
+            <div className="relative flex-1 min-w-[160px] max-w-md">
               <input
                 type="text"
                 value={query}
@@ -3338,21 +3277,62 @@ export default function Resources() {
                 <span className="ml-1 opacity-60">{scanExpanded ? '▴' : '▾'}</span>
               </button>
             )}
-            {viewTab === 'managed' && (
-              <button
-                type="button"
-                disabled={busy === 'cleanup' || idleLoading}
-                onClick={openSkillCleanup}
-                className="tb-press text-xs px-3 py-1.5 rounded-lg border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/20 disabled:opacity-50"
-              >
-                {idleLoading ? t('resources.cleanupScanning') : t('resources.cleanup')}
-              </button>
-            )}
           </div>
 
+          {/* 第二行：类型 + 来源应用 + 排序（同一行，低权重） */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="tb-glass-chip inline-flex flex-wrap rounded-2xl p-1 gap-0.5">
+              {TYPE_OPTIONS.map(opt => (
+                <button
+                  key={opt.id || 'all'}
+                  type="button"
+                  onClick={() => {
+                    changeTypeFilter(opt.id);
+                    if (opt.id !== 'prompt') setPromptKindFilter('');
+                  }}
+                  className={`tb-press text-xs px-3 py-1.5 rounded-xl transition-colors ${
+                    typeFilter === opt.id
+                      ? 'bg-white/80 dark:bg-white/10 text-zinc-900 dark:text-zinc-100 shadow-sm'
+                      : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
+                  }`}
+                >
+                  {t(opt.labelKey)}
+                </button>
+              ))}
+            </div>
+            {/* 提示词：文本 / 图片 子分类 */}
+            {typeFilter === 'prompt' && (
+              <div className="tb-glass-chip inline-flex rounded-lg p-0.5 gap-0.5">
+                {[
+                  { id: '', labelKey: 'resources.promptKind.all' },
+                  { id: 'text', labelKey: 'resources.promptKind.text' },
+                  { id: 'image', labelKey: 'resources.promptKind.image' },
+                ].map(opt => (
+                  <button
+                    key={opt.id || 'kind-all'}
+                    type="button"
+                    onClick={() => setPromptKindFilter(opt.id)}
+                    className={`tb-press text-xs px-2.5 py-1.5 rounded-md transition-colors ${
+                      promptKindFilter === opt.id
+                        ? 'bg-white/80 dark:bg-white/10 text-zinc-900 dark:text-zinc-100 font-semibold'
+                        : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-100'
+                    }`}
+                  >
+                    {t(opt.labelKey)}
+                  </button>
+                ))}
+              </div>
+            )}
+            {viewTab === 'managed' && renderAppFilter()}
+            {viewTab === 'managed' && <div className="ml-auto">{renderListSort()}</div>}
+          </div>
+
+          {/* 第三行：用途（单行横向滚动，不再占两行） */}
+          {renderTagFilter()}
           {/* Hit-or-Exit：分段筛选 + 紧凑轻推芯片 */}
           {viewTab === 'managed' && (
             <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
               <div
                 className="inline-flex flex-wrap gap-0.5 p-0.5 rounded-xl border border-zinc-200/70 dark:border-zinc-700/70 bg-zinc-100/70 dark:bg-zinc-900/60"
                 role="tablist"
@@ -3387,33 +3367,47 @@ export default function Resources() {
                     </button>
                   ))}
               </div>
+              <button
+                type="button"
+                disabled={busy === 'cleanup' || idleLoading}
+                onClick={openSkillCleanup}
+                title={t('resources.cleanupTitle')}
+                className="tb-press ml-auto text-xs px-2.5 py-1 rounded-lg text-zinc-500 hover:text-amber-700 dark:hover:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/20 disabled:opacity-50"
+              >
+                {idleLoading ? t('resources.cleanupScanning') : t('resources.cleanup')}
+              </button>
+              </div>
 
               {lifecycleNudges.length > 0 && (
-                <div className="rounded-lg border border-amber-200/80 dark:border-amber-800/60 bg-amber-50/70 dark:bg-amber-950/30 px-3 py-2 space-y-1.5">
-                  <p className="text-[11px] text-amber-800 dark:text-amber-200">
+                <div className="rounded-xl border border-zinc-200/80 dark:border-zinc-700/70 bg-white/50 dark:bg-zinc-900/40 px-3 py-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                  <p className="text-[11px] text-zinc-600 dark:text-zinc-300 flex items-center gap-1.5 shrink-0">
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-400" aria-hidden />
                     {t('resources.layer.nudgeBanner', { n: lifecycleNudges.length })}
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     {lifecycleNudges.map(({ r, life }) => (
-                      <button
+                      <span
                         key={r.id}
-                        type="button"
-                        disabled={busy === `cold-${r.id}`}
-                        onClick={() => {
-                          if (life.nudge === 'invoke') copyInvokeFor(r);
-                          else handleUnprojectAll(r);
-                        }}
-                        className="tb-press text-[10px] px-2 py-0.5 rounded-md bg-white/80 dark:bg-zinc-900/60 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-100 disabled:opacity-50"
-                        title={r.display_name || r.name}
+                        className="inline-flex items-center rounded-md border border-zinc-200 dark:border-zinc-700 bg-white/80 dark:bg-zinc-900/60 text-[11px] overflow-hidden"
                       >
-                        {r.display_name || r.name}
-                        {' · '}
-                        {life.nudge === 'invoke'
-                          ? t('resources.layer.nudgeInvoke')
-                          : life.nudge === 'unproject'
-                            ? t('resources.layer.nudgeUnproject')
-                            : t('resources.layer.nudgeCold')}
-                      </button>
+                        <span className="px-2 py-0.5 text-zinc-700 dark:text-zinc-200 max-w-[12rem] truncate" title={r.display_name || r.name}>
+                          {r.display_name || r.name}
+                        </span>
+                        <button
+                          type="button"
+                          disabled={busy === `cold-${r.id}`}
+                          onClick={() => {
+                            if (life.nudge === 'invoke') copyInvokeFor(r);
+                            else handleUnprojectAll(r);
+                          }}
+                          title={life.nudge === 'invoke' ? t('resources.layer.nudgeInvokeHint') : t('resources.layer.nudgeUnprojectHint')}
+                          className="tb-press px-2 py-0.5 border-l border-zinc-200 dark:border-zinc-700 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 disabled:opacity-50"
+                        >
+                          {life.nudge === 'invoke'
+                            ? t('resources.layer.nudgeInvoke')
+                            : t('resources.layer.nudgeUnproject')}
+                        </button>
+                      </span>
                     ))}
                   </div>
                 </div>

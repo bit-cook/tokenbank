@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 /** 类型色板:推荐 / 已纳管 / 目录卡片共用(与 Resources 原视觉一致) */
 export function typeVisual(type) {
@@ -216,7 +217,99 @@ export function AssetLogo({ type, icon, name }) {
 }
 
 export const ASSET_CARD_CLASS =
-  'tb-soft-tile group rounded-2xl p-4';
+  'tb-soft-tile group rounded-2xl px-4 py-3.5';
+
+/** 路径展示：把用户主目录折叠成 ~，完整路径放 title */
+export function shortenHomePath(p) {
+  return String(p || '').replace(/^(\/Users\/[^/]+|\/home\/[^/]+|[A-Za-z]:\\Users\\[^\\]+)/, '~');
+}
+
+/**
+ * 卡片「⋯」更多菜单：低频 / 危险操作收纳于此，卡片只露出主操作。
+ * 菜单 portal 到 body 并按按钮位置 fixed 定位（列表滚动容器会裁切 absolute 弹层），空间不足时向上弹出。
+ * items: [{ key, label, onClick, danger?, disabled?, title? }]
+ */
+export function AssetMoreMenu({ items, label = 'More' }) {
+  const [pos, setPos] = useState(null);
+  const btnRef = useRef(null);
+  const menuRef = useRef(null);
+  const list = (items || []).filter(Boolean);
+
+  useEffect(() => {
+    if (!pos) return undefined;
+    const close = (e) => {
+      if (menuRef.current?.contains(e.target) || btnRef.current?.contains(e.target)) return;
+      setPos(null);
+    };
+    const onKey = (e) => { if (e.key === 'Escape') setPos(null); };
+    const onScroll = () => setPos(null);
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', onScroll);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', onScroll);
+    };
+  }, [pos]);
+
+  if (!list.length) return null;
+
+  const toggle = () => {
+    if (pos) { setPos(null); return; }
+    const r = btnRef.current?.getBoundingClientRect();
+    if (!r) return;
+    const menuH = list.length * 34 + 10;
+    const up = r.bottom + menuH + 8 > window.innerHeight;
+    setPos({ right: Math.max(8, window.innerWidth - r.right), top: up ? undefined : r.bottom + 4, bottom: up ? window.innerHeight - r.top + 4 : undefined });
+  };
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={toggle}
+        aria-haspopup="menu"
+        aria-expanded={!!pos}
+        title={label}
+        aria-label={label}
+        className={`${ASSET_BTN_GHOST} !px-2.5 tracking-widest`}
+      >
+        ⋯
+      </button>
+      {pos && createPortal(
+        <div
+          ref={menuRef}
+          role="menu"
+          style={{ position: 'fixed', right: pos.right, top: pos.top, bottom: pos.bottom }}
+          className="electron-no-drag z-[10040] min-w-[9rem] py-1 rounded-xl border border-zinc-200/90 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-lg"
+        >
+          {list.map(it => (
+            <button
+              key={it.key}
+              type="button"
+              role="menuitem"
+              disabled={it.disabled}
+              title={it.title}
+              onClick={() => { setPos(null); it.onClick?.(); }}
+              className={`block w-full text-left text-xs px-3 py-2 disabled:opacity-45 transition-colors ${
+                it.danger
+                  ? 'text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30'
+                  : 'text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800'
+              }`}
+            >
+              {it.label}
+            </button>
+          ))}
+        </div>,
+        document.body,
+      )}
+    </>
+  );
+}
 
 export const ASSET_BTN_PRIMARY =
   'tb-press text-xs px-3.5 py-1.5 rounded-xl bg-blue-600 text-white shadow-sm shadow-blue-600/20 '
@@ -297,10 +390,10 @@ export default function ResourceAssetCard({
   const icon = item?.icon || item?.metadata?.icon;
   const stacked = layout === 'stack';
   const hasActions = !!(actions || (showPreviewBtn && onTogglePreview));
-  // 一律横排 + 可换行，不再在右侧 flex-col 堆积
+  // stack：贴卡片底；row：宽屏放在内容右侧一行（按钮已精简为 预览 / 主操作 / ⋯），窄屏换到下方
   const actionsCls = stacked
     ? 'flex shrink-0 flex-wrap gap-1.5 justify-end pt-1 mt-auto'
-    : 'flex flex-wrap items-center justify-end gap-1.5 mt-3 pt-3 border-t border-zinc-100/90 dark:border-white/[0.06]';
+    : 'flex shrink-0 flex-wrap items-center justify-end gap-1.5 sm:flex-nowrap';
 
   const actionBar = hasActions ? (
     <div className={actionsCls}>
@@ -315,7 +408,7 @@ export default function ResourceAssetCard({
 
   return (
     <div className={`${ASSET_CARD_CLASS}${stacked ? ' h-full flex flex-col' : ''}${className ? ` ${className}` : ''}`}>
-      <div className={`flex gap-3 ${stacked ? 'flex-col flex-1 min-h-0' : 'items-start'}`}>
+      <div className={`flex gap-3 ${stacked ? 'flex-col flex-1 min-h-0' : 'flex-col sm:flex-row sm:items-start'}`}>
         <div className="flex min-w-0 flex-1 gap-3">
           <AssetLogo type={type} icon={icon} name={title || item?.id || item?.slug} />
           <div className="min-w-0 flex-1">
@@ -352,10 +445,8 @@ export default function ResourceAssetCard({
             {meta}
           </div>
         </div>
-        {stacked ? actionBar : null}
+        {actionBar}
       </div>
-      {/* 列表卡：操作条沉底横排，避免右侧竖向堆积 */}
-      {!stacked ? actionBar : null}
       {expanded && (
         <pre className="mt-3.5 text-[11px] leading-relaxed p-3.5 rounded-xl border border-zinc-100 dark:border-zinc-800 bg-zinc-50/90 dark:bg-zinc-950 text-zinc-600 dark:text-zinc-300 overflow-x-auto max-h-64 whitespace-pre-wrap">
           {detail || emptyPreviewLabel}
