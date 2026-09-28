@@ -8,6 +8,7 @@ import {
   LibraryInspector, InspectorSection, InspectorPreview,
 } from '../components/LibraryControls';
 import PersonalizedRecommend from '../components/PersonalizedRecommend';
+import McpProvidersTab from '../components/McpProvidersTab';
 import SkillInstallDialog from '../components/SkillInstallDialog';
 import {
   ASSET_BTN_GHOST,
@@ -123,6 +124,7 @@ const TYPE_OPTIONS = [
   { id: 'prompt', labelKey: 'resources.type.prompt' },
   { id: 'skill', labelKey: 'resources.type.skill' },
   { id: 'assistant', labelKey: 'resources.type.assistant' },
+  { id: 'mcp', labelKey: 'resources.type.mcp' },
 ];
 
 function readViewTab() {
@@ -146,7 +148,7 @@ function readTypeFilter() {
     // 缺省 / 空 = 全部；记住用户上次选择
     if (v === null || v === undefined) return '';
     if (v === '') return '';
-    if (v === 'prompt' || v === 'skill' || v === 'assistant') return v;
+    if (v === 'prompt' || v === 'skill' || v === 'assistant' || v === 'mcp') return v;
     return '';
   } catch { return ''; }
 }
@@ -452,6 +454,10 @@ export default function Resources() {
   const [selectedKey, setSelectedKey] = useState(null);
   /** 推荐 Tab 详情面板挂载点（PersonalizedRecommend 通过 portal 渲染进来） */
   const [inspectorHost, setInspectorHost] = useState(null);
+  /** MCP 类型：「新建」按钮 → 打开 MCP 组件内的自定义表单 */
+  const [mcpCreateSignal, setMcpCreateSignal] = useState(0);
+  /** MCP 已纳管数（由 MCP 组件上报；未加载为 null） */
+  const [mcpCount, setMcpCount] = useState(null);
   /** 当前可见行 key（键盘 ↑↓ 导航用，渲染时写入） */
   const visibleKeysRef = useRef([]);
   const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -954,7 +960,16 @@ export default function Resources() {
   function changeTypeFilter(type) {
     setTypeFilter(type);
     saveTypeFilter(type);
+    setSelectedKey(null);
   }
+
+  // 其它页跳转带类型（如供给源「MCP 工具已移到资源」）：navigate('/resources', { state: { resourceType } })
+  useEffect(() => {
+    const want = location.state?.resourceType;
+    if (!want || !TYPE_OPTIONS.some(o => o.id === want)) return;
+    changeTypeFilter(want);
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.state]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function changeAppFilter(agentId) {
     setAppFilter(agentId);
@@ -2108,6 +2123,7 @@ export default function Resources() {
     : resources.length;
   const discoveredCount = scanStats?.totalOnDisk ?? discovered.length;
   const showSkillTabs = !typeFilter || typeFilter === 'skill';
+  const isMcp = typeFilter === 'mcp';
 
   // 当前类型下的已纳管资源（分层/轻推与列表共用，避免串类型）
   const resourcesInType = useMemo(
@@ -2152,19 +2168,21 @@ export default function Resources() {
   }, [lang, t]);
 
   // 「本机」Tab 计数：技能=磁盘总数;提示词/助手=该类型已纳管数;全部=非 skill 已纳管 + 磁盘 skill
-  const localCount = typeFilter === 'skill'
-    ? discoveredCount
-    : typeFilter
-      ? managedCount
-      : resources.filter(r => r.type !== 'skill').length + discoveredCount;
+  const localCount = typeFilter === 'mcp'
+    ? mcpCount
+    : typeFilter === 'skill'
+      ? discoveredCount
+      : typeFilter
+        ? managedCount
+        : resources.filter(r => r.type !== 'skill').length + discoveredCount;
 
   // 类型分段计数（资产库）：技能以本机扫描为准，扫描为空时回退已纳管 skill
   const typeCounts = useMemo(() => {
     const skill = discovered.length > 0 ? discoveredCount : resources.filter(r => r.type === 'skill').length;
     const prompt = resources.filter(r => r.type === 'prompt').length;
     const assistant = resources.filter(r => r.type === 'assistant').length;
-    return { all: skill + prompt + assistant, skill, prompt, assistant };
-  }, [discovered.length, discoveredCount, resources]);
+    return { all: skill + prompt + assistant, skill, prompt, assistant, mcp: mcpCount || 0 };
+  }, [discovered.length, discoveredCount, resources, mcpCount]);
 
   // 键盘：/ 聚焦搜索；资产库中 ↑↓ 切换选中行，Esc 关闭详情
   useEffect(() => {
@@ -3175,6 +3193,16 @@ export default function Resources() {
                 <kbd className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] px-1.5 rounded border border-zinc-200 dark:border-zinc-700 text-zinc-400 font-sans pointer-events-none">/</kbd>
               )}
             </div>
+            {isMcp ? (
+              <SplitButton
+                label={t('resources.mcp.add')}
+                onClick={() => setMcpCreateSignal(n => n + 1)}
+                menuLabel={t('resources.moreActions')}
+                items={[
+                  { key: 'catalog', label: t('resources.mcp.browseCatalog'), hint: t('resources.mcp.browseCatalogHint'), onClick: () => changeViewTab('recommend') },
+                ]}
+              />
+            ) : (
             <SplitButton
               label={typeFilter === 'skill' ? t('resources.skillInstall') : t('resources.create')}
               onClick={handlePrimaryAction}
@@ -3188,6 +3216,7 @@ export default function Resources() {
                 { key: 'cleanup', label: idleLoading ? t('resources.cleanupScanning') : t('resources.cleanup'), hint: t('resources.cleanupTitle'), disabled: busy === 'cleanup' || idleLoading, onClick: openSkillCleanup },
               ]}
             />
+            )}
           </div>
         </div>
         {/* 视图：下划线 Tab */}
@@ -3252,7 +3281,7 @@ export default function Resources() {
               ]}
             />
           )}
-          {(availableTags.length > 0 || purposeOther > 0) && (
+          {!isMcp && (availableTags.length > 0 || purposeOther > 0) && (
             <FilterMenu
               label={t('resources.filter.purpose')}
               value={tagFilter}
@@ -3264,7 +3293,7 @@ export default function Resources() {
               ]}
             />
           )}
-          {viewTab === 'managed' && showAppFilterBar && appFilterOptions.length > 1 && (
+          {!isMcp && viewTab === 'managed' && showAppFilterBar && appFilterOptions.length > 1 && (
             <FilterMenu
               label={t('resources.filter.app')}
               value={effectiveAppFilter}
@@ -3277,7 +3306,7 @@ export default function Resources() {
               }))}
             />
           )}
-          {viewTab === 'managed' && (
+          {!isMcp && viewTab === 'managed' && (
             <FilterMenu
               label={t('resources.filter.status')}
               value={layerFilter}
@@ -3288,7 +3317,7 @@ export default function Resources() {
                 .map(id => ({ value: id, label: t(`resources.layer.${id}`), count: layerCounts[id], dot: LIFE_DOT[id] }))}
             />
           )}
-          {viewTab === 'managed' && (
+          {!isMcp && viewTab === 'managed' && (
             <div className="ml-auto">
               <FilterMenu
                 label={t('resources.sort.label')}
@@ -3303,7 +3332,7 @@ export default function Resources() {
           )}
         </div>
 
-        {viewTab === 'managed' && !layerFilter && (
+        {!isMcp && viewTab === 'managed' && !layerFilter && (
           <>
         {lifecycleNudges.length > 0 && (
           <div className="rounded-xl border border-zinc-200/80 dark:border-zinc-700/70 bg-white/50 dark:bg-zinc-900/40 px-3 py-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
@@ -3449,7 +3478,9 @@ export default function Resources() {
           document.body,
         )}
 
-        {loading ? (
+        {isMcp ? (
+          <McpProvidersTab viewTab={viewTab} searchQuery={debouncedQuery} createSignal={mcpCreateSignal} onCountChange={setMcpCount} />
+        ) : loading ? (
           <div className="space-y-3 py-2" aria-busy="true">
             {[1, 2, 3].map(i => (
               <div key={i} className="h-20 rounded-xl bg-zinc-100 dark:bg-zinc-800/80 animate-pulse" />
@@ -3507,7 +3538,7 @@ export default function Resources() {
           </div>
         ) : null}
 
-        <p className="text-[11px] text-zinc-400 pt-2">
+        {!isMcp && <p className="text-[11px] text-zinc-400 pt-2">
           {t(
             typeFilter === 'prompt'
               ? 'resources.footerHint.prompt'
@@ -3515,7 +3546,7 @@ export default function Resources() {
                 ? 'resources.footerHint.assistant'
                 : 'resources.footerHint',
           )}
-        </p>
+        </p>}
       </div>
 
       {renderProjectMenu()}

@@ -16,7 +16,7 @@ import { resolveModelsForModelView } from '../lib/personalAvailableModels';
 import { buildPersonalModelTypeMap, inferModelTypeFromName } from '../api/gatewayModels';
 import { encodeRoute } from '../lib/route-binding';
 import { avatarColor } from '../components/UserAvatar';
-import McpProvidersTab, { readSupplyTab, saveSupplyTab } from '../components/McpProvidersTab';
+import { readSupplyTab, saveSupplyTab } from '../components/McpProvidersTab';
 import UsageMeter from '../components/UsageMeter';
 
 /** 按当前语言覆盖 meta 中的 label / hint / getKey / oauth.label */
@@ -4741,11 +4741,19 @@ export default function Providers() {
       </div>
 
       {supplyTab === 'mcp' ? (
-        isElectron ? (
-          <McpProvidersTab />
-        ) : (
-          <p className="text-sm text-zinc-400 py-12 text-center">{t('providers.supply.mcpWebOnly')}</p>
-        )
+        // MCP 工具已并入「资源」（与技能同为纳管 + 投射到应用的能力资产）；保留入口做引导
+        <div className="tb-soft-card rounded-2xl px-6 py-8 max-w-xl mx-auto text-center space-y-3">
+          <div className="text-2xl" aria-hidden>🔧</div>
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{t('providers.supply.mcpMovedTitle')}</h2>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">{t('providers.supply.mcpMovedDesc')}</p>
+          <button
+            type="button"
+            onClick={() => navigate('/resources', { state: { resourceType: 'mcp' } })}
+            className="px-4 py-2 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700"
+          >
+            {t('providers.supply.mcpMovedGo')}
+          </button>
+        </div>
       ) : (
       <>
       {/* 个人源：标题独立于 panel；统计 + 已添加卡片 + 添加源 */}
