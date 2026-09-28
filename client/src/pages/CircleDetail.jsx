@@ -459,7 +459,7 @@ export default function CircleDetail({ routeParams }) {
           )}
       </section>
 
-      {/* 共享智能体：与贡献页社区智能体同款卡片（图标 + 标题 + runtime + 简介） */}
+      {/* 共享智能体：与交易页社区智能体同款卡片（图标 + 标题 + runtime + 简介） */}
       <section className="tb-soft-card rounded-xl px-4 py-4 space-y-2.5">
         <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-200">{t('circles.detail.agents')}</h2>
         {agents.length === 0

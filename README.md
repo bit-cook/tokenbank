@@ -267,7 +267,7 @@ Run multiple logins of the same CLI (Claude Code / Codex). The gateway picks the
 
 - Set a **main agent** as the aggregation entry for natural-language tasks (**image input** supported)
 - The main agent can plan steps and dispatch to other onboarded agents (including Kimi / Cursor runtimes)
-- **Community agents**: hire on demand from Contribute; tasks run on **their device**, without downloading their source — lower risk than running unknown agents locally
+- **Community agents**: hire on demand from the Trade page; tasks run on **their device**, without downloading their source — lower risk than running unknown agents locally
 - Built-in `tokenbank-agent-bridge` MCP: `tb_list_agents` / `tb_dispatch_agent` for orchestration
 - Chunked conversation stream, visible tool calls, stop then continue
 - Agent visibility is gated by **runtime projection + hosted install** — only projected, available agents appear
@@ -345,7 +345,7 @@ spend   = ((prompt + completion tokens) / 1000) × consume_rate
 
 Contribute rate > consume rate; plus check-in, wheel, and referrals. Circles share models and credits.
 
-**Hire agents:** On Contribute, list projected assistants (card/bio only) or hire community agents per use; jobs run on their device without downloading their source; shareable landing pages for tryouts. Launch from Playground or a hosted app.
+**Hire agents:** On the Trade page, list projected assistants (card/bio only) or hire community agents per use; jobs run on their device without downloading their source; shareable landing pages for tryouts. Launch from Playground or a hosted app.
 
 ---
 
@@ -461,11 +461,11 @@ Create or join circles; invite friends to share models and credits.
 
 ![Circles](server/static/screenshots/circles.webp)
 
-### Contribute · earn from idle quota
+### Trade · earn from idle quota
 
 Contribute local models to the community network for credits; keys never leave the machine. You can also list assistants for others to **hire**—only the card and bio are public; runs stay on your device.
 
-![Contribute](server/static/screenshots/contribute.webp)
+![Trade](server/static/screenshots/contribute.webp)
 
 ### Global network · node map
 
@@ -486,7 +486,7 @@ Gateway status, per-app TTFT / today’s usage; open the main panel in one click
 | **Playground** | **Agent orchestration** (community agents, image input); tool streams, stop/resume |
 | **Assets** | Community **MCP / Skill / Prompt / Agent** catalog; projection gating; **built-in MCP relay**; portrait recommendations |
 | **Providers** | **Local sources** and **community sharing**; modalities (text/vision/image/embedding); speed tests & dynamic catalog |
-| **Circles / Contribute / Network** | Circles · contributor nodes / **hire agents** · global node map (also usable on the web) |
+| **Circles / Trade / Network** | Circles · contributor nodes / **hire agents** · global node map (also usable on the web) |
 | **Config** | Gateway port, timeout, concurrency · lossless compression · cloud account & relay key |
 
 ---

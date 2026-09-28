@@ -164,7 +164,7 @@
               <span data-tab="playground" data-i18n="hero.tab.playground" style="font-size:12px;color:#7b7b7b;padding:4px 10px;border-radius:8px;cursor:pointer;">Playground</span>
               <span data-tab="dashboard" data-i18n="hero.tab.dashboard" style="font-size:12px;color:#7b7b7b;padding:4px 10px;border-radius:8px;cursor:pointer;">Usage</span>
               <span data-tab="circle" data-i18n="hero.tab.circle" style="font-size:12px;color:#7b7b7b;padding:4px 10px;border-radius:8px;cursor:pointer;">Circles</span>
-              <span data-tab="contribute" data-i18n="hero.tab.contribute" style="font-size:12px;color:#7b7b7b;padding:4px 10px;border-radius:8px;cursor:pointer;">Contribute</span>
+              <span data-tab="contribute" data-i18n="hero.tab.contribute" style="font-size:12px;color:#7b7b7b;padding:4px 10px;border-radius:8px;cursor:pointer;">Trade</span>
               <span data-tab="world" data-i18n="hero.tab.world" style="font-size:12px;color:#7b7b7b;padding:4px 10px;border-radius:8px;cursor:pointer;">Network</span>
               <span data-tab="device" data-i18n="hero.tab.device" style="font-size:12px;color:#7b7b7b;padding:4px 10px;border-radius:8px;cursor:pointer;">Tray</span>
             </div>
@@ -1040,7 +1040,7 @@
             <span data-i18n="faq.q8">What is hiring agents?</span>
             <span class="tb-faq-mark" style="flex:0 0 auto;width:26px;height:26px;border-radius:8px;background:#f5f2f0;display:flex;align-items:center;justify-content:center;font-size:17px;color:#333;transition:transform .25s ease,background .25s ease;">+</span>
           </summary>
-          <p data-i18n="faq.a8" style="margin:0;padding:0 4px 26px;font-size:15px;line-height:1.6;color:#555;max-width:680px;">On Contribute, list projected assistants for others to hire: only the card and bio are public; configs and API keys stay on your machine, and jobs run there. You can also hire online community agents—tasks execute on their device without downloading their source; shareable links let others try them out.</p>
+          <p data-i18n="faq.a8" style="margin:0;padding:0 4px 26px;font-size:15px;line-height:1.6;color:#555;max-width:680px;">On the Trade page, list projected assistants for others to hire: only the card and bio are public; configs and API keys stay on your machine, and jobs run there. You can also hire online community agents—tasks execute on their device without downloading their source; shareable links let others try them out.</p>
         </details>
 
       </div>
@@ -1174,7 +1174,7 @@ class Component extends DCLogic {
     'hero.meta': '开源 · 不改使用习惯 · 随时一键还原　·　macOS · Windows · Linux',
     'hero.tab.dashboard': '盘点', 'hero.tab.gateway': '网关', 'hero.tab.sessions': '会话', 'hero.tab.trace': 'Trace',
     'hero.tab.provider': '供给源', 'hero.tab.assets': '资源', 'hero.tab.portrait': '画像', 'hero.tab.playground': '游乐场',
-    'hero.tab.contribute': '贡献', 'hero.tab.circle': '圈子', 'hero.tab.world': '网络', 'hero.tab.device': '托盘',
+    'hero.tab.contribute': '交易', 'hero.tab.circle': '圈子', 'hero.tab.world': '网络', 'hero.tab.device': '托盘',
     'trust.label': '已与你正在用的主流 AI 应用协同',
     'trust.new': '新支持',
     'stat.1': '一个本地端口<br>接管全部 AI 应用',
@@ -1300,7 +1300,7 @@ class Component extends DCLogic {
     'faq.q7': 'v0.5 的 Agent 聚合编排是什么？',
     'faq.a7': '在游乐场选定主 Agent 作为聚合入口：它接收任务、可规划步骤，并派发到其他已纳管智能体（含已雇佣的社区智能体）。配合 CLI 多账号与 MCP / Skill / Prompt 资源中枢，Token Bank 成为本地 Agent 控制面，而不只是 Token 代理。',
     'faq.q8': '什么是雇佣智能体？',
-    'faq.a8': '在「贡献」页可上架已投射智能体供他人雇佣：只公开名片与简介，配置与 API Key 留在本机，接单任务在你设备执行。也可雇佣社区在线智能体——任务在对方设备跑，本机不落对方正文；支持分享链接外链试用。',
+    'faq.a8': '在「交易」页可上架已投射智能体供他人雇佣：只公开名片与简介，配置与 API Key 留在本机，接单任务在你设备执行。也可雇佣社区在线智能体——任务在对方设备跑，本机不落对方正文；支持分享链接外链试用。',
   };
 
   renderVals() {
@@ -1398,8 +1398,8 @@ class Component extends DCLogic {
         zh: { h: '圈子', b: '创建或加入圈子，与好友共享模型与积分。' },
       },
       contribute: {
-        en: { h: 'Contribute · models & hire agents', b: 'Share local models and list assistants for hire; keys and agent configs never leave your machine.' },
-        zh: { h: '贡献 · 模型与雇佣智能体', b: '贡献本地模型，并上架智能体供雇佣；密钥与智能体配置永不离开本机。' },
+        en: { h: 'Trade · models & hire agents', b: 'Share local models and list assistants for hire; keys and agent configs never leave your machine.' },
+        zh: { h: '交易 · 模型与雇佣智能体', b: '贡献本地模型，并上架智能体供雇佣；密钥与智能体配置永不离开本机。' },
       },
       world: {
         en: { h: 'Global network', b: 'Online nodes, available models & agents, and a live geographic map.' },
