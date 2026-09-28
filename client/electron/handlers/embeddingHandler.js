@@ -54,7 +54,7 @@ function providerHasModel(p, name) {
 function resolveProvider(modelStr, providers) {
   if (!modelStr) return null;
   const list = Array.isArray(providers) ? providers : [];
-  const pr = parseRoute(modelStr);
+  const pr = parseRoute(modelStr, list.map((p) => p && p.id).filter(Boolean));
   const bare = pr.model || modelStr;
   let pool = list;
   if (pr.tier) {

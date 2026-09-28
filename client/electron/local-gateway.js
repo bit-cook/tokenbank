@@ -48,6 +48,7 @@ function applyP2pRouteHeader(headers, provider) {
   return headers;
 }
 const oauth = require('./oauth');
+const { withClaudeOAuthModels } = require('./claude-models');
 const { estimateCost } = require('./pricing');
 const { compressBody, compressionRatio } = require('./compressor');
 const { handleTts }             = require('./handlers/ttsHandler');
@@ -623,7 +624,8 @@ function enabledProviders() {
       if (p.type === 'p2p') {
         return { ...p, enabled: true, base_url: _backendUrl, token: _cloudToken || p.token, models: [..._peerModels] };
       }
-      return { ...p, enabled: true };
+      // 与离线目录共享兜底：空清单补全，用户显式选择不覆盖。
+      return withClaudeOAuthModels({ ...p, enabled: true });
     });
 }
 
@@ -3249,7 +3251,8 @@ async function route(model, reqPath, body, res, callerKey, skipP2P = false) {
   // tier/provider 客户端过滤候选；strategy/sharer 通过 X-TB-Route 头交服务端（p2p 派发）执行。
   let requestTier = null, requestScope = null, requestStrategy = null, requestSharer = null, requestProvider = null;
   {
-    const pr = parseRoute(model);
+    const _provIds = new Set((_getConfig?.()?.providers || []).map((p) => p && p.id).filter(Boolean));
+    const pr = parseRoute(model, _provIds);
     // 纯前缀 codec(整串都是 token、无裸模型) 另走策略分支，这里不当 model 前缀处理
     if (pr.model && !parsePureCodec(origModel)) {
       if (pr.tier || pr.scope || pr.strategy || pr.sharer || pr.provider) {

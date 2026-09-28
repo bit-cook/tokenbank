@@ -1,0 +1,1312 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>Token Bank Promo</title>
+<link rel="stylesheet" href="node_modules/@fontsource/inter/400.css">
+<link rel="stylesheet" href="node_modules/@fontsource/inter/500.css">
+<link rel="stylesheet" href="node_modules/@fontsource/inter/600.css">
+<link rel="stylesheet" href="node_modules/@fontsource/inter/700.css">
+<link rel="stylesheet" href="node_modules/@fontsource/inter/800.css">
+<link rel="stylesheet" href="node_modules/@fontsource/inter/900.css">
+<link rel="stylesheet" href="node_modules/@fontsource/noto-sans-sc/400.css">
+<link rel="stylesheet" href="node_modules/@fontsource/noto-sans-sc/500.css">
+<link rel="stylesheet" href="node_modules/@fontsource/noto-sans-sc/700.css">
+<link rel="stylesheet" href="node_modules/@fontsource/noto-sans-sc/900.css">
+<link rel="stylesheet" href="node_modules/@fontsource/jetbrains-mono/400.css">
+<link rel="stylesheet" href="node_modules/@fontsource/jetbrains-mono/600.css">
+<style>
+  :root {
+    --bg: #05050a;
+    --fg: #f5f5f7;
+    --muted: #8b8b98;
+    --line: rgba(255,255,255,.09);
+    --gold: #ffc23d;
+    --gold-hi: #ffe9a8;
+    --gold-lo: #e08a00;
+    --cyan: #5ac8fa;
+  }
+  html, body { margin: 0; background: #000; }
+  #stage {
+    position: relative; width: 1920px; height: 1080px; overflow: hidden;
+    background: var(--bg); color: var(--fg);
+    font-family: 'Inter', 'Noto Sans SC', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  #bg, #fx { position: absolute; inset: 0; }
+  .scene { position: absolute; inset: 0; opacity: 0; }
+  .abs { position: absolute; }
+  .c { position: absolute; left: 0; top: 0; }
+  .gold {
+    background: linear-gradient(180deg, var(--gold-hi) 0%, var(--gold) 45%, var(--gold-lo) 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .card {
+    background: linear-gradient(180deg, rgba(255,255,255,.07), rgba(255,255,255,.025));
+    border: 1px solid var(--line); border-radius: 22px;
+    box-shadow: 0 40px 100px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.07);
+  }
+  .eyebrow { font-size: 24px; letter-spacing: .28em; color: var(--gold); font-weight: 600; }
+  .h1 { font-size: 76px; font-weight: 900; letter-spacing: -.01em; line-height: 1.1; margin-top: 18px; }
+  .header { position: absolute; left: 140px; top: 96px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 12px; padding: 14px 26px; border-radius: 999px;
+    border: 1px solid rgba(255,194,61,.35); background: rgba(255,194,61,.07);
+    font-size: 26px; font-weight: 500; color: #ffe2a0; white-space: nowrap;
+  }
+  .chip i { width: 10px; height: 10px; border-radius: 50%; background: var(--gold); box-shadow: 0 0 12px var(--gold); }
+  .badge {
+    width: 58px; height: 58px; border-radius: 16px; display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 26px; color: #fff; flex: none;
+  }
+  .toggle { width: 74px; height: 40px; border-radius: 20px; background: #2a2a33; position: relative; flex: none; }
+  .toggle b { position: absolute; top: 4px; left: 4px; width: 32px; height: 32px; border-radius: 50%; background: #d8d8e0; box-shadow: 0 2px 6px rgba(0,0,0,.4); }
+  .kpi-label { font-size: 22px; color: var(--muted); }
+  .kpi-val { font-size: 64px; font-weight: 800; letter-spacing: -.02em; margin-top: 6px; font-variant-numeric: tabular-nums; }
+  .row {
+    position: absolute; left: 28px; right: 28px; height: 58px; border-radius: 12px;
+    display: flex; align-items: center; gap: 16px; padding: 0 16px; font-size: 20px;
+  }
+  .pill { padding: 5px 12px; border-radius: 8px; font-size: 17px; font-weight: 600; white-space: nowrap; }
+  .dest { position: absolute; width: 500px; height: 112px; display: flex; align-items: center; gap: 22px; padding: 0 28px; box-sizing: border-box; }
+  .rec { position: absolute; width: 720px; height: 132px; display: flex; align-items: center; gap: 24px; padding: 0 30px; box-sizing: border-box; }
+  .type { font-size: 18px; font-weight: 700; letter-spacing: .08em; padding: 6px 12px; border-radius: 8px; width: 86px; text-align: center; flex: none; }
+  .word { position: absolute; left: 0; right: 0; top: 400px; text-align: center; font-size: 190px; font-weight: 900; letter-spacing: -.01em; }
+  .sub-en { position: absolute; left: 0; right: 0; top: 660px; text-align: center; font-size: 30px; letter-spacing: .5em; color: var(--muted); font-weight: 500; }
+  #vignette { position: absolute; inset: 0; pointer-events: none;
+    background: radial-gradient(ellipse at center, rgba(0,0,0,0) 55%, rgba(0,0,0,.65) 100%); }
+  #flash { position: absolute; inset: 0; opacity: 0; pointer-events: none;
+    background: radial-gradient(circle at 50% 50%, rgba(255,226,150,.95), rgba(255,170,30,.35) 35%, rgba(0,0,0,0) 70%); }
+  html.en .h1 { font-size: 70px; }
+  html.en .rsub { display: none; }
+  html.en #gw span { white-space: nowrap; }
+  html.en #router div[style*='font-size:30px'] { white-space: nowrap; font-size: 28px !important; }
+  html.en #phEnd > div { font-size: 124px !important; }
+  html.en .word { font-size: 160px; }
+  html.en .sub-en { display: none; }
+  html.en .pain > div > div:first-child { font-size: 112px !important; }
+  html.cine #cam { position: absolute; inset: 0; transform-origin: 50% 50%; filter: contrast(1.12) saturate(.88) brightness(.97); }
+  html.cine #bg { filter: contrast(1.15) saturate(.8) brightness(.85); }
+  #fade { position: absolute; inset: 0; background: #000; opacity: 0; pointer-events: none; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="bg" width="1920" height="1080"></canvas>
+
+  <!-- ============ S1 · 痛点开场 ============ -->
+  <div class="scene" id="s1">
+    <div id="s1logs"></div>
+    <div class="c pain"><div style="text-align:center;white-space:nowrap"><div style="font-size:120px;font-weight:900">AI 工具越装越多</div><div style="font-size:38px;color:#b9b9c6;font-weight:500;margin-top:18px;letter-spacing:.06em">配置各管各，切换全靠手改</div></div></div>
+    <div class="c pain"><div style="text-align:center;white-space:nowrap"><div style="font-size:120px;font-weight:900">账单越来越长</div><div style="font-size:38px;color:#b9b9c6;font-weight:500;margin-top:18px;letter-spacing:.06em">Token 花在哪，说不清</div></div></div>
+    <div class="c pain"><div style="text-align:center;white-space:nowrap"><div style="font-size:120px;font-weight:900">额度月底清零</div><div style="font-size:38px;color:#b9b9c6;font-weight:500;margin-top:18px;letter-spacing:.06em">免费额度闲着，付费却在涨</div></div></div>
+    <div class="c pain"><div style="text-align:center;white-space:nowrap"><div style="font-size:120px;font-weight:900">Skill / MCP 越装越乱</div><div style="font-size:38px;color:#b9b9c6;font-weight:500;margin-top:18px;letter-spacing:.06em">复制粘贴，版本对不上</div></div></div>
+    <div class="c pain"><div style="text-align:center;white-space:nowrap"><div style="font-size:120px;font-weight:900">好模型用不起</div><div style="font-size:38px;color:#b9b9c6;font-weight:500;margin-top:18px;letter-spacing:.06em">稀缺模型、专家智能体，够不着</div></div></div>
+    <div class="c pain"><div style="text-align:center;white-space:nowrap"><div style="font-size:120px;font-weight:900">闲置能力白白浪费</div><div style="font-size:38px;color:#b9b9c6;font-weight:500;margin-top:18px;letter-spacing:.06em">订阅用不完，本地模型吃灰</div></div></div>
+    <div class="c" id="painN"><div class="mono" style="font-size:24px;color:#ff6a6a;letter-spacing:.2em;white-space:nowrap"></div></div>
+    <div class="c" id="phEnd"><div style="font-size:150px;font-weight:900;white-space:nowrap">你的 AI，<span class="gold">该有个管家了</span></div></div>
+    <div class="c" id="bill"><div class="mono" style="font-size:34px;color:#ff6a6a;letter-spacing:.04em;white-space:nowrap">本月账单&nbsp;&nbsp;¥ <span id="billv">0.00</span></div></div>
+    <div class="c" id="dot"><div style="width:40px;height:40px;border-radius:50%;background:radial-gradient(circle,#fff6d0,#ffc23d 50%,#e08a00);box-shadow:0 0 60px 20px rgba(255,194,61,.6)"></div></div>
+  </div>
+
+  <!-- ============ S2 · Logo 揭幕 ============ -->
+  <div class="scene" id="s2">
+    <div class="c" id="rays"><div style="width:1600px;height:1600px;border-radius:50%;background:repeating-conic-gradient(from 0deg, rgba(255,200,80,.10) 0deg 4deg, rgba(255,200,80,0) 4deg 15deg);-webkit-mask:radial-gradient(circle, #000 0%, rgba(0,0,0,.6) 25%, transparent 62%);mask:radial-gradient(circle, #000 0%, rgba(0,0,0,.6) 25%, transparent 62%)"></div></div>
+    <div class="c" id="glow2"><div style="width:900px;height:900px;border-radius:50%;background:radial-gradient(circle, rgba(255,190,60,.45), rgba(255,150,0,.12) 40%, rgba(0,0,0,0) 70%)"></div></div>
+    <div class="c" id="coinWrap" style="perspective:1400px"><div id="coin" style="width:340px;height:340px"></div></div>
+    <div class="c" id="title2"><div id="title2t" style="font-size:150px;font-weight:900;white-space:nowrap;letter-spacing:-.02em"><span>Token</span> <span class="gold">Bank</span></div></div>
+    <div class="c" id="sub2"><div style="font-size:46px;color:#c9c9d3;font-weight:500;letter-spacing:.35em;white-space:nowrap">你的个人 AI 中枢</div></div>
+  </div>
+
+  <!-- ============ S3 · 一键纳管 ============ -->
+  <div class="scene" id="s3">
+    <div class="header" id="h3"><div class="eyebrow">01 — 一键纳管</div><div class="h1">你在用的 AI 工具，<span class="gold">一键全接入</span></div></div>
+    <svg id="s3svg" class="abs" width="1920" height="1080" style="left:0;top:0"></svg>
+    <div id="apps"></div>
+    <div class="c" id="gw"><div class="card" style="width:540px;height:230px;padding:34px 38px;box-sizing:border-box;border-color:rgba(255,194,61,.35)">
+      <div style="display:flex;align-items:center;gap:18px">
+        <div id="gwlogo" style="width:64px;height:64px"></div>
+        <div><div style="font-size:32px;font-weight:800;white-space:nowrap">Token Bank Gateway</div>
+          <div class="mono" style="font-size:22px;color:var(--gold);margin-top:4px">localhost:11430/v1</div></div>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:34px;font-size:24px;color:var(--muted)">
+        <span style="display:flex;align-items:center;gap:10px"><i style="width:12px;height:12px;border-radius:50%;background:#34d399;box-shadow:0 0 12px #34d399;display:inline-block"></i>本地网关运行中</span>
+        <span>已接入 <b id="gwn" style="color:#fff;font-size:34px">0</b> / 6</span>
+      </div>
+    </div></div>
+    <div class="c" id="chips3"><div style="display:flex;gap:22px">
+      <div class="chip"><i></i>不改客户端</div><div class="chip"><i></i>不改命令</div><div class="chip"><i></i>一键还原</div>
+    </div></div>
+  </div>
+
+  <!-- ============ S4 · 全链路 Trace ============ -->
+  <div class="scene" id="s4">
+    <div class="header" id="h4"><div class="eyebrow">02 — 用的明白</div><div class="h1">你的每一个 Token，<span class="gold">都有据可查</span></div></div>
+    <div class="abs" id="dash" style="left:140px;top:330px;width:1640px;height:680px;perspective:1600px">
+      <div id="dashInner" class="card" style="position:absolute;inset:0;transform-origin:50% 100%">
+        <div class="abs" style="left:48px;top:40px;display:flex;gap:80px">
+          <div><div class="kpi-label">今日 Token</div><div class="kpi-val gold" id="k1">0</div></div>
+          <div><div class="kpi-label">请求数</div><div class="kpi-val" id="k2">0</div></div>
+          <div><div class="kpi-label">接入应用</div><div class="kpi-val" id="k3">0</div></div>
+        </div>
+        <div class="abs" id="bars" style="left:48px;top:250px;width:940px;height:360px"></div>
+        <div class="abs" style="left:1020px;top:0;bottom:0;width:1px;background:var(--line)"></div>
+        <div class="abs" style="left:1060px;top:40px;font-size:24px;font-weight:700;display:flex;align-items:center;gap:12px">
+          <i id="live" style="width:12px;height:12px;border-radius:50%;background:#ff4d4f;display:inline-block;box-shadow:0 0 12px #ff4d4f"></i>实时 Trace</div>
+        <div class="abs" id="rows" style="left:1020px;top:100px;width:620px;height:560px;overflow:hidden"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ S5 · 智能路由 ============ -->
+  <div class="scene" id="s5">
+    <div class="header" id="h5"><div class="eyebrow">03 — 用的节省</div><div class="h1">同样的活，<span class="gold">自动走最省钱的路</span></div></div>
+    <svg id="s5svg" class="abs" width="1920" height="1080" style="left:0;top:0"></svg>
+    <div id="reqs"></div>
+    <div class="c" id="router"><div style="position:relative;width:260px;height:260px">
+      <div id="ring" style="position:absolute;inset:0;border-radius:50%;border:2px dashed rgba(255,194,61,.55)"></div>
+      <div style="position:absolute;inset:30px;border-radius:50%;background:radial-gradient(circle at 40% 35%, #2a2210, #120f08);border:1px solid rgba(255,194,61,.5);box-shadow:0 0 80px rgba(255,170,30,.35), inset 0 0 40px rgba(255,194,61,.15);display:flex;flex-direction:column;align-items:center;justify-content:center">
+        <div style="font-size:30px;font-weight:800">智能路由</div>
+        <div class="rsub" style="font-size:18px;color:var(--muted);margin-top:6px">Scene Router</div>
+      </div>
+    </div></div>
+    <div class="c" id="proto"><div class="mono" style="font-size:20px;color:#9fd9ff;white-space:nowrap;padding:10px 18px;border-radius:10px;border:1px solid rgba(90,200,250,.3);background:rgba(90,200,250,.06)"><span id="protot">Anthropic Messages ⇄ OpenAI Chat</span></div></div>
+    <div id="dests"></div>
+    <div class="c" id="chips5"><div style="display:flex;gap:22px">
+      <div class="chip"><i></i>模型名不变</div><div class="chip"><i></i>协议自动转换</div><div class="chip"><i></i>本地优先 · 按任务分型</div>
+    </div></div>
+  </div>
+
+  <!-- ============ S6 · 越用越懂你 ============ -->
+  <div class="scene" id="s6">
+    <div class="header" id="h6"><div class="eyebrow">04 — 越用越懂你</div><div class="h1">从你的习惯里，<span class="gold">长出你的工具箱</span></div></div>
+    <svg id="radar" class="abs" width="900" height="780" style="left:110px;top:290px"></svg>
+    <div id="tags6"></div>
+    <div id="recs"></div>
+  </div>
+
+  <!-- ============ SA · AI 资产一处纳管 ============ -->
+  <div class="scene" id="sa">
+    <div class="header" id="ha"><div class="eyebrow">05 — AI 资产 · 一处纳管</div><div class="h1">散落各处的 AI 资产，<span class="gold">一处纳管</span></div></div>
+    <div class="abs card" id="lib" style="left:300px;top:310px;width:1320px;height:600px;box-sizing:border-box;padding:26px 30px">
+      <div style="display:flex;align-items:center;gap:16px">
+        <div style="flex:1;height:54px;border-radius:14px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);display:flex;align-items:center;padding:0 20px;font-size:22px;color:var(--muted)"><span id="libq"></span></div>
+        <div style="font-size:20px;color:var(--muted);white-space:nowrap">共 <b id="libn" style="color:#fff;font-size:26px">0</b> 项资产</div>
+      </div>
+      <div id="libtabs" style="display:flex;gap:12px;margin-top:20px"></div>
+      <div id="libgrid" style="position:relative;margin-top:22px;height:390px"></div>
+    </div>
+    <div id="mess"></div>
+    <div class="c" id="chipsa"><div style="display:flex;gap:22px">
+      <div class="chip"><i></i>MCP / Skill / Prompt / Agent 统一收纳</div><div class="chip"><i></i>按类型分类 · 一搜即得</div><div class="chip"><i></i>一处修改，处处生效</div>
+    </div></div>
+  </div>
+
+  <!-- ============ SP · 资源投射 ============ -->
+  <div class="scene" id="sp">
+    <div class="header" id="hp"><div class="eyebrow">06 — 资源投射</div><div class="h1">一次沉淀，<span class="gold">投射到每个智能体</span></div></div>
+    <svg id="spsvg" class="abs" width="1920" height="1080" style="left:0;top:0"></svg>
+    <div id="passets"></div>
+    <div class="c" id="gate"><div style="position:relative;width:200px;height:320px">
+      <div style="position:absolute;inset:0;border-radius:28px;border:1px solid rgba(255,194,61,.55);background:linear-gradient(180deg,rgba(255,194,61,.16),rgba(255,194,61,.03));box-shadow:0 0 70px rgba(255,170,30,.28), inset 0 0 40px rgba(255,194,61,.12)"></div>
+      <div id="gateScan" style="position:absolute;left:14px;right:14px;height:3px;border-radius:2px;background:#ffe29a;box-shadow:0 0 18px #ffc23d"></div>
+      <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px">
+        <div style="font-size:30px;font-weight:800">投射门控</div><div style="font-size:18px;color:var(--muted)">已纳管 × 已安装</div>
+      </div></div></div>
+    <div id="ptargets"></div>
+    <div class="c" id="chipsp"><div style="display:flex;gap:22px">
+      <div class="chip"><i></i>只投射到已纳管且已安装的目标</div><div class="chip"><i></i>依赖自动级联</div><div class="chip"><i></i>随时一键取消</div>
+    </div></div>
+  </div>
+
+  <!-- ============ SG · 游乐场 · Agent 聚合编排 ============ -->
+  <div class="scene" id="sg">
+    <div class="header" id="hg"><div class="eyebrow">07 — 游乐场 · 智能体编排</div><div class="h1">一句话，<span class="gold">调度一支智能体团队</span></div></div>
+    <div class="abs card" id="chat" style="left:140px;top:320px;width:820px;height:680px;overflow:hidden">
+      <div style="height:64px;display:flex;align-items:center;gap:14px;padding:0 28px;border-bottom:1px solid var(--line);font-size:22px">
+        <span style="display:flex;gap:8px"><i style="width:12px;height:12px;border-radius:50%;background:#ff5f57;display:inline-block"></i><i style="width:12px;height:12px;border-radius:50%;background:#febc2e;display:inline-block"></i><i style="width:12px;height:12px;border-radius:50%;background:#28c840;display:inline-block"></i></span>
+        <span style="font-weight:700;margin-left:10px">游乐场</span><span style="color:var(--muted)">· 主 Agent：Claude Code</span>
+      </div>
+      <div id="umsg" class="abs" style="right:28px;top:92px;max-width:600px;padding:18px 22px;border-radius:18px 18px 4px 18px;background:linear-gradient(180deg,#ffd466,#f0a000);color:#2b1a00;font-size:25px;font-weight:600;line-height:1.45">
+        <div id="utext"></div>
+        <div id="uimg" style="margin-top:12px;display:flex;align-items:center;gap:10px;font-size:18px;font-weight:600;color:#5c3a00">
+          <span style="width:54px;height:38px;border-radius:6px;background:linear-gradient(135deg,#fff3cf,#e8a830);border:1px solid rgba(0,0,0,.15);display:inline-block"></span>login-error.png</div>
+      </div>
+      <div id="plan" class="abs" style="left:28px;top:262px;font-size:23px;color:#d8d8e0">已拆解为 <b style="color:#fff">3 个子任务</b>，并行派发：</div>
+      <div id="calls"></div>
+      <div id="done" class="abs" style="left:28px;top:604px;font-size:23px;font-weight:700;color:#34d399;display:flex;align-items:center;gap:10px">✓ 全部完成 · 3/3 · 已合并结果</div>
+    </div>
+    <canvas id="orch" class="abs" width="1920" height="1080" style="left:0;top:0"></canvas>
+    <div id="onodes"></div>
+  </div>
+
+  <!-- ============ SM · 共享市场（出租 / 租用 模型与智能体） ============ -->
+  <div class="scene" id="sm">
+    <div class="header" id="hm"><div class="eyebrow">08 — 共享市场 · 闲置赚钱</div><div class="h1">出租闲置模型与智能体，<span class="gold">人人用上稀缺能力</span></div></div>
+    <canvas id="mk" class="abs" width="1920" height="1080" style="left:0;top:0"></canvas>
+    <div class="abs card" id="lend" style="left:120px;top:310px;width:600px;height:690px;box-sizing:border-box;padding:28px 30px">
+      <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:30px;font-weight:900">出租方 <span style="font-size:22px;color:var(--muted);font-weight:500">· 你的设备</span></div><div class="pill" style="font-size:18px;background:rgba(255,194,61,.12);color:#ffc23d;border:1px solid rgba(255,194,61,.4)">闲置中 → 赚钱中</div></div>
+      <div style="font-size:18px;color:var(--muted);margin:22px 0 10px;letter-spacing:.1em">上架出租 · 对外只公开名片</div>
+      <div id="lrows"></div>
+      <div id="vault" style="position:absolute;left:30px;right:30px;top:378px;height:180px;border-radius:16px;border:1px dashed rgba(255,194,61,.45);background:rgba(255,194,61,.05);padding:18px 22px;box-sizing:border-box">
+        <div style="display:flex;align-items:center;gap:12px;font-size:23px;font-weight:800"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#ffc23d" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7.5a4 4 0 0 1 8 0V11"/></svg>本机保险箱 <span id="vaultTag" style="margin-left:auto;font-size:18px;font-weight:700;color:#34d399">✓ 未外传</span></div>
+        <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap">
+          <span class="pill mono" style="font-size:17px;background:rgba(255,255,255,.05);color:#d8d8e0;border:1px solid rgba(255,255,255,.12)">API Key ••••••3f9a</span>
+          <span class="pill" style="font-size:17px;background:rgba(255,255,255,.05);color:#d8d8e0;border:1px solid rgba(255,255,255,.12)">Skill</span>
+          <span class="pill" style="font-size:17px;background:rgba(255,255,255,.05);color:#d8d8e0;border:1px solid rgba(255,255,255,.12)">Prompt</span>
+          <span class="pill" style="font-size:17px;background:rgba(255,255,255,.05);color:#d8d8e0;border:1px solid rgba(255,255,255,.12)">智能体配置</span>
+        </div>
+        <div style="font-size:18px;color:var(--muted);margin-top:14px">任务在本机执行，只回传结果</div></div>
+      <div style="position:absolute;left:30px;right:30px;bottom:28px;display:flex;align-items:baseline;gap:14px">
+        <div style="font-size:22px;color:var(--muted)">本月出租收益</div><div class="gold" id="lcred" style="font-size:60px;font-weight:900;margin-left:auto;font-variant-numeric:tabular-nums">+0</div><div style="font-size:24px;color:var(--muted)">积分</div></div>
+    </div>
+    <div class="abs card" id="rent" style="left:1200px;top:310px;width:600px;height:690px;box-sizing:border-box;padding:28px 30px">
+      <div style="display:flex;justify-content:space-between;align-items:center"><div style="font-size:30px;font-weight:900">使用方 <span style="font-size:22px;color:var(--muted);font-weight:500">· 社区用户</span></div><div class="pill" style="font-size:18px;background:rgba(90,200,250,.1);color:#9fd9ff;border:1px solid rgba(90,200,250,.35)">按次 · 积分支付</div></div>
+      <div id="rreqs"></div>
+      <div id="rsum" style="position:absolute;left:30px;right:30px;bottom:28px;font-size:22px;color:#d8d8e0;line-height:1.6">
+        <div>✓ 没有订阅，也能用上稀有模型</div><div>✓ 雇佣专家智能体，直接解决问题</div></div>
+    </div>
+    <div class="c" id="tunLabel"><div style="text-align:center;white-space:nowrap"><div style="font-size:24px;font-weight:800">Token Bank 共享网络</div></div></div>
+    <div class="c" id="tunSub"><div style="text-align:center;white-space:nowrap;font-size:18px;color:var(--muted);line-height:1.6">只传任务与结果<br>出站连接 · 无需开放端口</div></div>
+  </div>
+
+  <!-- ============ S7 · 闲置赚钱 ============ -->
+  <div class="scene" id="s7">
+    <canvas id="net" class="abs" width="1920" height="1080" style="left:0;top:0"></canvas>
+    <div class="header" id="h7"><div class="eyebrow">07 — 闲置赚钱</div><div class="h1">闲置算力，<span class="gold">变成积分</span></div></div>
+    <div class="c" id="earn"><div class="card" style="width:500px;padding:34px 40px;box-sizing:border-box;border-color:rgba(255,194,61,.3)">
+      <div class="kpi-label">本月贡献收益</div>
+      <div style="display:flex;align-items:baseline;gap:14px;margin-top:8px">
+        <div class="kpi-val gold" style="font-size:78px" id="credits">+0</div><div style="font-size:28px;color:var(--muted)">积分</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px;margin-top:26px;font-size:24px;color:#d8d8e0">
+        <div id="e1" style="display:flex;justify-content:space-between"><span>贡献闲置额度</span><span class="mono" style="color:var(--gold)">+8,420</span></div>
+        <div id="e2" style="display:flex;justify-content:space-between"><span>社区智能体被雇佣</span><span class="mono" style="color:var(--gold)">+3,960</span></div>
+        <div id="e3" style="display:flex;justify-content:space-between"><span>圈子共享</span><span class="mono" style="color:var(--gold)">+480</span></div>
+      </div>
+    </div></div>
+  </div>
+
+  <!-- ============ S8 · 五条主线 ============ -->
+  <div class="scene" id="s8">
+    <div class="c" id="ring8"><div style="width:900px;height:900px;border-radius:50%;border:2px solid rgba(255,194,61,.6);box-shadow:0 0 60px rgba(255,170,30,.35), inset 0 0 60px rgba(255,170,30,.25)"></div></div>
+    <div id="words"></div>
+    <div class="c" id="dots8"><div style="display:flex;gap:18px" id="dots8i"></div></div>
+  </div>
+
+  <!-- ============ S9 · 结尾 ============ -->
+  <div class="scene" id="s9">
+    <div class="c" id="glow9"><div style="width:1100px;height:1100px;border-radius:50%;background:radial-gradient(circle, rgba(255,190,60,.30), rgba(255,150,0,.08) 40%, rgba(0,0,0,0) 70%)"></div></div>
+    <div class="c" id="logo9"><div id="logo9i" style="width:220px;height:220px"></div></div>
+    <div class="c" id="title9"><div style="font-size:128px;font-weight:900;letter-spacing:-.02em;white-space:nowrap">Token <span class="gold">Bank</span></div></div>
+    <div class="c" id="sub9"><div style="font-size:42px;color:#d0d0da;font-weight:500;letter-spacing:.18em;white-space:nowrap">个人 AI 中枢 · Token 管家</div></div>
+    <div class="c" id="plat9"><div style="text-align:center;white-space:nowrap"><div style="font-size:30px;color:#ffe2a0;font-weight:600;letter-spacing:.12em">开源 · 不改使用习惯 · 随时一键还原</div><div style="font-size:22px;color:var(--muted);letter-spacing:.3em;margin-top:14px">macOS &nbsp;·&nbsp; Windows &nbsp;·&nbsp; CLI &nbsp;·&nbsp; Docker</div></div></div>
+    <div class="c" id="url9"><div style="display:flex;gap:26px;align-items:center">
+      <div id="web9" style="display:flex;align-items:center;gap:14px;font-size:32px;font-weight:800;color:#2b1a00;white-space:nowrap;padding:18px 38px;border-radius:999px;background:linear-gradient(180deg,#ffd466,#f0a000);box-shadow:0 0 50px rgba(255,170,30,.35)">
+        <span style="font-size:24px;font-weight:900">免费下载</span><span style="opacity:.5">·</span><span style="font-family:'JetBrains Mono',monospace">tokenbank.wink.run</span></div>
+      <div id="gh9" style="display:flex;align-items:center;gap:14px;font-size:30px;color:var(--gold);white-space:nowrap;padding:18px 36px;border:1px solid rgba(255,194,61,.45);border-radius:999px;background:rgba(255,194,61,.06)">
+        <span style="font-size:20px;font-weight:700;color:var(--muted)">GitHub</span><span style="font-family:'JetBrains Mono',monospace">github.com/wink-run/tokenbank</span></div>
+    </div></div>
+  </div>
+
+  <div id="wm" class="abs" style="right:56px;bottom:34px;display:flex;align-items:center;gap:12px;font-size:22px;color:rgba(255,255,255,.55);opacity:0">
+    <div id="wmlogo" style="width:30px;height:30px"></div><span style="font-family:'JetBrains Mono',monospace">tokenbank.wink.run</span></div>
+  <div id="flash"></div>
+  <div id="vignette"></div>
+  <div id="fade"></div>
+</div>
+
+<script>
+// ---------------------------------------------------------------------------
+// Deterministic timeline: window.renderFrame(t) paints the stage at time t (s).
+// No CSS transitions / animations are used, so any frame can be rendered in
+// isolation — render.mjs steps through it at a fixed fps.
+// ---------------------------------------------------------------------------
+const EN = new URLSearchParams(location.search).get('lang') === 'en';
+// English copy: exact / longest-substring replacement over every text node, plus L() for text set at render time.
+const I18N = {"AI 工具越装越多": "Too many AI tools", "配置各管各，切换全靠手改": "Each configured differently, switched by hand", "账单越来越长": "Bills keep growing", "Token 花在哪，说不清": "No idea where the tokens went", "额度月底清零": "Quota expires unused", "免费额度闲着，付费却在涨": "Free tiers sit idle while paid usage climbs", "Skill / MCP 越装越乱": "Skills & MCPs everywhere", "复制粘贴，版本对不上": "Copy-pasted, out of sync", "好模型用不起": "Top models out of reach", "稀缺模型、专家智能体，够不着": "Rare models and expert agents feel unreachable", "闲置能力白白浪费": "Idle capacity wasted", "订阅用不完，本地模型吃灰": "Unused subscriptions, local models gathering dust", "你的 AI，": "Your AI ", "该有个管家了": "needs a manager.", "本月账单": "This month", "你的个人 AI 中枢": "YOUR PERSONAL AI HUB", "01 — 一键纳管": "01 — ONE-CLICK ONBOARDING", "你在用的 AI 工具，": "All your AI tools, ", "一键全接入": "one click away", "本地网关运行中": "Gateway running", "已接入": "Connected", "不改客户端": "No client changes", "不改命令": "No command changes", "一键还原": "One-click revert", "CLI 注入": "CLI", "会话接入": "Sessions", "配置热补丁": "Config", "· 未纳管": "· off", "02 — 用的明白": "02 — SEE CLEARLY", "你的每一个 Token，": "Every token, ", "都有据可查": "fully traceable", "今日 Token": "Tokens today", "请求数": "Requests", "接入应用": "Apps connected", "实时 Trace": "Live Trace", "03 — 用的节省": "03 — SPEND LESS", "同样的活，": "Same work, ", "自动走最省钱的路": "on the cheapest route", "智能路由": "Smart Router", "模型名不变": "Model names unchanged", "协议自动转换": "Automatic protocol conversion", "本地优先 · 按任务分型": "Local-first · task-aware", "本地模型": "Local model", "订阅套餐": "Subscription", "未用完的月度额度": "Unused monthly quota", "已付": "Prepaid", "社区算力": "Community", "P2P 共享 · 积分结算": "P2P sharing · credits", "qwen3-coder · 本地": "qwen3-coder · local", "llama-3.3-70b · 免费": "llama-3.3-70b · free", "社区节点 · 积分结算": "community node · credits", "· 花费 ¥0.00": "· cost $0.00", "免费额度": "Free tier", "免费": "Free", "¥0": "$0", "04 — 越用越懂你": "04 — SMARTER WITH YOU", "从你的习惯里，": "From your habits, ", "长出你的工具箱": "your own toolkit", "编码": "Coding", "调试": "Debug", "架构": "Architecture", "文档": "Docs", "数据": "Data", "设计": "Design", "工作画像 · 自动提炼": "WORK PORTRAIT · AUTO-GENERATED", "Debug 高频": "Heavy debugging", "长上下文": "Long context", "PR 与 Issue 直接进入上下文": "PRs & issues straight into context", "按你的团队规范自动审查": "Reviews by your team's rules", "从你的高频改动中提炼": "Learned from your frequent edits", "社区智能体，一键雇佣": "Community agent, hire in one click", "匹配度": "Match", "+ 添加": "+ Add", "✓ 已添加": "✓ Added", "05 — AI 资产 · 一处纳管": "05 — ALL YOUR AI ASSETS", "散落各处的 AI 资产，": "AI assets everywhere? ", "一处纳管": "One home.", "共": "Total", "项资产": "assets", "MCP / Skill / Prompt / Agent 统一收纳": "MCP / Skill / Prompt / Agent, all in one", "按类型分类 · 一搜即得": "Sorted by type · instant search", "一处修改，处处生效": "Edit once, apply everywhere", "重复 ×3": "dup ×3", "重复 ×2": "dup ×2", "版本不一致": "version drift", "忘了放哪": "lost", "重复": "dup", "全部": "All", "SQL 调优": "SQL tuning", "团队规范": "Team rules", "搜索：代码评审、GitHub、测试…": "Search: code review, GitHub, tests…", "搜索全部 AI 资产": "Search all AI assets", "06 — 资源投射": "06 — PROJECTION", "一次沉淀，": "Build once, ", "投射到每个智能体": "project to every agent", "投射门控": "Gate", "已纳管 × 已安装": "managed × installed", "已纳管 · 已安装": "Managed · installed", "未安装 · 跳过": "Not installed · skipped", "+4 资源": "+4 assets", "只投射到已纳管且已安装的目标": "Only to managed & installed targets", "依赖自动级联": "Dependencies cascade", "随时一键取消": "Undo anytime", "已纳管": "Managed", "07 — 游乐场 · 智能体编排": "07 — PLAYGROUND · ORCHESTRATION", "一句话，": "One sentence, ", "调度一支智能体团队": "a whole agent team", "游乐场": "Playground", "· 主 Agent：Claude Code": "· Lead agent: Claude Code", "已拆解为": "Split into", "3 个子任务": "3 subtasks", "，并行派发：": ", dispatched in parallel:", "✓ 全部完成 · 3/3 · 已合并结果": "✓ All done · 3/3 · results merged", "修复登录页 Bug，补齐单元测试，再写一份更新日志": "Fix the login bug, add unit tests, then write a changelog", "修复登录 Bug": "Fix login bug", "补齐单元测试": "Add unit tests", "撰写更新日志": "Write changelog", "修复 Bug": "Fix bugs", "单元测试": "Unit tests", "更新日志 · 远端执行": "Changelog · runs remotely", "主 Agent · 编排": "Lead agent · orchestrates", "✓ 完成": "✓ Done", "运行中…": "Running…", "08 — 共享市场 · 闲置赚钱": "08 — SHARING MARKET · EARN FROM IDLE", "出租闲置模型与智能体，": "Rent out idle AI. ", "人人用上稀缺能力": "Rent rare AI.", "出租方": "Lender", "· 你的设备": "· your device", "闲置中 → 赚钱中": "Idle → Earning", "上架出租 · 对外只公开名片": "FOR RENT · PUBLIC CARD ONLY", "本机保险箱": "Local vault", "✓ 未外传": "✓ Never leaves", "智能体配置": "Config", "任务在本机执行，只回传结果": "Tasks run here; only results go back", "本月出租收益": "This month", "使用方": "Renter", "· 社区用户": "· community user", "按次 · 积分支付": "Pay per use · credits", "✓ 没有订阅，也能用上稀有模型": "✓ Rare models, no subscription needed", "✓ 雇佣专家智能体，直接解决问题": "✓ Hire expert agents to get it done", "Token Bank 共享网络": "Token Bank sharing network", "只传任务与结果": "Only tasks & results cross", "出站连接 · 无需开放端口": "Outbound only · no open ports", "闲置订阅额度": "idle subscription", "内网私有部署": "private deployment", "测试生成专家": "Test-gen expert", "已投射智能体": "projected agent", "租用稀有模型": "RENT A RARE MODEL", "雇佣智能体": "HIRE AN AGENT", "用 claude-opus-4 审查整个仓库的架构": "Use claude-opus-4 to review the whole repo", "「测试生成专家」为支付模块补齐测试": "\"Test-gen expert\" writes tests for payments", "✓ 已获得回答 · 消耗 86 积分": "✓ Answer received · 86 credits", "✓ 已生成 42 个用例 · 消耗 120 积分": "✓ 42 test cases generated · 120 credits", "处理中…": "Processing…", "任务": "TASK", "结果": "RESULT", "积分": "credits", "代码评审": "Code review", "重构助手": "Refactor helper", "测试生成": "Test generator", "社区智能体": "Community agent", "用的明白": "See clearly", "用的节省": "Spend less", "用的简单": "Stay simple", "越用越懂你": "Smarter with you", "闲置赚钱": "Earn from idle", "个人 AI 中枢 · Token 管家": "Personal AI hub · Your token manager", "开源 · 不改使用习惯 · 随时一键还原": "Open source · Keep your workflow · One-click revert", "免费下载": "Free download"};
+const I18N_KEYS = Object.keys(I18N).sort((a, b) => b.length - a.length);
+const L = z => (EN ? (I18N[z] ?? z) : z);
+const tr = L;  // alias for scopes that shadow L with a local (path length / legs())
+function translateDOM(root) {
+  const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  const nodes = []; while (w.nextNode()) nodes.push(w.currentNode);
+  for (const n of nodes) {
+    let v = n.nodeValue.replace(/\u00a0/g, ' ');
+    if (!/[\u4e00-\u9fff¥]/.test(v)) continue;
+    v = v.replace(/已用于 (\d+) 个应用/g, (_, k) => `Used in ${k} app${k === '1' ? '' : 's'}`);
+    for (const k of I18N_KEYS) if (v.includes(k)) v = v.split(k).join(I18N[k]);
+    n.nodeValue = v.replace(/¥/g, '$');
+  }
+}
+if (EN) document.documentElement.classList.add('en');
+const DURATION = 78.5;
+const INTRO = 2;  // intro grew from 5s to 7s; everything after it shifts by INTRO
+// Two scenes (资源投射 / 游乐场) are spliced in at 36s; the base timeline resumes at 49s.
+const INS_A = 36, INS_B = 64.5, INS = 22.5, D2 = 6.5;  // base resumes at its 42s (montage) at real 58s; base S7 is dropped
+const W = 1920, H = 1080, CX = 960, CY = 540;
+
+const $ = id => document.getElementById(id);
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, t) => a + (b - a) * t;
+const p = (t, a, b) => clamp((t - a) / (b - a));
+const eo = x => 1 - Math.pow(1 - x, 3);
+const eo5 = x => 1 - Math.pow(1 - x, 5);
+const eio = x => x < .5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+const back = x => { const c1 = 1.9, c3 = c1 + 1; return x <= 0 ? 0 : 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); };
+const win = (t, a, b, fi = .45, fo = .45) => Math.min(eo(p(t, a, a + fi)), 1 - eio(p(t, b - fo, b)));
+
+function rng(seed) { return () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; }; }
+const fmt = n => Math.round(n).toLocaleString('en-US');
+
+// set transform/opacity. cx/cy: position the element's centre at that point.
+function S(el, o = {}) {
+  const { op = 1, x = 0, y = 0, s = 1, r = 0, blur = 0, cx, cy, extra = '' } = o;
+  el.style.opacity = op;
+  let tr = '';
+  if (cx !== undefined) tr += `translate(${cx}px,${cy}px) translate(-50%,-50%) `;
+  tr += `translate(${x}px,${y}px) scale(${s}) rotate(${r}deg) ${extra}`;
+  el.style.transform = tr;
+  el.style.filter = blur > .05 ? `blur(${blur}px)` : 'none';
+}
+
+// ---------------------------------------------------------------- logo svg
+function logoSVG(id) {
+  return `<svg viewBox="0 0 120 120" width="100%" height="100%" style="overflow:visible">
+  <defs>
+    <radialGradient id="${id}c" cx="40%" cy="35%" r="65%"><stop offset="0%" stop-color="#FFD055"/><stop offset="100%" stop-color="#E08A00"/></radialGradient>
+    <linearGradient id="${id}s" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".75"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    <clipPath id="${id}k"><circle cx="60" cy="60" r="56"/></clipPath>
+  </defs>
+  <circle cx="60" cy="60" r="56" fill="url(#${id}c)"/>
+  <circle cx="60" cy="60" r="56" fill="none" stroke="#C07800" stroke-width="3" opacity=".5"/>
+  <circle cx="60" cy="60" r="51" fill="none" stroke="#FFE07A" stroke-width="1.5" opacity=".55"/>
+  <g class="edges" stroke="#7A4A00" stroke-width="2.5" stroke-linecap="round" opacity=".65">
+    <line x1="60" y1="22" x2="26" y2="72"/><line x1="60" y1="22" x2="94" y2="72"/><line x1="26" y1="72" x2="94" y2="72"/>
+    <line x1="60" y1="22" x2="60" y2="56"/><line x1="26" y1="72" x2="60" y2="56"/><line x1="94" y1="72" x2="60" y2="56"/>
+  </g>
+  <g class="arrows"><polygon points="80,52 88,60 74,63" fill="#7A4A00" opacity=".55"/><polygon points="57,72 67,66 67,78" fill="#7A4A00" opacity=".55"/></g>
+  <g class="nodes">
+    <g><circle cx="60" cy="22" r="9" fill="#FFF0A0" stroke="#7A4A00" stroke-width="2.5"/><circle cx="60" cy="22" r="3.5" fill="#7A4A00"/></g>
+    <g><circle cx="26" cy="72" r="9" fill="#FFF0A0" stroke="#7A4A00" stroke-width="2.5"/><circle cx="26" cy="72" r="3.5" fill="#7A4A00"/></g>
+    <g><circle cx="94" cy="72" r="9" fill="#FFF0A0" stroke="#7A4A00" stroke-width="2.5"/><circle cx="94" cy="72" r="3.5" fill="#7A4A00"/></g>
+  </g>
+  <g class="center"><circle cx="60" cy="56" r="13" fill="#FFD233" stroke="#7A4A00" stroke-width="2.5"/>
+  <text x="60" y="61.5" text-anchor="middle" font-family="Georgia, serif" font-size="14" font-weight="bold" fill="#5C3600">T</text></g>
+  <g clip-path="url(#${id}k)"><rect class="shine" x="-60" y="-20" width="40" height="160" fill="url(#${id}s)" transform="rotate(20 60 60)"/></g>
+</svg>`;
+}
+$('coin').innerHTML = logoSVG('L2');
+$('gwlogo').innerHTML = logoSVG('L3');
+$('logo9i').innerHTML = logoSVG('L9');
+$('wmlogo').innerHTML = logoSVG('LW');
+const coinEdges = [...$('coin').querySelectorAll('.edges line')];
+coinEdges.forEach(l => { const len = Math.hypot(l.x2.baseVal.value - l.x1.baseVal.value, l.y2.baseVal.value - l.y1.baseVal.value); l.style.strokeDasharray = len; l.dataset.len = len; });
+const coinNodes = [...$('coin').querySelectorAll('.nodes > g')];
+const coinCenter = $('coin').querySelector('.center');
+const coinArrows = $('coin').querySelector('.arrows');
+const coinShine = $('coin').querySelector('.shine');
+const shine9 = $('logo9i').querySelector('.shine');
+
+// ---------------------------------------------------------------- background
+const bg = $('bg').getContext('2d');
+const dust = (() => { const r = rng(7); return Array.from({ length: 140 }, () => ({ x: r() * W, y: r() * H, z: .3 + r() * .7, ph: r() * 6.28 })); })();
+function drawBg(t, warm, gridA) {
+  bg.fillStyle = '#05050a'; bg.fillRect(0, 0, W, H);
+  // drifting glows
+  const g1x = CX + Math.sin(t * .23) * 420, g1y = 260 + Math.cos(t * .19) * 120;
+  let g = bg.createRadialGradient(g1x, g1y, 0, g1x, g1y, 900);
+  g.addColorStop(0, `rgba(255,176,40,${.16 * warm})`); g.addColorStop(1, 'rgba(255,176,40,0)');
+  bg.fillStyle = g; bg.fillRect(0, 0, W, H);
+  const g2x = 1500 - Math.sin(t * .17) * 300, g2y = 900;
+  g = bg.createRadialGradient(g2x, g2y, 0, g2x, g2y, 800);
+  g.addColorStop(0, `rgba(70,120,255,${.10 * warm})`); g.addColorStop(1, 'rgba(70,120,255,0)');
+  bg.fillStyle = g; bg.fillRect(0, 0, W, H);
+  // perspective floor grid
+  if (gridA > 0.01) {
+    bg.save(); bg.lineWidth = 1;
+    const hy = 640, off = (t * 40) % 60;
+    const vg = bg.createLinearGradient(0, hy, 0, H);
+    vg.addColorStop(0, 'rgba(255,200,90,0)'); vg.addColorStop(1, `rgba(255,200,90,${.08 * gridA})`);
+    bg.strokeStyle = vg;
+    for (let i = -24; i <= 24; i++) { bg.beginPath(); bg.moveTo(CX + i * 18, hy); bg.lineTo(CX + i * 260, H + 40); bg.stroke(); }
+    for (let k = 0; k < 14; k++) { const d = k * 60 + off; const y = hy + Math.pow(d / 840, 2.2) * 460; bg.strokeStyle = `rgba(255,200,90,${.08 * gridA * Math.pow(clamp((y - hy) / (H - hy)), .8)})`; bg.beginPath(); bg.moveTo(0, y); bg.lineTo(W, y); bg.stroke(); }
+    bg.restore();
+  }
+  // dust
+  for (const d of dust) {
+    const y = (d.y - t * 18 * d.z + H * 10) % H, x = d.x + Math.sin(t * .5 + d.ph) * 14;
+    bg.fillStyle = `rgba(255,220,150,${(.10 + .25 * d.z) * (.6 + .4 * Math.sin(t * 2 + d.ph))})`;
+    bg.beginPath(); bg.arc(x, y, 1.2 * d.z + .3, 0, 6.283); bg.fill();
+  }
+}
+
+// ---------------------------------------------------------------- S1 build
+const painEls = [...document.querySelectorAll('#s1 .pain')];
+const PAIN_T = [.3, 1.0, 1.7, 2.4, 3.1, 3.8];
+const logLines = (() => {
+  const r = rng(11), apps = ['claude-code', 'codex', 'cursor', 'workbuddy', 'kimi-code', 'openclaw'],
+    models = ['claude-sonnet-4-6', 'gpt-5', 'claude-opus-4', 'kimi-k2', 'deepseek-v3', 'gemini-2.5-pro'];
+  let html = '';
+  const arr = [];
+  for (let i = 0; i < 34; i++) {
+    const tok = Math.floor(r() * 90000 + 800), cost = (tok * (r() * .00006 + .00001)).toFixed(4);
+    const txt = `${apps[i % 6].padEnd(12)} ${models[Math.floor(r() * 6)].padEnd(18)} ${String(tok).padStart(6)} tok  $${cost}`;
+    arr.push({ x: r() * 1700 + 40, y: r() * 1080, v: 30 + r() * 80, a: .05 + r() * .12, red: r() < .25 });
+    html += `<div class="abs mono" style="font-size:20px;white-space:pre;color:${arr[i].red ? '#ff6a6a' : '#9a9aa8'}">${txt}</div>`;
+  }
+  $('s1logs').innerHTML = html;
+  return arr.map((a, i) => ({ ...a, el: $('s1logs').children[i] }));
+})();
+
+// ---------------------------------------------------------------- S3 build
+const APPS = [
+  { n: 'Claude Code', k: 'C', c: '#d97757', how: 'CLI 注入' },
+  { n: 'Codex', k: 'Cx', c: '#3b3b46', how: 'CLI 注入' },
+  { n: 'Cursor', k: 'Cu', c: '#2f3a55', how: '会话接入' },
+  { n: 'WorkBuddy', k: 'W', c: '#2d7ff9', how: '配置热补丁' },
+  { n: 'Kimi Code', k: 'K', c: '#1f1f1f', how: 'CLI 注入' },
+  { n: 'OpenClaw', k: 'O', c: '#e0484f', how: '配置热补丁' },
+];
+const appPos = APPS.map((a, i) => ({ x: i < 3 ? 110 : 1400, y: 400 + (i % 3) * 190 }));
+$('apps').innerHTML = APPS.map((a, i) => `
+  <div class="abs card app" style="left:${appPos[i].x}px;top:${appPos[i].y}px;width:410px;height:120px;display:flex;align-items:center;gap:20px;padding:0 24px;box-sizing:border-box;border-radius:20px">
+    <div class="badge" style="background:${a.c};border:1px solid rgba(255,255,255,.15)">${a.k}</div>
+    <div style="flex:1;min-width:0"><div style="font-size:28px;font-weight:700;white-space:nowrap">${a.n}</div>
+      <div class="st" style="font-size:19px;color:var(--muted);margin-top:4px;white-space:nowrap">${a.how} · 未纳管</div></div>
+    <div class="toggle"><b></b></div>
+  </div>`).join('');
+const appEls = [...document.querySelectorAll('#apps .app')];
+const GW = { x: CX, y: 690, w: 540, h: 230 };
+function bez(P, t) { const u = 1 - t; return [0, 1].map(k => u * u * u * P[0][k] + 3 * u * u * t * P[1][k] + 3 * u * t * t * P[2][k] + t * t * t * P[3][k]); }
+const s3paths = APPS.map((a, i) => {
+  const left = i < 3, sx = left ? appPos[i].x + 410 : appPos[i].x, sy = appPos[i].y + 60;
+  const ex = left ? GW.x - GW.w / 2 : GW.x + GW.w / 2, ey = GW.y - 60 + (i % 3) * 60;
+  const mx = (sx + ex) / 2;
+  return [[sx, sy], [mx, sy], [mx, ey], [ex, ey]];
+});
+$('s3svg').innerHTML = `<defs><filter id="gl"><feGaussianBlur stdDeviation="4"/></filter></defs>` + s3paths.map(P =>
+  `<path d="M${P[0]} C${P[1]} ${P[2]} ${P[3]}" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="2"/>
+   <path class="lit" d="M${P[0]} C${P[1]} ${P[2]} ${P[3]}" fill="none" stroke="#ffc23d" stroke-width="3" stroke-linecap="round"/>`).join('')
+  + APPS.map(() => `<circle class="pk" r="7" fill="#fff4cc" filter="url(#gl)"/><circle class="pk2" r="4" fill="#fff"/>`).join('')
+  + `<rect id="pulse3" fill="none" stroke="#ffc23d" stroke-width="2"/>`;
+const litPaths = [...document.querySelectorAll('#s3svg .lit')];
+litPaths.forEach(el => { const L = el.getTotalLength(); el.style.strokeDasharray = L; el.dataset.len = L; });
+const pk = [...document.querySelectorAll('#s3svg .pk')], pk2 = [...document.querySelectorAll('#s3svg .pk2')];
+const TOG = APPS.map((_, i) => 11.0 + i * .5);
+
+// ---------------------------------------------------------------- S4 build
+const BARN = 24;
+const barH = (() => { const r = rng(21); return Array.from({ length: BARN }, (_, i) => .18 + .8 * Math.pow(Math.sin((i + 2) / BARN * Math.PI), 1.6) * (.55 + .45 * r())); })();
+$('bars').innerHTML = barH.map((h, i) => `<div class="abs bar" style="left:${i * (940 / BARN)}px;bottom:30px;width:${940 / BARN - 12}px;height:${h * 300}px;border-radius:8px 8px 3px 3px;transform-origin:50% 100%;
+  background:linear-gradient(180deg,#ffe29a 0%,#ffb81f 45%,rgba(224,138,0,.25) 100%)"></div>`).join('')
+  + `<div class="abs" style="left:0;right:0;bottom:24px;height:1px;background:var(--line)"></div>`
+  + [0, 6, 12, 18, 23].map(i => `<div class="abs mono" style="left:${i * (940 / BARN)}px;bottom:-8px;font-size:16px;color:var(--muted)">${String(i).padStart(2, '0')}:00</div>`).join('');
+const bars = [...document.querySelectorAll('#bars .bar')];
+const ROWS = (() => {
+  const r = rng(33), apps = [['Claude Code', '#d97757'], ['Codex', '#8e8ea0'], ['Cursor', '#6e8cff'], ['WorkBuddy', '#2d7ff9'], ['Kimi Code', '#c0c0c0'], ['OpenClaw', '#e0484f']],
+    models = ['claude-sonnet-4-6', 'gpt-5', 'llama-3.3-70b', 'qwen3-coder', 'kimi-k2', 'deepseek-v3'];
+  return Array.from({ length: 22 }, (_, i) => { const a = apps[Math.floor(r() * 6)]; return { a, m: models[Math.floor(r() * 6)], tok: Math.floor(r() * 24000 + 600), ms: Math.floor(r() * 2400 + 300), time: (s => `14:${String(30 + Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`)(3 + i * 4 + Math.floor(r() * 3)) }; });
+})();
+$('rows').innerHTML = ROWS.map(R => `<div class="row">
+  <span class="mono" style="color:var(--muted);font-size:17px;width:82px">${R.time}</span>
+  <span class="pill" style="background:${R.a[1]}22;color:${R.a[1]};border:1px solid ${R.a[1]}55">${R.a[0]}</span>
+  <span class="mono" style="flex:1;color:#d8d8e0;font-size:17px;white-space:nowrap;overflow:hidden">${R.m}</span>
+  <span class="mono" style="color:var(--gold);font-size:18px;width:80px;text-align:right">${fmt(R.tok)}</span></div>`).join('');
+const rowEls = [...document.querySelectorAll('#rows .row')];
+
+// ---------------------------------------------------------------- S5 build
+const DEST = [
+  { n: '本地模型', d: 'Ollama · qwen3-coder', tag: '¥0', c: '#34d399' },
+  { n: '免费额度', d: 'Groq · llama-3.3-70b', tag: '免费', c: '#5ac8fa' },
+  { n: '订阅套餐', d: '未用完的月度额度', tag: '已付', c: '#b38cff' },
+  { n: '社区算力', d: 'P2P 共享 · 积分结算', tag: '积分', c: '#ffc23d' },
+];
+const destPos = DEST.map((_, i) => ({ x: 1290, y: 330 + i * 150 }));
+$('dests').innerHTML = DEST.map((d, i) => `<div class="card dest" style="left:${destPos[i].x}px;top:${destPos[i].y}px">
+  <div style="width:14px;height:14px;border-radius:50%;background:${d.c};box-shadow:0 0 14px ${d.c};flex:none"></div>
+  <div style="flex:1"><div style="font-size:30px;font-weight:800">${d.n}</div><div class="mono" style="font-size:19px;color:var(--muted);margin-top:4px">${d.d}</div></div>
+  <div class="pill" style="font-size:22px;padding:8px 16px;background:${d.c}1f;color:${d.c};border:1px solid ${d.c}66">${d.tag}</div></div>`).join('');
+const destEls = [...document.querySelectorAll('#dests .dest')];
+const REQ = [
+  { app: 'Claude Code', m: 'claude-sonnet-4-6', to: 0, real: 'qwen3-coder · 本地', t0: 23.2 },
+  { app: 'Codex', m: 'gpt-5', to: 1, real: 'llama-3.3-70b · 免费', t0: 25.0 },
+  { app: 'Cursor', m: 'claude-opus-4', to: 3, real: '社区节点 · 积分结算', t0: 26.8 },
+];
+const reqPos = REQ.map((_, i) => ({ x: 140, y: 380 + i * 190 }));
+$('reqs').innerHTML = REQ.map((q, i) => `<div class="card abs req" style="left:${reqPos[i].x}px;top:${reqPos[i].y}px;width:470px;height:150px;padding:22px 28px;box-sizing:border-box">
+  <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:26px;font-weight:800">${q.app}</span><span class="mono" style="font-size:16px;color:var(--muted)">POST /v1</span></div>
+  <div class="mono" style="font-size:20px;margin-top:10px;color:#d8d8e0">model: <span style="color:#fff">"${q.m}"</span></div>
+  <div class="mono res" style="font-size:18px;margin-top:10px;color:#34d399;white-space:nowrap">→ ${q.real} · 花费 ¥0.00</div></div>`).join('');
+const reqEls = [...document.querySelectorAll('#reqs .req')];
+const ROUTER = { x: 900, y: 640 };
+const s5paths = REQ.map((q, i) => {
+  const a = [[reqPos[i].x + 470, reqPos[i].y + 75], [760, reqPos[i].y + 75], [760, ROUTER.y], [ROUTER.x - 130, ROUTER.y]];
+  const d = destPos[q.to], b = [[ROUTER.x + 130, ROUTER.y], [1120, ROUTER.y], [1120, d.y + 56], [d.x, d.y + 56]];
+  return [a, b];
+});
+$('s5svg').innerHTML = `<defs><filter id="gl5"><feGaussianBlur stdDeviation="5"/></filter></defs>`
+  + destPos.map(d => { const P = [[ROUTER.x + 130, ROUTER.y], [1120, ROUTER.y], [1120, d.y + 56], [d.x, d.y + 56]]; return `<path d="M${P[0]} C${P[1]} ${P[2]} ${P[3]}" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="2"/>`; }).join('')
+  + s5paths.map(([a, b]) => `<path d="M${a[0]} C${a[1]} ${a[2]} ${a[3]}" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="2"/>
+     <path class="la" d="M${a[0]} C${a[1]} ${a[2]} ${a[3]}" fill="none" stroke="#ffc23d" stroke-width="3" stroke-linecap="round"/>
+     <path class="lb" d="M${b[0]} C${b[1]} ${b[2]} ${b[3]}" fill="none" stroke="#ffc23d" stroke-width="3" stroke-linecap="round"/>`).join('')
+  + REQ.map(() => `<circle class="p5" r="9" fill="#fff2c2" filter="url(#gl5)"/><circle class="p5b" r="5" fill="#fff"/>`).join('');
+const la = [...document.querySelectorAll('#s5svg .la')], lb = [...document.querySelectorAll('#s5svg .lb')];
+[...la, ...lb].forEach(el => { const L = el.getTotalLength(); el.style.strokeDasharray = L; el.dataset.len = L; });
+const p5 = [...document.querySelectorAll('#s5svg .p5')], p5b = [...document.querySelectorAll('#s5svg .p5b')];
+const PROTOS = ['Anthropic Messages ⇄ OpenAI Chat', 'OpenAI Chat ⇄ Codex Responses', 'Codex Responses ⇄ Anthropic Messages'];
+
+// ---------------------------------------------------------------- S6 build
+const AX = ['编码', '调试', '架构', '文档', '数据', '设计'];
+const AV = [.92, .86, .62, .42, .55, .34];
+const RC = { x: 450, y: 370, r: 250 };
+const axPt = (i, v) => { const a = -Math.PI / 2 + i * Math.PI / 3; return [RC.x + Math.cos(a) * RC.r * v, RC.y + Math.sin(a) * RC.r * v]; };
+$('radar').innerHTML = `<defs><radialGradient id="rg"><stop offset="0" stop-color="#ffc23d" stop-opacity=".55"/><stop offset="1" stop-color="#e08a00" stop-opacity=".15"/></radialGradient></defs>`
+  + [.25, .5, .75, 1].map(k => `<polygon class="grid" points="${AX.map((_, i) => axPt(i, k).join(',')).join(' ')}" fill="none" stroke="rgba(255,255,255,.10)" stroke-width="1.5"/>`).join('')
+  + AX.map((_, i) => `<line class="grid" x1="${RC.x}" y1="${RC.y}" x2="${axPt(i, 1)[0]}" y2="${axPt(i, 1)[1]}" stroke="rgba(255,255,255,.08)"/>`).join('')
+  + `<polygon id="rpoly" fill="url(#rg)" stroke="#ffc23d" stroke-width="3" stroke-linejoin="round"/>`
+  + AX.map((_, i) => `<circle class="rdot" r="7" fill="#fff4cc" stroke="#ffc23d" stroke-width="3"/>`).join('')
+  + AX.map((n, i) => { const [x, y] = axPt(i, 1.2); return `<text class="rlab" x="${x}" y="${y + 10}" text-anchor="middle" fill="#d8d8e0" font-size="28" font-weight="600" font-family="Noto Sans SC">${n}</text>`; }).join('')
+  + `<text x="${RC.x}" y="${RC.y + RC.r + 110}" text-anchor="middle" fill="#8b8b98" font-size="24" letter-spacing="6" font-family="Noto Sans SC">工作画像 · 自动提炼</text>`;
+const rdots = [...document.querySelectorAll('#radar .rdot')];
+const TAGS = [{ t: 'TypeScript / React', x: 680, y: 330 }, { t: 'Debug 高频', x: 90, y: 640 }, { t: '长上下文', x: 800, y: 880 }];
+$('tags6').innerHTML = TAGS.map(g => `<div class="abs chip tag" style="left:${g.x}px;top:${g.y}px;font-size:22px;padding:10px 20px">${g.t}</div>`).join('');
+const tagEls = [...document.querySelectorAll('#tags6 .tag')];
+const RECS = [
+  { ty: 'MCP', c: '#5ac8fa', n: 'GitHub', d: 'PR 与 Issue 直接进入上下文', m: 97 },
+  { ty: 'SKILL', c: '#34d399', n: '代码评审', d: '按你的团队规范自动审查', m: 94 },
+  { ty: 'PROMPT', c: '#b38cff', n: '重构助手', d: '从你的高频改动中提炼', m: 91 },
+  { ty: 'AGENT', c: '#ffc23d', n: '测试生成', d: '社区智能体，一键雇佣', m: 88 },
+];
+$('recs').innerHTML = RECS.map((q, i) => `<div class="card rec" style="left:1060px;top:${320 + i * 162}px">
+  <div class="type" style="background:${q.c}1f;color:${q.c};border:1px solid ${q.c}66">${q.ty}</div>
+  <div style="flex:1;min-width:0"><div style="font-size:30px;font-weight:800">${q.n}</div><div style="font-size:21px;color:var(--muted);margin-top:4px;white-space:nowrap">${q.d}</div></div>
+  <div style="text-align:right"><div class="mono" style="font-size:18px;color:var(--muted)">匹配度</div><div class="mono" style="font-size:30px;font-weight:600;color:#fff">${q.m}%</div></div>
+  <div class="add" style="position:relative;width:128px;height:52px;flex:none">
+    <div class="a0" style="position:absolute;inset:0;border-radius:12px;border:1px solid rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:600">+ 添加</div>
+    <div class="a1" style="position:absolute;inset:0;border-radius:12px;background:linear-gradient(180deg,#ffd466,#f0a000);color:#2b1a00;display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:800;opacity:0">✓ 已添加</div>
+  </div></div>`).join('');
+const recEls = [...document.querySelectorAll('#recs .rec')];
+
+// ---------------------------------------------------------------- S7 build
+const net = $('net').getContext('2d');
+const NODES = (() => {
+  const r = rng(77), arr = [];
+  for (let gy = 0; gy < 7; gy++) for (let gx = 0; gx < 13; gx++) {
+    const x = 120 + gx * 140 + (r() - .5) * 90, y = 330 + gy * 110 + (r() - .5) * 70;
+    if (Math.hypot(x - 1440, y - 700) < 300) continue; // keep space for the earnings card
+    if (x < 1000 && y < 360) continue;                   // keep space for the header
+    arr.push({ x, y, s: 3 + r() * 4, ph: r() * 6.28 });
+  }
+  return arr;
+})();
+const YOU = { x: 700, y: 650 };
+NODES.forEach(n => n.d = Math.hypot(n.x - YOU.x, n.y - YOU.y));
+const EDGES = [];
+NODES.forEach((n, i) => {
+  const near = NODES.map((m, j) => [Math.hypot(m.x - n.x, m.y - n.y), j]).filter(q => q[1] !== i).sort((a, b) => a[0] - b[0]).slice(0, 2);
+  near.forEach(([, j]) => { if (!EDGES.some(e => (e[0] === j && e[1] === i))) EDGES.push([i, j]); });
+});
+const HUB = NODES.map((n, i) => [n.d, i]).sort((a, b) => a[0] - b[0]).slice(0, 7).map(q => q[1]);
+function drawNet(t, a) {
+  net.clearRect(0, 0, W, H);
+  if (a <= 0) return;
+  net.globalAlpha = a;
+  const wave = lerp(0, 1500, eio(p(t, 36.7, 40.2)));
+  const lit = n => clamp((wave - n.d) / 120);
+  for (const [i, j] of EDGES) {
+    const A = NODES[i], B = NODES[j], L = Math.min(lit(A), lit(B));
+    net.strokeStyle = L > 0 ? `rgba(255,194,61,${.12 + .45 * L})` : 'rgba(255,255,255,.07)';
+    net.lineWidth = 1.5; net.beginPath(); net.moveTo(A.x, A.y); net.lineTo(B.x, B.y); net.stroke();
+  }
+  HUB.forEach(i => {
+    const B = NODES[i], L = clamp((wave - B.d + 50) / 60);
+    if (L <= 0) return;
+    net.strokeStyle = `rgba(255,210,110,${.55 * L})`; net.lineWidth = 2.5;
+    net.beginPath(); net.moveTo(YOU.x, YOU.y); net.lineTo(B.x, B.y); net.stroke();
+    // packets flowing in towards "you" (credits)
+    for (let k = 0; k < 2; k++) {
+      const f = ((t * .7 + i * .13 + k * .5) % 1);
+      const x = lerp(B.x, YOU.x, f), y = lerp(B.y, YOU.y, f);
+      net.fillStyle = `rgba(255,240,190,${L * (1 - f * .5)})`; net.beginPath(); net.arc(x, y, 4, 0, 6.283); net.fill();
+    }
+  });
+  for (const n of NODES) {
+    const L = lit(n), s = n.s * (1 + .6 * L) * (1 + .12 * Math.sin(t * 3 + n.ph));
+    if (L > 0) { const g = net.createRadialGradient(n.x, n.y, 0, n.x, n.y, s * 5); g.addColorStop(0, `rgba(255,194,61,${.45 * L})`); g.addColorStop(1, 'rgba(255,194,61,0)'); net.fillStyle = g; net.beginPath(); net.arc(n.x, n.y, s * 5, 0, 6.283); net.fill(); }
+    net.fillStyle = L > 0 ? `rgb(255,${Math.round(lerp(255, 205, L))},${Math.round(lerp(255, 90, L))})` : 'rgba(200,200,215,.45)';
+    net.beginPath(); net.arc(n.x, n.y, s, 0, 6.283); net.fill();
+  }
+  // "you" node
+  const pr = eo(p(t, 36.3, 36.9));
+  for (let k = 0; k < 3; k++) { const f = (t * .6 + k / 3) % 1; net.strokeStyle = `rgba(255,194,61,${(1 - f) * .5 * pr})`; net.lineWidth = 2; net.beginPath(); net.arc(YOU.x, YOU.y, 30 + f * 160, 0, 6.283); net.stroke(); }
+  const g = net.createRadialGradient(YOU.x - 8, YOU.y - 8, 2, YOU.x, YOU.y, 32 * pr);
+  g.addColorStop(0, '#fff6d0'); g.addColorStop(.5, '#ffc23d'); g.addColorStop(1, '#e08a00');
+  net.fillStyle = g; net.beginPath(); net.arc(YOU.x, YOU.y, 30 * pr, 0, 6.283); net.fill();
+  net.fillStyle = `rgba(255,255,255,${pr})`; net.font = '700 26px Inter, "Noto Sans SC"'; net.textAlign = 'center';
+  net.fillText('你', YOU.x, YOU.y + 72);
+  net.globalAlpha = 1;
+}
+
+// ---------------------------------------------------------------- S8 build
+const WORDS = [['用的明白', 'SEE CLEARLY'], ['用的节省', 'SPEND LESS'], ['用的简单', 'STAY SIMPLE'], ['越用越懂你', 'SMARTER WITH YOU'], ['闲置赚钱', 'EARN FROM IDLE']];
+$('words').innerHTML = WORDS.map((w, i) => `<div class="wd" style="position:absolute;inset:0;opacity:0"><div class="word ${i % 2 ? '' : 'gold'}">${w[0]}</div><div class="sub-en">${w[1]}</div></div>`).join('');
+const wordEls = [...document.querySelectorAll('#words .wd')];
+$('dots8i').innerHTML = WORDS.map(() => `<div style="width:56px;height:6px;border-radius:3px;background:rgba(255,255,255,.15);overflow:hidden"><div class="df" style="height:100%;width:0;background:#ffc23d"></div></div>`).join('');
+const dfs = [...document.querySelectorAll('#dots8i .df')];
+
+// ---------------------------------------------------------------- render
+function header(el, t, a, b) {
+  const k = eo5(p(t, a, a + .7));
+  const out = eio(p(t, b - .45, b));
+  S(el, { op: k * (1 - out), y: (1 - k) * 40 - out * 20, blur: (1 - k) * 8 });
+}
+
+function renderBase(t, rt, t1 = rt) {
+  // ------------ background
+  const warm = t < 5 ? .35 : (t < 9.5 ? 1.2 : 1);
+  const gridA = (t > 9.5 && t < 42) ? 1 : (t >= 47 ? .8 : 0);
+  drawBg(rt, warm, gridA * (t < 5 ? 0 : 1));
+
+  // ------------ S1 (0 – 7, real time): six pain points, then the answer
+  const s1 = $('s1');
+  s1.style.opacity = t1 < 7.3 ? 1 : 0;
+  if (t1 < 7.3) {
+    const collapse = eio(p(t1, 6.45, 6.95));
+    logLines.forEach(L => {
+      const y = ((L.y - t1 * L.v) % 1080 + 1080) % 1080;
+      const x = lerp(L.x, CX - 300, collapse), yy = lerp(y, CY, collapse);
+      S(L.el, { op: L.a * eo(p(t1, .1, .8)) * (1 + (L.red ? 1.5 * p(t1, 1.0, 2.0) : 0)) * (1 - .6 * p(t1, 4.3, 4.6)) * (1 - collapse), x, y: yy, s: 1 - collapse * .8 });
+    });
+    painEls.forEach((el, i) => {
+      const a = PAIN_T[i], b = a + .7, k = eo5(p(t1, a, a + .22)), o = p(t1, b - .1, b);
+      S(el, { op: k * (1 - o), s: lerp(1.22, 1, k) * (1 - .05 * o), blur: (1 - k) * 12, cx: CX, cy: CY - 30 });
+    });
+    const pi = PAIN_T.findIndex((a, i) => t1 >= a && t1 < a + .7);
+    $('painN').firstElementChild.textContent = pi >= 0 ? `${EN ? 'PAIN POINT' : '痛点'} ${pi + 1} / 6` : '';
+    S($('painN'), { op: pi >= 0 ? .85 : 0, cx: CX, cy: 250 });
+    const ek = eo5(p(t1, 4.5, 4.8)), c = eio(p(t1, 6.45, 6.95));
+    S($('phEnd'), { op: ek * (1 - p(t1, 6.75, 6.95)), s: lerp(1.25, 1, ek) * (1 + .05 * p(t1, 4.5, 6.4)) * (1 - .97 * c), blur: (1 - ek) * 14 + c * 6, cx: CX, cy: CY - 20 });
+    // bill ticker during "账单越来越长" / "额度月底清零"
+    const bk = eio(p(t1, 1.0, 2.35)), bv = 3862.4 * bk + (bk > 0 && bk < 1 ? (Math.sin(t1 * 40) * 9) : 0);
+    $('billv').textContent = Math.max(0, bv).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    S($('bill'), { op: win(t1, 1.05, 2.4, .2, .2) * .95, cx: CX, cy: 860, s: 1 + .04 * Math.sin(t1 * 20) * p(t1, 1.4, 2.3) });
+    const dk = eo(p(t1, 6.75, 7.0)), dz = p(t1, 7.0, 7.25);
+    S($('dot'), { op: dk * (1 - dz), s: .3 + dk * .7 + dz * 3, cx: CX, cy: CY - 60 });
+  }
+
+  // ------------ S2 (5 – 9.5)
+  const s2 = $('s2'), s2a = (t > 4.9 && t < 9.6);
+  s2.style.opacity = s2a ? 1 : 0;
+  if (s2a) {
+    const out = eio(p(t, 8.9, 9.5));
+    const pushS = 1 + out * .25;
+    const spin = eo5(p(t, 5.0, 6.6));
+    S($('coinWrap'), { op: clamp(p(t, 5.0, 5.2)) * (1 - out), cx: CX, cy: 390, s: lerp(.2, 1, back(p(t, 5.0, 5.9))) * pushS, blur: out * 10 });
+    $('coin').style.transform = `rotateY(${(1 - spin) * -720}deg)`;
+    coinEdges.forEach((l, i) => { const k = eo(p(t, 5.5 + i * .08, 6.3 + i * .08)); l.style.strokeDashoffset = l.dataset.len * (1 - k); });
+    coinNodes.forEach((g, i) => { const k = back(p(t, 5.9 + i * .1, 6.4 + i * .1)); g.style.transformOrigin = ['60px 22px', '26px 72px', '94px 72px'][i]; g.style.transform = `scale(${k})`; });
+    { const k = back(p(t, 6.3, 6.8)); coinCenter.style.transformOrigin = '60px 56px'; coinCenter.style.transform = `scale(${k})`; coinArrows.style.opacity = p(t, 6.5, 6.9); }
+    coinShine.setAttribute('x', lerp(-60, 160, eio(p(t, 6.9, 7.6))));
+    S($('glow2'), { op: eo(p(t, 5.0, 6.0)) * (.8 + .2 * Math.sin(t * 3)) * (1 - out), cx: CX, cy: 390, s: lerp(.4, 1.1, eo(p(t, 5.0, 7))) });
+    S($('rays'), { op: eo(p(t, 5.3, 6.5)) * .9 * (1 - out), cx: CX, cy: 390, r: t * 6, s: 1 + out * .2 });
+    const tk = eo5(p(t, 6.5, 7.5));
+    S($('title2'), { op: tk * (1 - out), cx: CX, cy: 690, y: (1 - tk) * 30, blur: (1 - tk) * 10 + out * 8, s: pushS });
+    $('title2t').style.letterSpacing = `${lerp(.4, -.02, tk)}em`;
+    const sk = eo(p(t, 7.3, 8.1));
+    S($('sub2'), { op: sk * (1 - out), cx: CX, cy: 800, y: (1 - sk) * 20, s: pushS, blur: out * 8 });
+  }
+
+  // ------------ S3 (9.5 – 16)
+  const s3a = t > 9.4 && t < 16.1;
+  $('s3').style.opacity = s3a ? 1 : 0;
+  if (s3a) {
+    const out = eio(p(t, 15.5, 16.0));
+    header($('h3'), t, 9.55, 16.0);
+    const gk = back(p(t, 9.9, 10.6));
+    let pulseK = 0;
+    let n = 0;
+    appEls.forEach((el, i) => {
+      const k = eo5(p(t, 10.0 + i * .1, 10.7 + i * .1)), left = i < 3;
+      const on = eo5(p(t, TOG[i], TOG[i] + .25));
+      if (t >= TOG[i] + .15) n++;
+      S(el, { op: k * (1 - out), x: (1 - k) * (left ? -120 : 120) + (left ? -1 : 1) * out * 60 });
+      el.style.borderColor = `rgba(255,194,61,${.1 + .45 * on})`;
+      el.style.boxShadow = `0 40px 100px rgba(0,0,0,.55), 0 0 ${40 * on}px rgba(255,170,30,${.25 * on})`;
+      const tg = el.querySelector('.toggle'), kb = tg.querySelector('b');
+      tg.style.background = on > .5 ? '#ffc23d' : '#2a2a33';
+      kb.style.transform = `translateX(${34 * on}px)`;
+      kb.style.background = on > .5 ? '#fff' : '#d8d8e0';
+      el.querySelector('.st').innerHTML = on > .5 ? `${tr(APPS[i].how)} · <span style="color:#ffc23d">${tr('已纳管')}</span>` : `${tr(APPS[i].how)} ${tr('· 未纳管')}`;
+      const L = +litPaths[i].dataset.len, dk = eio(p(t, TOG[i] + .05, TOG[i] + .55));
+      litPaths[i].style.strokeDashoffset = L * (1 - dk);
+      litPaths[i].style.opacity = (1 - out) * .9;
+      const f = ((t - TOG[i] - .55) * .9 + 10) % 1, show = t > TOG[i] + .55 ? 1 - out : 0;
+      const P = bez(s3paths[i], dk < 1 ? dk : f);
+      [pk[i], pk2[i]].forEach(c => { c.setAttribute('cx', P[0]); c.setAttribute('cy', P[1]); c.style.opacity = (dk > 0 && dk < 1 ? 1 : show); });
+      const since = t - (TOG[i] + .55); if (since > 0 && since < .6) pulseK = Math.max(pulseK, 1 - since / .6);
+    });
+    const pc = $('pulse3'), since = TOG.map(x => t - x - .55).filter(x => x >= 0 && x < .7).pop();
+    if (since !== undefined) { const g = eo(since / .7) * 60; pc.setAttribute('x', GW.x - GW.w / 2 - g); pc.setAttribute('y', GW.y - GW.h / 2 - g); pc.setAttribute('width', GW.w + 2 * g); pc.setAttribute('height', GW.h + 2 * g); pc.setAttribute('rx', 22 + g); pc.style.opacity = (1 - since / .7) * .8; } else pc.style.opacity = 0;
+    $('gwn').textContent = n;
+    S($('gw'), { op: clamp(gk * 1.2) * (1 - out), cx: GW.x, cy: GW.y, s: lerp(.7, 1, gk) * (1 + .03 * pulseK) * (1 - out * .1) });
+    $('gw').firstElementChild.style.boxShadow = `0 40px 100px rgba(0,0,0,.55), 0 0 ${60 + 60 * pulseK}px rgba(255,170,30,${.18 + .3 * pulseK + .12 * (n / 6)})`;
+    const ck = eo5(p(t, 14.0, 14.6));
+    S($('chips3'), { op: ck * (1 - out), cx: CX, cy: 960, y: (1 - ck) * 30 });
+  }
+
+  // ------------ S4 (16 – 22.5)
+  const s4a = t > 15.9 && t < 22.6;
+  $('s4').style.opacity = s4a ? 1 : 0;
+  if (s4a) {
+    const out = eio(p(t, 22.0, 22.5));
+    header($('h4'), t, 16.05, 22.5);
+    const dk = eo5(p(t, 16.2, 17.2));
+    S($('dash'), { op: dk * (1 - out), y: (1 - dk) * 120 - out * 30, s: 1 + .025 * p(t, 16.2, 22.5) });
+    $('dashInner').style.transform = `rotateX(${(1 - dk) * 24}deg)`;
+    const kk = eo(p(t, 16.8, 20.8));
+    $('k1').textContent = fmt(2847316 * kk + (t > 20.8 ? (t - 20.8) * 3150 : 0));
+    $('k2').textContent = fmt(1204 * kk + (t > 20.8 ? Math.floor((t - 20.8) * 4) : 0));
+    $('k3').textContent = Math.round(6 * eo(p(t, 16.8, 18.2)));
+    bars.forEach((b, i) => { const k = back(p(t, 16.9 + i * .05, 17.6 + i * .05)); b.style.transform = `scaleY(${Math.max(0, k)})`; b.style.opacity = k > 0 ? 1 : 0; });
+    // rows: newest on top, a new one every .32s
+    const nr = clamp(Math.floor((t - 17.0) / .32) + 1, 0, ROWS.length), frac = eo5(clamp(((t - 17.0) / .32) % 1 * 2.2));
+    rowEls.forEach((el, i) => {
+      if (i >= nr) { el.style.opacity = 0; return; }
+      const slot = nr - 1 - i, isNew = slot === 0;
+      const y = 10 + (slot - (1 - frac)) * 64 + (isNew ? 0 : 0);
+      el.style.top = `${y}px`;
+      el.style.opacity = isNew ? frac : clamp(1 - (slot - 6) * .35);
+      el.style.background = isNew ? `rgba(255,194,61,${.16 * (1 - frac * .5)})` : 'rgba(255,255,255,.03)';
+      el.style.border = isNew ? '1px solid rgba(255,194,61,.35)' : '1px solid rgba(255,255,255,.04)';
+    });
+    $('live').style.opacity = .4 + .6 * (Math.sin(t * 8) > 0 ? 1 : 0);
+  }
+
+  // ------------ S5 (22.5 – 30)
+  const s5a = t > 22.4 && t < 30.1;
+  $('s5').style.opacity = s5a ? 1 : 0;
+  if (s5a) {
+    const out = eio(p(t, 29.5, 30.0));
+    header($('h5'), t, 22.55, 30.0);
+    const rk = back(p(t, 22.8, 23.5));
+    S($('router'), { op: clamp(rk) * (1 - out), cx: ROUTER.x, cy: ROUTER.y, s: lerp(.6, 1, rk) });
+    let spinBoost = 0, hot = -1, hotK = 0;
+    REQ.forEach((q, i) => {
+      const t0 = q.t0, ek = eo5(p(t, t0 - .5, t0));
+      S(reqEls[i], { op: ek * (1 - out), x: (1 - ek) * -80 });
+      const a = eio(p(t, t0, t0 + .55)), b = eio(p(t, t0 + .75, t0 + 1.3));
+      la[i].style.strokeDashoffset = la[i].dataset.len * (1 - a);
+      lb[i].style.strokeDashoffset = lb[i].dataset.len * (1 - b);
+      const dim = t > t0 + 1.8 ? .35 : 1;
+      la[i].style.opacity = lb[i].style.opacity = dim * (1 - out);
+      let P = null;
+      if (a > 0 && a < 1) P = bez(s5paths[i][0], a);
+      else if (b > 0 && b < 1) P = bez(s5paths[i][1], b);
+      else if (a >= 1 && b <= 0) P = [ROUTER.x, ROUTER.y];
+      [p5[i], p5b[i]].forEach(c => { c.style.opacity = P ? 1 - out : 0; if (P) { c.setAttribute('cx', P[0]); c.setAttribute('cy', P[1]); } });
+      if (t > t0 + .5 && t < t0 + .8) spinBoost = 1;
+      if (t > t0 + 1.25) { hot = q.to; hotK = 1 - p(t, t0 + 1.6, t0 + 1.8) * .6; }
+      const res = reqEls[i].querySelector('.res'), rk2 = eo(p(t, t0 + 1.3, t0 + 1.6));
+      res.style.opacity = rk2; res.style.transform = `translateX(${(1 - rk2) * -20}px)`;
+      reqEls[i].style.borderColor = t > t0 && t < t0 + 1.8 ? 'rgba(255,194,61,.5)' : 'rgba(255,255,255,.09)';
+    });
+    $('ring').style.transform = `rotate(${t * 40 + (t > 23 ? (t - 23) * 30 : 0)}deg) scale(${1 + .06 * spinBoost})`;
+    destEls.forEach((el, i) => {
+      const k = eo5(p(t, 23.0 + i * .12, 23.7 + i * .12));
+      const h = i === hot ? hotK : 0;
+      S(el, { op: k * (1 - out), x: (1 - k) * 100, s: 1 + .04 * h });
+      el.style.borderColor = `rgba(255,194,61,${.09 + .6 * h})`;
+      el.style.boxShadow = `0 40px 100px rgba(0,0,0,.55), 0 0 ${50 * h}px rgba(255,170,30,${.35 * h})`;
+    });
+    const pi = clamp(Math.floor((t - 23.0) / 1.8), 0, 2);
+    $('protot').textContent = PROTOS[pi];
+    const pk5 = eo(p(t, 23.4, 23.9));
+    S($('proto'), { op: pk5 * (1 - out) * (.75 + .25 * Math.abs(Math.sin((t - 23) * Math.PI / 1.8))), cx: ROUTER.x, cy: ROUTER.y + 190 });
+    const ck = eo5(p(t, 28.6, 29.1));
+    S($('chips5'), { op: ck * (1 - out), cx: CX, cy: 1000, y: (1 - ck) * 30 });
+  }
+
+  // ------------ S6 (30 – 36)
+  const s6a = t > 29.9 && t < 36.1;
+  $('s6').style.opacity = s6a ? 1 : 0;
+  if (s6a) {
+    const out = eio(p(t, 35.5, 36.0));
+    header($('h6'), t, 30.05, 36.0);
+    const gk = eo(p(t, 30.3, 31.0));
+    S($('radar'), { op: gk * (1 - out), s: lerp(.85, 1, gk) });
+    const vk = eo5(p(t, 30.7, 32.2));
+    const wob = i => 1 + .03 * Math.sin(t * 2.2 + i);
+    const pts = AX.map((_, i) => axPt(i, AV[i] * vk * wob(i)));
+    $('rpoly').setAttribute('points', pts.map(q => q.join(',')).join(' '));
+    rdots.forEach((d, i) => { d.setAttribute('cx', pts[i][0]); d.setAttribute('cy', pts[i][1]); d.style.opacity = vk; });
+    tagEls.forEach((el, i) => { const k = back(p(t, 32.0 + i * .25, 32.5 + i * .25)); S(el, { op: clamp(k) * (1 - out), s: k, y: Math.sin(t * 1.5 + i) * 6 }); });
+    recEls.forEach((el, i) => {
+      const k = eo5(p(t, 31.4 + i * .35, 32.1 + i * .35));
+      S(el, { op: k * (1 - out), x: (1 - k) * 140 });
+      const ak = eo(p(t, 33.6 + i * .3, 33.8 + i * .3));
+      el.querySelector('.a1').style.opacity = ak;
+      el.querySelector('.a0').style.opacity = 1 - ak;
+      el.querySelector('.add').style.transform = `scale(${1 + .12 * Math.sin(Math.PI * ak)})`;
+      el.style.borderColor = `rgba(255,194,61,${.09 + .35 * ak})`;
+    });
+  }
+
+  // ------------ S7 (36 – 42)
+  const s7a = t > 35.9 && t < 42.1;
+  $('s7').style.opacity = s7a ? 1 : 0;
+  if (s7a) {
+    const out = eio(p(t, 41.5, 42.0));
+    header($('h7'), t, 36.05, 42.0);
+    drawNet(t, eo(p(t, 36.0, 36.6)) * (1 - out));
+    const ek = eo5(p(t, 37.4, 38.2));
+    S($('earn'), { op: ek * (1 - out), cx: 1440, cy: 700, y: (1 - ek) * 60 });
+    $('credits').textContent = '+' + fmt(12860 * eo(p(t, 37.8, 40.8)));
+    ['e1', 'e2', 'e3'].forEach((id, i) => { const k = eo(p(t, 38.4 + i * .5, 38.9 + i * .5)); S($(id), { op: k, x: (1 - k) * 30 }); });
+  } else drawNet(t, 0);
+
+  // ------------ S8 (42 – 47)
+  const s8a = t > 41.95 && t < 47.1;
+  $('s8').style.opacity = s8a ? 1 : 0;
+  if (s8a) {
+    wordEls.forEach((el, i) => {
+      const a = 42 + i, k = eo5(p(t, a, a + .3)), o = eio(p(t, a + .82, a + 1));
+      const last = i === 4;
+      S(el, { op: k * (last ? 1 - eio(p(t, 46.75, 47.0)) : 1 - o), s: lerp(1.35, 1, k) * (1 + .04 * p(t, a, a + 1)) * (last ? 1 + eio(p(t, 46.75, 47.0)) * .4 : 1), blur: (1 - k) * 16 + o * 10 });
+    });
+    { const f = (t - 42) % 1, k = eo(f); S($('ring8'), { op: (t < 47 ? (1 - f) * .8 : 0), cx: CX, cy: 520, s: .25 + k * .9 }); }
+    dfs.forEach((d, i) => d.style.width = `${100 * clamp(p(t, 42 + i, 42.35 + i))}%`);
+    S($('dots8'), { op: eo(p(t, 42, 42.3)) * (1 - p(t, 46.7, 47)), cx: CX, cy: 880 });
+  }
+
+  // ------------ S9 (47 – 54)
+  const s9a = t > 46.9;
+  $('s9').style.opacity = s9a ? 1 : 0;
+  if (s9a) {
+    const lk = back(p(t, 47.0, 47.8));
+    S($('glow9'), { op: eo(p(t, 47, 48)) * (.85 + .15 * Math.sin(t * 2)), cx: CX, cy: 340 });
+    S($('logo9'), { op: clamp(p(t, 47.0, 47.25)), cx: CX, cy: 310, s: lerp(.3, 1, lk), extra: `rotateY(${(1 - eo5(p(t, 47, 48.2))) * 360}deg)` });
+    $('logo9').style.transform = `translate(${CX}px,310px) translate(-50%,-50%) perspective(1200px) rotateY(${(1 - eo5(p(t, 47, 48.2))) * 360}deg) scale(${lerp(.3, 1, lk)})`;
+    shine9.setAttribute('x', lerp(-60, 160, eio(p(t, 48.6, 49.3))));
+    const tk = eo5(p(t, 47.5, 48.4));
+    S($('title9'), { op: tk, cx: CX, cy: 545, y: (1 - tk) * 30, blur: (1 - tk) * 10 });
+    const sk = eo5(p(t, 48.1, 48.9));
+    S($('sub9'), { op: sk, cx: CX, cy: 648, y: (1 - sk) * 20 });
+    const pk9 = eo5(p(t, 48.6, 49.4));
+    S($('plat9'), { op: pk9, cx: CX, cy: 762, y: (1 - pk9) * 16 });
+    const uk = eo5(p(t, 49.0, 49.8));
+    S($('url9'), { op: uk, cx: CX, cy: 900, s: lerp(.9, 1, uk) * (1 + .025 * Math.sin(Math.max(0, t - 50) * 4) * p(t, 50, 50.5)) });
+    const wk = eo5(p(t, 49.0, 49.7)), gk2 = eo5(p(t, 49.25, 49.95));  // base-timeline times
+    S($('web9'), { op: wk, x: (1 - wk) * -40 });
+    S($('gh9'), { op: gk2, x: (1 - gk2) * 40 });
+  }
+
+  // ------------ global flashes & fade
+  const flashes = [[5.0, .55], [47.0, .5], [42, .18], [43, .14], [44, .14], [45, .14], [46, .16]];
+  let fl = 0; flashes.forEach(([a, m]) => { const d = t - a; if (d >= 0 && d < .5) fl = Math.max(fl, m * (1 - eo(d / .5))); });
+  $('flash').style.opacity = fl;
+  $('fade').style.opacity = Math.max(1 - p(rt, 0, .25), eio(p(t, 53.0, 54.0)));
+}
+
+// ---------------------------------------------------------------- SP build (资源投射)
+const PASSETS = [
+  { ty: 'SKILL', c: '#34d399', n: '代码评审' },
+  { ty: 'MCP', c: '#5ac8fa', n: 'GitHub' },
+  { ty: 'PROMPT', c: '#b38cff', n: '重构助手' },
+  { ty: 'AGENT', c: '#ffc23d', n: '测试生成' },
+];
+const paPos = PASSETS.map((_, i) => ({ x: 140, y: 350 + i * 150 }));
+$('passets').innerHTML = PASSETS.map((a, i) => `<div class="card abs pa" style="left:${paPos[i].x}px;top:${paPos[i].y}px;width:440px;height:110px;display:flex;align-items:center;gap:22px;padding:0 26px;box-sizing:border-box">
+  <div class="type" style="background:${a.c}1f;color:${a.c};border:1px solid ${a.c}66">${a.ty}</div>
+  <div style="font-size:30px;font-weight:800;white-space:nowrap">${a.n}</div></div>`).join('');
+const paEls = [...document.querySelectorAll('#passets .pa')];
+const GATE = { x: 900, y: 650 };
+const PT = [
+  { n: 'Claude Code', k: 'C', c: '#d97757', ok: true },
+  { n: 'Codex', k: 'Cx', c: '#3b3b46', ok: true },
+  { n: 'Cursor', k: 'Cu', c: '#2f3a55', ok: true },
+  { n: 'Kimi Code', k: 'K', c: '#1f1f1f', ok: true },
+  { n: 'Trae', k: 'T', c: '#444', ok: false },
+];
+const ptPos = PT.map((_, i) => ({ x: 1300, y: 322 + i * 132 }));
+$('ptargets').innerHTML = PT.map((a, i) => `<div class="card abs pt" style="left:${ptPos[i].x}px;top:${ptPos[i].y}px;width:480px;height:108px;display:flex;align-items:center;gap:20px;padding:0 24px;box-sizing:border-box">
+  <div class="badge" style="background:${a.c};border:1px solid rgba(255,255,255,.15);width:52px;height:52px;font-size:22px">${a.k}</div>
+  <div style="flex:1;min-width:0"><div style="font-size:27px;font-weight:700">${a.n}</div>
+    <div class="ps" style="font-size:18px;color:var(--muted);margin-top:3px;white-space:nowrap">${a.ok ? '已纳管 · 已安装' : '未安装 · 跳过'}</div></div>
+  <div class="pr" style="font-size:22px;font-weight:800;white-space:nowrap;padding:6px 14px;border-radius:10px;${a.ok ? 'color:#2b1a00;background:linear-gradient(180deg,#ffd466,#f0a000)' : 'color:#ff6a6a;border:1px solid rgba(255,106,106,.5)'}">${a.ok ? '+4 资源' : '✕'}</div></div>`).join('');
+const ptEls = [...document.querySelectorAll('#ptargets .pt')];
+const spIn = paPos.map((p, i) => [[p.x + 440, p.y + 55], [720, p.y + 55], [720, GATE.y - 60 + i * 40], [GATE.x - 100, GATE.y - 60 + i * 40]]);
+const spOut = ptPos.map((p, i) => [[GATE.x + 100, GATE.y - 80 + i * 40], [1110, GATE.y - 80 + i * 40], [1110, p.y + 54], [p.x, p.y + 54]]);
+const dpath = P => `M${P[0]} C${P[1]} ${P[2]} ${P[3]}`;
+$('spsvg').innerHTML = `<defs><filter id="glp"><feGaussianBlur stdDeviation="5"/></filter></defs>`
+  + spIn.map(P => `<path d="${dpath(P)}" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="2"/><path class="pin" d="${dpath(P)}" fill="none" stroke="#ffc23d" stroke-width="3" stroke-linecap="round"/>`).join('')
+  + spOut.map((P, i) => `<path d="${dpath(P)}" fill="none" stroke="rgba(255,255,255,.08)" stroke-width="2" ${PT[i].ok ? '' : 'stroke-dasharray="6 8"'}/><path class="pout" d="${dpath(P)}" fill="none" stroke="#ffc23d" stroke-width="3" stroke-linecap="round"/>`).join('')
+  + spOut.map(() => `<circle class="ppk" r="8" fill="#fff2c2" filter="url(#glp)"/>`).join('');
+const pin = [...document.querySelectorAll('#spsvg .pin')], pout = [...document.querySelectorAll('#spsvg .pout')], ppk = [...document.querySelectorAll('#spsvg .ppk')];
+[...pin, ...pout].forEach(el => { const L = el.getTotalLength(); el.style.strokeDasharray = L; el.dataset.len = L; });
+const PIN_T = 37.8, POUT_T = 38.6;
+
+// ---------------------------------------------------------------- SG build (游乐场编排)
+const UTEXT = '修复登录页 Bug，补齐单元测试，再写一份更新日志';
+const CALLS = [
+  { a: 'codex', task: '修复登录 Bug', t: 45.0 },
+  { a: 'kimi-code', task: '补齐单元测试', t: 45.5 },
+  { a: 'community/doc-writer', task: '撰写更新日志', t: 46.0 },
+];
+$('calls').innerHTML = CALLS.map((q, i) => `<div class="abs call mono" style="left:28px;right:28px;top:${316 + i * 92}px;height:76px;border-radius:12px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07);display:flex;align-items:center;gap:14px;padding:0 20px;font-size:19px;box-sizing:border-box">
+  <span style="color:#9fd9ff">tb_dispatch_agent</span><span style="color:#d8d8e0;white-space:nowrap;overflow:hidden;flex:1">("${q.a}", "${q.task}")</span>
+  <span class="cs" style="white-space:nowrap;font-family:Inter,'Noto Sans SC';font-weight:700;font-size:19px"></span></div>`).join('');
+const callEls = [...document.querySelectorAll('#calls .call')];
+const MAIN = { x: 1400, y: 440 };
+const WORK = [
+  { n: 'Codex', k: 'Cx', c: '#3b3b46', d: '修复 Bug', x: 1150, y: 800 },
+  { n: 'Kimi Code', k: 'K', c: '#1f1f1f', d: '单元测试', x: 1400, y: 800 },
+  { n: '社区智能体', k: '☁', c: '#7a4a00', d: '更新日志 · 远端执行', x: 1650, y: 800 },
+];
+const nodeHTML = (n, k, c, d, big) => `<div class="c onode"><div style="display:flex;flex-direction:column;align-items:center;gap:12px">
+  <div style="position:relative;width:${big ? 132 : 104}px;height:${big ? 132 : 104}px">
+    <svg class="ring" width="100%" height="100%" viewBox="0 0 100 100" style="position:absolute;inset:0;transform:rotate(-90deg)"><circle cx="50" cy="50" r="46" fill="none" stroke="rgba(255,255,255,.1)" stroke-width="4"/><circle class="rp" cx="50" cy="50" r="46" fill="none" stroke="#ffc23d" stroke-width="4" stroke-linecap="round" stroke-dasharray="289" stroke-dashoffset="289"/></svg>
+    <div style="position:absolute;inset:12px;border-radius:50%;background:${c};border:1px solid rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:${big ? 34 : 28}px;font-weight:800">${k}</div>
+    <div class="ok" style="position:absolute;right:-6px;top:-6px;width:34px;height:34px;border-radius:50%;background:#34d399;color:#062;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:900;opacity:0">✓</div>
+  </div>
+  <div style="text-align:center"><div style="font-size:${big ? 28 : 24}px;font-weight:800;white-space:nowrap">${n}</div><div style="font-size:18px;color:var(--muted);white-space:nowrap;margin-top:2px">${d}</div></div></div></div>`;
+$('onodes').innerHTML = nodeHTML('Claude Code', 'C', '#d97757', '主 Agent · 编排', true) + WORK.map(w => nodeHTML(w.n, w.k, w.c, w.d, false)).join('');
+const oNodes = [...document.querySelectorAll('#onodes .onode')];
+const orch = $('orch').getContext('2d');
+
+function renderExtra(t) {
+  // ------------ SP 资源投射 (36 – 42.5)
+  const spa = t > 35.95 && t < 42.6;
+  $('sp').style.opacity = spa ? 1 : 0;
+  if (spa) {
+    const out = eio(p(t, 42.0, 42.5));
+    header($('hp'), t, 36.05, 42.5);
+    paEls.forEach((el, i) => { const k = eo5(p(t, 36.4 + i * .12, 37.1 + i * .12)); const glow = eo(p(t, PIN_T + i * .08, PIN_T + .3 + i * .08)) * (1 - p(t, 39.2, 39.8)); S(el, { op: k * (1 - out), x: (1 - k) * -100 }); el.style.borderColor = `rgba(255,194,61,${.09 + .5 * glow})`; });
+    const gk = back(p(t, 36.8, 37.5)), gp = t > 38.4 && t < 39.0 ? 1 - p(t, 38.4, 39.0) : 0;
+    S($('gate'), { op: clamp(gk) * (1 - out), cx: GATE.x, cy: GATE.y, s: lerp(.6, 1, gk) * (1 + .05 * gp) });
+    $('gateScan').style.top = `${20 + 280 * (.5 + .5 * Math.sin(t * 3))}px`;
+    pin.forEach((el, i) => { const k = eio(p(t, PIN_T + i * .08, PIN_T + .6 + i * .08)); el.style.strokeDashoffset = el.dataset.len * (1 - k); el.style.opacity = (1 - out) * (1 - .6 * p(t, 39.6, 40.2)); });
+    ptEls.forEach((el, i) => {
+      const ok = PT[i].ok, k = eo5(p(t, 37.0 + i * .1, 37.7 + i * .1));
+      const d0 = POUT_T + i * .18, dk = eio(p(t, d0, d0 + .6));
+      const hit = eo(p(t, d0 + .55, d0 + .8));
+      S(el, { op: k * (1 - out) * (ok ? 1 : 1 - .45 * hit), x: (1 - k) * 100, s: 1 + (ok ? .04 * Math.sin(Math.PI * hit) : 0) });
+      el.style.borderColor = ok ? `rgba(255,194,61,${.09 + .5 * hit})` : `rgba(255,106,106,${.09 + .4 * hit})`;
+      el.style.boxShadow = ok ? `0 40px 100px rgba(0,0,0,.55), 0 0 ${40 * hit}px rgba(255,170,30,${.25 * hit})` : '0 40px 100px rgba(0,0,0,.55)';
+      const pr = el.querySelector('.pr'); pr.style.opacity = hit; pr.style.transform = `scale(${lerp(.6, 1, back(p(t, d0 + .55, d0 + .95)))})`;
+      // blocked beam stops half-way at the gate side
+      const L = +pout[i].dataset.len, reach = ok ? 1 : .35;
+      pout[i].style.strokeDashoffset = L * (1 - dk * reach);
+      pout[i].style.stroke = ok ? '#ffc23d' : '#ff6a6a';
+      pout[i].style.opacity = (1 - out) * (ok ? 1 : 1 - p(t, d0 + .6, d0 + 1.2));
+      const P = bez(spOut[i], dk * reach);
+      ppk[i].setAttribute('cx', P[0]); ppk[i].setAttribute('cy', P[1]);
+      ppk[i].style.opacity = dk > 0 && dk < 1 ? 1 - out : 0;
+      ppk[i].setAttribute('fill', ok ? '#fff2c2' : '#ff9a9a');
+    });
+    const ck = eo5(p(t, 40.4, 40.9));
+    S($('chipsp'), { op: ck * (1 - out), cx: CX, cy: 1010, y: (1 - ck) * 30 });
+  }
+
+  // ------------ SG 游乐场编排 (42.5 – 49)
+  const sga = t > 42.45 && t < 49.1;
+  $('sg').style.opacity = sga ? 1 : 0;
+  orch.clearRect(0, 0, W, H);
+  if (sga) {
+    const out = eio(p(t, 48.5, 49.0));
+    header($('hg'), t, 42.55, 49.0);
+    const ck = eo5(p(t, 42.8, 43.5));
+    S($('chat'), { op: ck * (1 - out), y: (1 - ck) * 80 });
+    const tk = p(t, 43.4, 44.4), nch = Math.floor(L(UTEXT).length * tk);
+    $('utext').textContent = L(UTEXT).slice(0, Math.max(1, nch)) + (tk < 1 && Math.floor(t * 6) % 2 ? '▍' : '');
+    S($('umsg'), { op: eo(p(t, 43.3, 43.5)), y: (1 - eo(p(t, 43.3, 43.6))) * 16 });
+    $('uimg').style.opacity = eo(p(t, 44.3, 44.6));
+    S($('plan'), { op: eo(p(t, 44.6, 44.9)), x: (1 - eo(p(t, 44.6, 44.9))) * -20 });
+    const doneAt = CALLS.map(q => q.t + 1.6);
+    callEls.forEach((el, i) => {
+      const q = CALLS[i], k = eo5(p(t, q.t - .2, q.t + .2)), fin = t >= doneAt[i];
+      S(el, { op: k, x: (1 - k) * -30 });
+      const cs = el.querySelector('.cs');
+      cs.textContent = fin ? L('✓ 完成') : (t > q.t ? L('运行中…') : '');
+      cs.style.color = fin ? '#34d399' : '#ffc23d';
+      el.style.borderColor = fin ? 'rgba(52,211,153,.35)' : (t > q.t ? 'rgba(255,194,61,.4)' : 'rgba(255,255,255,.07)');
+    });
+    S($('done'), { op: eo(p(t, 47.9, 48.2)), y: (1 - eo(p(t, 47.9, 48.2))) * 12 });
+    // orchestration graph
+    const nk = i => back(p(t, 43.0 + i * .12, 43.6 + i * .12));
+    const posN = [MAIN, ...WORK];
+    oNodes.forEach((el, i) => {
+      const k = nk(i);
+      S(el, { op: clamp(k) * (1 - out), cx: posN[i].x, cy: posN[i].y + (i ? 30 : 0), s: lerp(.5, 1, k) });
+      const rp = el.querySelector('.rp'), ok = el.querySelector('.ok');
+      if (i === 0) { const busy = t > 44.5 && t < 48.0; rp.style.strokeDashoffset = 289 * (1 - (busy ? .25 : (t >= 48 ? 1 : 0))); rp.parentNode.style.transform = `rotate(${-90 + (busy ? t * 360 : 0)}deg)`; ok.style.opacity = eo(p(t, 48.0, 48.2)); }
+      else { const q = CALLS[i - 1], pr = p(t, q.t + .35, doneAt[i - 1]); rp.style.strokeDashoffset = 289 * (1 - pr); ok.style.opacity = eo(p(t, doneAt[i - 1], doneAt[i - 1] + .2)); }
+    });
+    orch.globalAlpha = (1 - out) * eo(p(t, 43.2, 43.8));
+    WORK.forEach((w, i) => {
+      const q = CALLS[i];
+      const A = [MAIN.x, MAIN.y + 118], B = [w.x, w.y - 30];
+      const P = [A, [A[0], A[1] + 100], [B[0], B[1] - 100], B];
+      const active = t > q.t;
+      orch.strokeStyle = active ? 'rgba(255,194,61,.7)' : 'rgba(255,255,255,.12)'; orch.lineWidth = active ? 3 : 2;
+      orch.setLineDash(i === 2 ? [8, 8] : []);
+      orch.beginPath(); orch.moveTo(...P[0]); orch.bezierCurveTo(...P[1], ...P[2], ...P[3]); orch.stroke();
+      orch.setLineDash([]);
+      if (active) {
+        const fin = t >= q.t + 1.6;
+        for (let k = 0; k < 2; k++) {
+          let f = fin ? 1 - ((t * .9 + k * .5) % 1) : ((t - q.t) * 1.1 + k * .5) % 1; // task down, result back up
+          const pt = bez(P, f);
+          orch.fillStyle = fin ? 'rgba(120,240,190,.95)' : 'rgba(255,240,190,.95)';
+          orch.shadowColor = fin ? '#34d399' : '#ffc23d'; orch.shadowBlur = 16;
+          orch.beginPath(); orch.arc(pt[0], pt[1], 6, 0, 6.283); orch.fill(); orch.shadowBlur = 0;
+        }
+      }
+    });
+    orch.globalAlpha = 1;
+  }
+}
+
+// ---------------------------------------------------------------- SA build (AI 资产一处纳管)
+const MESS = [
+  ['#d97757', '~/.claude/skills/code-review/', '重复 ×3'], ['#6e8cff', '.cursor/mcp.json', ''], ['#8e8ea0', '~/.codex/prompts/fix-bug.md', '版本不一致'],
+  ['#d97757', 'CLAUDE.md', ''], ['#2d7ff9', 'workbuddy/skills/sql-tuning', ''], ['#c0c0c0', '~/.kimi/mcp.json', '重复 ×2'],
+  ['#8e8ea0', 'AGENTS.md', ''], ['#6e8cff', '.cursor/rules/refactor.mdc', ''], ['#999', 'prompts-final-v3(1).txt', '忘了放哪'],
+  ['#d97757', '~/.claude/mcp.json', ''], ['#999', 'github-mcp (copy)', '重复'], ['#ffc23d', 'test-gen-agent.yaml', ''],
+  ['#8e8ea0', '~/.codex/config.toml', ''], ['#6e8cff', '.cursor/prompts/review.md', '版本不一致'],
+];
+const messPos = (() => { const r = rng(91); return MESS.map((_, i) => ({ x: 170 + (i % 4) * 400 + (r() - .5) * 120, y: 330 + Math.floor(i / 4) * 170 + (r() - .5) * 70, r: (r() - .5) * 14, ph: r() * 6.28 })); })();
+$('mess').innerHTML = MESS.map(m => `<div class="c mchip"><div style="display:flex;align-items:center;gap:10px;padding:12px 18px;border-radius:12px;background:rgba(30,30,38,.92);border:1px solid rgba(255,255,255,.12);box-shadow:0 12px 30px rgba(0,0,0,.4);white-space:nowrap">
+  <i style="width:10px;height:10px;border-radius:50%;background:${m[0]};display:inline-block"></i><span class="mono" style="font-size:19px;color:#d8d8e0">${m[1]}</span>
+  ${m[2] ? `<span style="font-size:15px;font-weight:700;color:#ff6a6a;border:1px solid rgba(255,106,106,.5);border-radius:6px;padding:2px 8px">${m[2]}</span>` : ''}</div></div>`).join('');
+const messEls = [...document.querySelectorAll('#mess .mchip')];
+const TABS = [['全部', 72], ['MCP', 12], ['Skill', 18], ['Prompt', 36], ['Agent', 6]];
+$('libtabs').innerHTML = TABS.map((tb, i) => `<div class="tab" style="padding:10px 20px;border-radius:12px;font-size:21px;font-weight:700;${i === 0 ? 'background:linear-gradient(180deg,#ffd466,#f0a000);color:#2b1a00' : 'background:rgba(255,255,255,.05);color:#d8d8e0;border:1px solid rgba(255,255,255,.08)'}">${tb[0]} <span style="opacity:.7">${tb[1]}</span></div>`).join('');
+const tabEls = [...document.querySelectorAll('#libtabs .tab')];
+const LIB = [
+  ['MCP', '#5ac8fa', 'GitHub', ['#d97757', '#6e8cff', '#c0c0c0']], ['SKILL', '#34d399', '代码评审', ['#d97757', '#2d7ff9']],
+  ['PROMPT', '#b38cff', '修复 Bug', ['#8e8ea0', '#6e8cff']], ['AGENT', '#ffc23d', '测试生成', ['#d97757']],
+  ['MCP', '#5ac8fa', 'PostgreSQL', ['#8e8ea0', '#6e8cff']], ['SKILL', '#34d399', 'SQL 调优', ['#2d7ff9']],
+  ['PROMPT', '#b38cff', '重构助手', ['#6e8cff', '#d97757']], ['PROMPT', '#b38cff', '团队规范', ['#d97757', '#8e8ea0', '#c0c0c0']],
+];
+$('libgrid').innerHTML = LIB.map((a, i) => `<div class="lc" style="position:absolute;left:${(i % 4) * 318}px;top:${Math.floor(i / 4) * 196}px;width:296px;height:176px;border-radius:16px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);padding:20px 22px;box-sizing:border-box">
+  <div class="type" style="width:auto;display:inline-block;font-size:15px;background:${a[1]}1f;color:${a[1]};border:1px solid ${a[1]}66">${a[0]}</div>
+  <div style="font-size:28px;font-weight:800;margin-top:14px">${a[2]}</div>
+  <div style="display:flex;align-items:center;gap:6px;margin-top:14px;font-size:17px;color:var(--muted)">${a[3].map(c => `<i style="width:12px;height:12px;border-radius:50%;background:${c};display:inline-block;border:1px solid rgba(255,255,255,.3)"></i>`).join('')}<span style="margin-left:6px">已用于 ${a[3].length} 个应用</span></div></div>`).join('');
+const lcEls = [...document.querySelectorAll('#libgrid .lc')];
+
+function renderAssets(t) {
+  const saa = t > 35.95 && t < 42.6;
+  $('sa').style.opacity = saa ? 1 : 0;
+  if (!saa) return;
+  const out = eio(p(t, 42.0, 42.5));
+  header($('ha'), t, 36.05, 42.5);
+  const LIBC = { x: 960, y: 610 };
+  messEls.forEach((el, i) => {
+    const P = messPos[i], ik = eo5(p(t, 36.2 + i * .06, 36.6 + i * .06));
+    const fly = eio(p(t, 38.2 + i * .04, 38.9 + i * .04));
+    const jit = (1 - fly) * p(t, 36.8, 37.6);
+    const x = lerp(P.x + Math.sin(t * 7 + P.ph) * 6 * jit, LIBC.x - 120 + (i % 4) * 80, fly);
+    const y = lerp(P.y + Math.cos(t * 6 + P.ph) * 5 * jit, LIBC.y, fly);
+    S(el, { op: ik * (1 - p(t, 38.6 + i * .04, 38.95 + i * .04)), cx: x + 180, cy: y, r: P.r * (1 - fly) + Math.sin(t * 5 + P.ph) * 2 * jit, s: lerp(1, .4, fly) });
+  });
+  const lk = eo5(p(t, 38.6, 39.3));
+  S($('lib'), { op: lk * (1 - out), s: lerp(.92, 1, lk) });
+  $('lib').style.boxShadow = `0 40px 100px rgba(0,0,0,.55), 0 0 ${80 * (1 - p(t, 39.0, 40.0)) * lk}px rgba(255,170,30,.35)`;
+  const q = L('搜索：代码评审、GitHub、测试…'), qk = p(t, 40.4, 41.2);
+  $('libq').textContent = qk > 0 ? q.slice(0, Math.ceil(q.length * qk)) : L('搜索全部 AI 资产');
+  $('libn').textContent = Math.round(72 * eo(p(t, 39.0, 40.2)));
+  tabEls.forEach((el, i) => { const k = eo5(p(t, 39.0 + i * .07, 39.4 + i * .07)); S(el, { op: k, y: (1 - k) * 12 }); });
+  lcEls.forEach((el, i) => { const k = back(p(t, 39.2 + i * .07, 39.7 + i * .07)); S(el, { op: clamp(k), s: lerp(.7, 1, k) }); el.style.borderColor = qk > 0 && [0, 1, 3].includes(i) ? 'rgba(255,194,61,.55)' : 'rgba(255,255,255,.08)'; });
+  const ck = eo5(p(t, 40.6, 41.1));
+  S($('chipsa'), { op: ck * (1 - out), cx: CX, cy: 990, y: (1 - ck) * 30 });
+}
+
+function renderFrame(t) {
+  if (CINE) renderCine(t);
+  const u = t - INTRO;
+  $('wm').style.opacity = .85 * win(u, 9.8, 64.5, .6, .5);
+  const o = u < INS_A ? u : (u < INS_B ? INS_A : u - INS);
+  renderBase(o, t, t);
+  renderAssets(u);
+  renderExtra(u - D2);
+  renderMarket(u - D2);
+}
+
+// ---------------------------------------------------------------- SM build (共享市场)
+const LROWS = [
+  { ty: 'MODEL', c: '#5ac8fa', n: 'claude-opus-4', d: '闲置订阅额度' },
+  { ty: 'MODEL', c: '#5ac8fa', n: 'qwen3-coder-480b', d: '内网私有部署' },
+  { ty: 'AGENT', c: '#ffc23d', n: '测试生成专家', d: '已投射智能体' },
+];
+$('lrows').innerHTML = LROWS.map((r, i) => `<div class="lrow" style="display:flex;align-items:center;gap:16px;height:66px;padding:0 16px;margin-bottom:10px;border-radius:12px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.07)">
+  <div class="type" style="width:78px;font-size:16px;background:${r.c}1f;color:${r.c};border:1px solid ${r.c}66">${r.ty}</div>
+  <div class="mono" style="font-size:22px;font-weight:600;flex:1;white-space:nowrap">${r.n}</div>
+  <div style="font-size:18px;color:var(--muted);white-space:nowrap">${r.d}</div></div>`).join('');
+const lrowEls = [...document.querySelectorAll('#lrows .lrow')];
+const RREQ = [
+  { k: '租用稀有模型', q: '用 claude-opus-4 审查整个仓库的架构', res: '✓ 已获得回答 · 消耗 86 积分', row: 0, t: 50.4 },
+  { k: '雇佣智能体', q: '「测试生成专家」为支付模块补齐测试', res: '✓ 已生成 42 个用例 · 消耗 120 积分', row: 2, t: 52.7 },
+];
+$('rreqs').innerHTML = RREQ.map((r, i) => `<div class="rreq" style="position:absolute;left:30px;right:30px;top:${104 + i * 196}px;height:176px;border-radius:16px;background:rgba(255,255,255,.035);border:1px solid rgba(255,255,255,.08);padding:18px 22px;box-sizing:border-box">
+  <div style="font-size:18px;font-weight:700;color:#9fd9ff;letter-spacing:.08em">${r.k}</div>
+  <div style="font-size:24px;font-weight:700;margin-top:8px;line-height:1.4">${r.q}</div>
+  <div class="rres" style="font-size:20px;font-weight:700;color:#34d399;margin-top:12px"></div></div>`).join('');
+const rreqEls = [...document.querySelectorAll('#rreqs .rreq')];
+const mk = $('mk').getContext('2d');
+const TUN = { x0: 740, x1: 1180, y: 640 };
+const legs = r => ({ req: [r.t + .3, r.t + .9], exec: [r.t + .9, r.t + 1.5], res: [r.t + 1.5, r.t + 2.1] });
+
+function renderMarket(t) {
+  const sma = t > 48.95 && t < 58.1;
+  $('sm').style.opacity = sma ? 1 : 0;
+  mk.clearRect(0, 0, W, H);
+  if (!sma) return;
+  const out = eio(p(t, 57.5, 58.0));
+  header($('hm'), t, 49.05, 58.0);
+  const lk = eo5(p(t, 49.3, 50.0)), rk = eo5(p(t, 49.45, 50.15));
+  S($('lend'), { op: lk * (1 - out), x: (1 - lk) * -100 });
+  S($('rent'), { op: rk * (1 - out), x: (1 - rk) * 100 });
+  const tk = eo(p(t, 49.7, 50.3));
+  S($('tunLabel'), { op: tk * (1 - out), cx: (TUN.x0 + TUN.x1) / 2, cy: TUN.y - 90 });
+  S($('tunSub'), { op: tk * (1 - out) * .9, cx: (TUN.x0 + TUN.x1) / 2, cy: TUN.y + 90 });
+  // tunnel
+  mk.globalAlpha = tk * (1 - out);
+  const g = mk.createLinearGradient(TUN.x0, 0, TUN.x1, 0);
+  g.addColorStop(0, 'rgba(255,194,61,.5)'); g.addColorStop(.5, 'rgba(90,200,250,.35)'); g.addColorStop(1, 'rgba(90,200,250,.5)');
+  mk.strokeStyle = g; mk.lineWidth = 2;
+  [TUN.y - 26, TUN.y + 26].forEach(y => { mk.beginPath(); mk.moveTo(TUN.x0 - 20, y); mk.lineTo(TUN.x1 + 20, y); mk.stroke(); });
+  mk.setLineDash([4, 10]); mk.lineDashOffset = -t * 40; mk.strokeStyle = 'rgba(255,255,255,.18)';
+  mk.beginPath(); mk.moveTo(TUN.x0, TUN.y); mk.lineTo(TUN.x1, TUN.y); mk.stroke(); mk.setLineDash([]);
+  let vaultPulse = 0, credits = 0;
+  RREQ.forEach((r, i) => {
+    const L = legs(r), el = rreqEls[i];
+    const ek = eo5(p(t, r.t - .3, r.t + .1));
+    S(el, { op: ek, y: (1 - ek) * 20 });
+    const running = t > r.t && t < L.res[1];
+    el.style.borderColor = t >= L.res[1] ? 'rgba(52,211,153,.4)' : (running ? 'rgba(90,200,250,.45)' : 'rgba(255,255,255,.08)');
+    const rres = el.querySelector('.rres');
+    rres.textContent = t >= L.res[1] ? tr(r.res) : (running ? tr('处理中…') : '');
+    rres.style.color = t >= L.res[1] ? '#34d399' : '#9fd9ff';
+    // request packet: right -> left (upper lane), result packet: left -> right (lower lane)
+    const pk = (f, y, col, label) => {
+      const x = lerp(TUN.x1 + 20, TUN.x0 - 20, f);
+      mk.shadowColor = col; mk.shadowBlur = 20; mk.fillStyle = col;
+      mk.beginPath(); mk.roundRect(x - 44, y - 15, 88, 30, 15); mk.fill(); mk.shadowBlur = 0;
+      mk.fillStyle = '#10131a'; mk.font = '700 16px Inter, "Noto Sans SC"'; mk.textAlign = 'center'; mk.fillText(label, x, y + 6);
+    };
+    const a = p(t, ...L.req), b = p(t, ...L.res);
+    if (a > 0 && a < 1) pk(eio(a), TUN.y - 26, '#9fd9ff', tr('任务'));
+    if (b > 0 && b < 1) pk(1 - eio(b), TUN.y + 26, '#ffd466', tr('结果'));
+    const ex = t > L.exec[0] - .1 && t < L.res[0] + .2;
+    const row = lrowEls[r.row];
+    if (ex) { row.style.borderColor = 'rgba(255,194,61,.6)'; row.style.background = 'rgba(255,194,61,.1)'; }
+    const vp = t > L.exec[0] && t < L.exec[1] + .6 ? Math.sin(Math.PI * p(t, L.exec[0], L.exec[1] + .6)) : 0;
+    vaultPulse = Math.max(vaultPulse, vp);
+    credits += (i === 0 ? 86 : 120) * eo(p(t, L.res[1], L.res[1] + .5));
+  });
+  lrowEls.forEach((row, j) => {
+    const busy = RREQ.some(r => { const L = legs(r); return r.row === j && t > L.exec[0] - .1 && t < L.res[0] + .2; });
+    if (!busy) { row.style.borderColor = 'rgba(255,255,255,.07)'; row.style.background = 'rgba(255,255,255,.035)'; }
+  });
+  const vault = $('vault');
+  vault.style.boxShadow = `0 0 ${50 * vaultPulse}px rgba(255,194,61,${.45 * vaultPulse}), inset 0 0 ${30 * vaultPulse}px rgba(255,194,61,${.2 * vaultPulse})`;
+  vault.style.borderColor = `rgba(255,194,61,${.45 + .5 * vaultPulse})`;
+  $('vaultTag').style.transform = `scale(${1 + .15 * vaultPulse})`;
+  $('lcred').textContent = '+' + fmt(12434 + credits);
+  const sk = eo(p(t, 55.2, 55.8));
+  S($('rsum'), { op: sk, y: (1 - sk) * 16 });
+  mk.globalAlpha = 1;
+}
+
+if (EN) translateDOM($('stage'));  // after every scene has been built
+
+// ---------------------------------------------------------------- cinematic mode (?cine)
+// Trailer look on top of the same timeline: 2.39:1 letterbox, a virtual camera (push-in,
+// 3D dolly on UI shots, handheld drift), teal/orange grade, film grain, foreground bokeh,
+// anamorphic flares and hard dips to black between sections.
+const CINE = new URLSearchParams(location.search).has('cine');
+const BAR = Math.round((1080 - 1920 / 2.39) / 2);
+// [start, end, kind] in real (output) time
+const SHOTS = [[0, 7, 'text'], [7, 11.5, 'logo'], [11.5, 18, 'ui'], [18, 24.5, 'ui'], [24.5, 32, 'ui'], [32, 38, 'ui'], [38, 44.5, 'ui'],
+  [44.5, 51, 'ui'], [51, 57.5, 'ui'], [57.5, 66.5, 'ui'], [66.5, 71.5, 'text'], [71.5, 78.5, 'logo']];
+const DIPS = [11.5, 18, 24.5, 32, 38, 44.5, 51, 57.5, 66.5];
+const FLARES = [[7.0, 410, 1], [8.9, 410, .6], [66.5, 500, .7], [67.5, 500, .5], [68.5, 500, .5], [69.5, 500, .5], [70.5, 500, .6], [71.5, 342, 1], [73.3, 342, .5]];
+let cam, grainCtx, grainImg, bokehCtx;
+const BOKEH = (() => { const r = rng(123); return Array.from({ length: 9 }, () => ({ x: r() * 1920, y: 150 + r() * 780, r: 30 + r() * 110, v: 8 + r() * 22, warm: r() < .7, a: .05 + r() * .09, ph: r() * 6.28 })); })();
+if (CINE) {
+  document.documentElement.classList.add('cine');
+  const stage = $('stage');
+  cam = document.createElement('div'); cam.id = 'cam';
+  stage.insertBefore(cam, stage.querySelector('.scene'));
+  [...stage.querySelectorAll(':scope > .scene')].forEach(el => cam.appendChild(el));
+  const add = (tag, id, z) => { const el = document.createElement(tag); el.id = id; el.style.cssText = `position:absolute;inset:0;pointer-events:none;z-index:${z}`; stage.appendChild(el); return el; };
+  const bk = add('canvas', 'bokeh', 1); bk.width = 1920; bk.height = 1080; bokehCtx = bk.getContext('2d');
+  add('div', 'grade', 2).style.cssText += ';mix-blend-mode:soft-light;background:radial-gradient(ellipse at 50% 45%, rgba(255,170,80,.28) 0%, rgba(128,128,128,0) 45%, rgba(0,80,110,.55) 100%)';
+  const fl = add('div', 'flares', 3); fl.style.mixBlendMode = 'screen';
+  fl.innerHTML = `<div id="flWide" style="position:absolute;left:0;right:0;height:120px;background:radial-gradient(ellipse at center, rgba(255,200,120,.55), rgba(90,170,255,.18) 35%, rgba(0,0,0,0) 70%);filter:blur(10px)"></div>
+    <div id="flLine" style="position:absolute;left:60px;right:60px;height:5px;border-radius:3px;background:linear-gradient(90deg, rgba(0,0,0,0), rgba(110,180,255,.9) 38%, #ffffff 50%, rgba(110,180,255,.9) 62%, rgba(0,0,0,0));box-shadow:0 0 18px 4px rgba(110,180,255,.6)"></div>`;
+  $('vignette').style.zIndex = 4;
+  $('vignette').style.background = 'radial-gradient(ellipse at center, rgba(0,0,0,0) 45%, rgba(0,0,0,.8) 100%)';
+  const gr = add('canvas', 'grain', 5); gr.width = 480; gr.height = 270; gr.style.width = '1920px'; gr.style.height = '1080px';
+  gr.style.mixBlendMode = 'overlay'; gr.style.opacity = .35; grainCtx = gr.getContext('2d'); grainImg = grainCtx.createImageData(480, 270);
+  add('div', 'barT', 6).style.cssText += `;bottom:auto;height:${BAR}px;background:#000`;
+  add('div', 'barB', 6).style.cssText += `;top:auto;height:${BAR}px;background:#000`;
+  add('div', 'dip', 7).style.cssText += ';background:#000;opacity:0';
+  $('wm').style.zIndex = 8; $('wm').style.bottom = `${(BAR - 32) / 2}px`;
+  $('flash').style.zIndex = 3; $('fade').style.zIndex = 9;
+}
+
+function renderCine(t) {
+  // camera
+  const si = Math.max(0, SHOTS.findIndex(([a, b]) => t >= a && t < b)), [a, b, kind] = SHOTS[si === -1 ? SHOTS.length - 1 : si];
+  const k = clamp((t - a) / (b - a)), ui = kind === 'ui', dir = si % 2 ? 1 : -1;
+  const base = ui ? .8 : .86, push = 1 + (ui ? .045 : .06) * eio(k);
+  const rx = ui ? lerp(8, 3, eo(k)) : 0, ry = ui ? lerp(-4.5, 4.5, eio(k)) * dir : 0;
+  const hx = Math.sin(t * .9) * 2.2 + Math.sin(t * 2.3 + 1) * 1.1, hy = Math.cos(t * .7) * 1.8 + Math.sin(t * 1.9) * .9;  // handheld
+  const dx = (ui ? lerp(-26, 26, eio(k)) * dir : 0) + hx, dy = hy + (ui ? lerp(12, -6, eio(k)) : 0);
+  cam.style.transform = `perspective(2400px) translate(${dx}px,${dy}px) rotateX(${rx}deg) rotateY(${ry}deg) scale(${base * push})`;
+  // letterbox opens at the head, closes at the tail
+  const open = eio(p(t, 0, .6)) * (1 - eio(p(t, 77.4, 78.4)));
+  const bh = lerp(540, BAR, open);
+  $('barT').style.height = $('barB').style.height = `${bh}px`;
+  // dips to black between sections
+  let d = 0; DIPS.forEach(x => { d = Math.max(d, 1 - Math.abs(t - x) / .2); });
+  $('dip').style.opacity = clamp(d);
+  // anamorphic flares
+  let fs = 0, fy = 500;
+  FLARES.forEach(([x, y, m]) => { const q = t - x; if (q >= 0 && q < 1.6) { const e = m * Math.min(1, q / .12) * Math.exp(-q * 2.2); if (e > fs) { fs = e; fy = y; } } });
+  $('flWide').style.top = `${fy - 60}px`; $('flLine').style.top = `${fy - 2}px`;
+  $('flares').style.opacity = fs;
+  $('flLine').style.transform = `scaleX(${.6 + .5 * fs})`;
+  // foreground bokeh
+  const bc = bokehCtx; bc.clearRect(0, 0, 1920, 1080);
+  bc.filter = 'blur(14px)';
+  for (const o of BOKEH) {
+    const x = (o.x + t * o.v) % 2160 - 120, y = o.y + Math.sin(t * .3 + o.ph) * 30;
+    const g = bc.createRadialGradient(x, y, 0, x, y, o.r);
+    const c = o.warm ? '255,190,110' : '90,180,230';
+    g.addColorStop(0, `rgba(${c},${o.a * (.7 + .3 * Math.sin(t + o.ph))})`); g.addColorStop(.7, `rgba(${c},${o.a * .6})`); g.addColorStop(1, `rgba(${c},0)`);
+    bc.fillStyle = g; bc.beginPath(); bc.arc(x, y, o.r, 0, 6.283); bc.fill();
+  }
+  bc.filter = 'none';
+  // film grain (deterministic per frame)
+  const r = rng(1 + Math.floor(t * 30) * 7919), px = grainImg.data;
+  for (let i = 0; i < px.length; i += 4) { const v = 128 + (r() - .5) * 150; px[i] = px[i + 1] = px[i + 2] = v; px[i + 3] = 255; }
+  grainCtx.putImageData(grainImg, 0, 0);
+}
+
+
+window.DURATION = DURATION;
+window.renderFrame = renderFrame;
+window.ready = document.fonts.ready.then(() => { renderFrame(0); return true; });
+// Preview mode: open video.html?play to watch in a browser at real time.
+if (location.search.includes('play')) {
+  const t0 = performance.now();
+  const loop = () => { renderFrame(((performance.now() - t0) / 1000) % DURATION); requestAnimationFrame(loop); };
+  window.ready.then(loop);
+}
+</script>
+</body>
+</html>

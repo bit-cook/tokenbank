@@ -1,12 +1,14 @@
 # Token Bank
 
-> **Personal AI Hub · Token Manager**
+> ## Your AI needs a manager.
 >
-> See clearly · Spend less · Stay simple · Get smarter with you · Earn from idle
+> **Personal AI hub · Your token manager.** One local gateway for Claude Code, Codex, Cursor, WorkBuddy, Kimi Code and more — see every token, spend less, keep every AI asset in one place, orchestrate agents, and rent out what sits idle.
 >
-> One-click Claude / Cursor / Codex / WorkBuddy onboarding · one-stop trace & routing · portrait-driven discovery · community sharing & remote agents
+> Open source · Keep your workflow · One-click revert
 
-[中文文档](./README.zh-CN.md) · [Download Latest](https://github.com/wink-run/tokenbank/releases/latest) · [Architecture](./DESIGN.md) · [Privacy Policy](./docs/PRIVACY_POLICY.md)
+[Website](https://tokenbank.wink.run) · [Free download](https://github.com/wink-run/tokenbank/releases/latest) · [▶ 78s film](./server/static/video/tokenbank-promo-en.mp4) · [中文文档](./README.zh-CN.md) · [Architecture](./DESIGN.md) · [Privacy Policy](./docs/PRIVACY_POLICY.md)
+
+[![Token Bank in 78 seconds](./server/static/video/tokenbank-promo-en-poster.jpg)](./server/static/video/tokenbank-promo-en.mp4)
 
 ---
 
@@ -49,14 +51,18 @@ The system automatically extracts work portraits from real call records and sess
 
 ## Why Token Bank
 
-Pain points it tackles:
+**Six AI headaches. One hub.**
 
-- Many model plans, little clarity on where tokens go each day
-- Free quotas sit unused while paid bills rise; local models idle
-- Tools, accounts, and devices don’t line up; Skills / MCP / prompts pile up
-- Month-end plan credits expire unused
+| Sound familiar? | What Token Bank does |
+|---|---|
+| **Too many AI tools** — each configured differently, switched by hand | **One-click onboarding**: every tool behind one local address; revert to the official config anytime |
+| **Bills keep growing** — no idea where the tokens went | **Full-chain trace**: app, model, tokens and cost for every call, merged across devices |
+| **Quota expires unused** — free tiers idle while paid usage climbs | **Smart routing**: local and free sources first, native model names unchanged, protocols converted automatically |
+| **Skills & MCPs everywhere** — copy-pasted, out of sync | **AI assets in one place**: MCP / Skill / Prompt / Agent in one library, projected to the agents that need them |
+| **Top models out of reach** — rare models and expert agents feel unreachable | **Sharing market**: pay per call in credits to use rare models or hire expert agents |
+| **Idle capacity wasted** — unused subscriptions, local models gathering dust | **Earn from idle**: rent out models and agents for credits — API keys, Skills and configs never leave your machine |
 
-**Token Bank is your personal AI hub.** Plug Claude Code, Codex, Cursor, WorkBuddy, Kimi Code and more into a local gateway—keep familiar clients, **see clearly, spend less, stay simple**, grow resources from your habits (**get smarter with you**), and turn idle capacity into credits via **community sharing**; community agents can run on someone else’s machine (**earn from idle**).
+**Token Bank is your personal AI hub — your AI's manager.** Plug Claude Code, Codex, Cursor, WorkBuddy, Kimi Code and more into one local gateway without changing how you work: **see clearly, spend less, stay simple**, keep your AI assets in order and let them **get smarter with you**, orchestrate a team of agents from one sentence, and **earn from idle** by renting out what you don't use.
 
 **Five pillars:**
 
@@ -64,9 +70,9 @@ Pain points it tackles:
 |---|---|
 | **See clearly** | One-click onboard; full trace; multi-device analytics; subscriptions vs PAYG side by side |
 | **Spend less** | Seamless model swap; smart local-first + task-type routing; scene strategies; optional lossless compression |
-| **Stay simple** | One-click onboard/restore; multi-account CLI by directory; tray status; one local address |
+| **Stay simple** | One-click onboard/restore; all AI assets in one library, projected to every agent; multi-account CLI by directory; tray status; one local address |
 | **Get smarter with you** | Work portrait; personalized MCP / Skill / Prompt / Agent discover · accumulate · iterate |
-| **Earn from idle** | Contribute idle capacity for credits; **hire agents**; circles & network map |
+| **Earn from idle** | Rent out idle models and agents for credits (keys and Skills stay local); rent rare models or hire expert agents per call; circles & network map |
 
 ---
 
@@ -266,9 +272,9 @@ Run multiple logins of the same CLI (Claude Code / Codex). The gateway picks the
 - Chunked conversation stream, visible tool calls, stop then continue
 - Agent visibility is gated by **runtime projection + hosted install** — only projected, available agents appear
 
-### Resource hub: MCP · Skill · Prompt
+### AI assets in one place: MCP · Skill · Prompt · Agent
 
-The **Resources** tab consolidates community picks and personal assets:
+Skills in one folder, MCP configs in three, prompts in a text file you can't find — the **Resources** tab gathers community picks and your own assets into one ordered library, and **projects** them to every agent instead of copying them around. Edit once, and every managed agent gets the same version.
 
 | Type | Capability |
 |---|---|
@@ -319,6 +325,14 @@ Community sharing (spend credits on shared compute)
 - **Accumulate & iterate**: keep assets in your library; reuse portrait to rediscover, or remine; compose when the catalog falls short
 
 ### 5 — Earn from idle
+
+**Rent out idle AI. Rent rare AI.** The sharing market has two sides, both inside the same gateway:
+
+| | Lender (your device) | Renter (community user) |
+|---|---|---|
+| **What** | List idle subscription quota, local or private models, and projected agents | Call rare or private models, or hire expert agents by the task |
+| **Privacy** | Only a public card is shown; **API keys, Skills, Prompts and configs never leave your machine**; jobs run locally and only results go back | Nothing of theirs lands on your machine — you only receive results |
+| **Credits** | Every call earns credits (outbound connection, no open ports) | Pay per call in credits — no extra subscription needed |
 
 Contribute unused compute or API quota to **community sharing**, earn credits, spend them on shared models; or **list / hire agents** (tasks run on their device; configs and API keys stay local).
 

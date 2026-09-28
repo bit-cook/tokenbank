@@ -16,6 +16,7 @@
  *   isOauthProvider(provider) / prepare(provider, getConfig, saveConfig)   // 网关代理前用
  */
 const crypto = require('crypto');
+const { claudeModelInfo, normalizeClaudeOAuthBody } = require('../claude-models');
 const http = require('http');
 const https = require('https');
 const { resolveOutboundProxyAgent } = require('../../shared/outbound-proxy');
@@ -90,6 +91,8 @@ function oauthHttp(url, opts = {}) {
 }
 const CLAUDE_CODE_SYSTEM_PROMPT = "You are Claude Code, Anthropic's official CLI for Claude.";
 const CLAUDE_CLI_VERSION = '2.1.161';
+const CLAUDE_BILLING_PREFIX = 'x-anthropic-billing-header:';
+const CLAUDE_BILLING_FINGERPRINT_SALT = '59cf53e54c78';
 const CLAUDE_DEFAULT_HEADERS = {
   'User-Agent': `claude-cli/${CLAUDE_CLI_VERSION} (external, cli)`,
   'X-Stainless-Lang': 'js',
@@ -128,10 +131,13 @@ const PROVIDERS = {
       h['Accept'] = 'application/json';
       h['Authorization'] = `Bearer ${creds.access_token}`;
       h['anthropic-version'] = '2023-06-01';
-      h['anthropic-beta'] = CLAUDE_BETA;
+      h['anthropic-beta'] = claudeModelInfo(body?.model)?.adaptiveOnly
+        ? 'claude-code-20250219,oauth-2025-04-20' : CLAUDE_BETA;
       h['x-client-request-id'] = crypto.randomUUID();
       delete h['x-api-key'];
-      return { headers: h, body: injectClaudeSystem(body), baseUrl: 'https://api.anthropic.com' };
+      const userAgent = h['user-agent'] || h['User-Agent'];
+      const cliVersion = /^claude-cli\/(\d+\.\d+\.\d+)\b/.exec(userAgent || '')?.[1] || CLAUDE_CLI_VERSION;
+      return { headers: h, body: injectClaudeSystem(normalizeClaudeOAuthBody(body), cliVersion), baseUrl: 'https://api.anthropic.com' };
     },
   },
   // codex / copilot / google 后续以同样结构加入（device 流 / 特殊刷新 / 各自 applyAuth）
@@ -141,22 +147,39 @@ const PROVIDERS = {
 function b64url(buf) {
   return buf.toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
-function injectClaudeSystem(body) {
+// 与本地 sub2api 的 billing attribution 格式一致；版本跟随出站 CLI UA。
+// 只描述客户端归因信号，不假定上游会因此接受请求或采用特定计费方式。
+function claudeBillingText(body, cliVersion) {
+  const firstUser = Array.isArray(body?.messages) ? body.messages.find((m) => m?.role === 'user') : null;
+  const content = firstUser?.content;
+  const text = typeof content === 'string' ? content
+    : (Array.isArray(content) ? content.find((b) => b?.type === 'text')?.text : '') || '';
+  // 保持与 sub2api 的 UTF-8 字节取样一致，缺少的位置使用 ASCII '0'。
+  const bytes = Buffer.from(typeof text === 'string' ? text : '', 'utf8');
+  const sample = Buffer.from([4, 7, 20].map((i) => bytes[i] ?? 48));
+  const fingerprint = crypto.createHash('sha256')
+    .update(CLAUDE_BILLING_FINGERPRINT_SALT).update(sample).update(cliVersion)
+    .digest('hex').slice(0, 3);
+  return `${CLAUDE_BILLING_PREFIX} cc_version=${cliVersion}.${fingerprint}; cc_entrypoint=cli;`;
+}
+
+function injectClaudeSystem(body, cliVersion = CLAUDE_CLI_VERSION) {
   const cc = { type: 'text', text: CLAUDE_CODE_SYSTEM_PROMPT };
-  const blocks = [cc];
+  const blocks = [{ type: 'text', text: claudeBillingText(body, cliVersion) }, cc];
   const sys = body && body.system;
-  if (typeof sys === 'string') {
-    const s = sys.trim();
-    if (s && s !== CLAUDE_CODE_SYSTEM_PROMPT) blocks.push({ type: 'text', text: sys });
-  } else if (Array.isArray(sys)) {
-    for (const item of sys) {
-      if (item && typeof item === 'object') {
-        if ((item.text || '').trim() === CLAUDE_CODE_SYSTEM_PROMPT) continue;
-        blocks.push(item);
-      } else if (typeof item === 'string' && item.trim()) {
-        blocks.push({ type: 'text', text: item });
-      }
+  const items = typeof sys === 'string' ? [sys] : Array.isArray(sys) ? sys : [];
+  for (const item of items) {
+    const block = typeof item === 'string' ? { type: 'text', text: item } : item;
+    if (!block || typeof block !== 'object') continue;
+    if (typeof block.text !== 'string') { blocks.push(block); continue; }
+    // 去掉旧的前置计费行，保留同一块中后续的用户指令及 cache_control。
+    // 不删除正文中间提到的 billing-header 字样，也不改写输入对象。
+    let text = block.text;
+    while (text.trimStart().startsWith(CLAUDE_BILLING_PREFIX)) {
+      text = text.trimStart().replace(/^x-anthropic-billing-header:[^\r\n]*(?:\r\n|\r|\n)?/, '');
     }
+    if (!text.trim() || text.trim() === CLAUDE_CODE_SYSTEM_PROMPT) continue;
+    blocks.push(text === block.text ? block : { ...block, text });
   }
   return { ...body, system: blocks };
 }
