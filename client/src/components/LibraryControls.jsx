@@ -167,3 +167,99 @@ export const LIFE_DOT = {
   shelf: 'bg-zinc-300 dark:bg-zinc-600',
   exempt: 'bg-sky-400',
 };
+
+/** 资产库 / 推荐 / 社区共用的列表容器 */
+export const LIB_LIST_CLS = 'rounded-2xl border border-zinc-200/70 dark:border-white/[0.07] bg-white/55 dark:bg-zinc-900/40 overflow-hidden';
+
+/** 列表行底样式（列布局由调用方给 grid-cols-*） */
+export function libRowCls(sel) {
+  return `group grid items-center gap-3 px-4 py-2.5 cursor-pointer border-b last:border-b-0 border-zinc-100/90 dark:border-white/[0.05] transition-colors ${
+    sel ? 'bg-blue-50/80 dark:bg-blue-950/30' : 'hover:bg-zinc-50/90 dark:hover:bg-white/[0.03]'
+  }`;
+}
+
+/** 列表区块标题：标题 + 计数 + 右侧附加信息 */
+export function LibrarySectionHead({ title, count, extra }) {
+  return (
+    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 px-1 mb-2">
+      <h3 className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-100">{title}</h3>
+      {count != null && <span className="text-[11px] text-zinc-400 tabular-nums">{count}</span>}
+      {extra && <div className="ml-auto flex items-center gap-2 text-[11px] text-zinc-400">{extra}</div>}
+    </div>
+  );
+}
+
+/** 行内：名称 + 徽标 / 副标题（两行） */
+export function LibraryRowTitle({ logo, name, chips, sub, subClass = 'text-zinc-500 dark:text-zinc-400' }) {
+  return (
+    <div className="flex items-center gap-3 min-w-0">
+      {logo}
+      <div className="min-w-0">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="text-[13px] font-medium text-zinc-900 dark:text-zinc-50 truncate">{name}</span>
+          {chips}
+        </div>
+        {sub && <p className={`text-[11px] truncate mt-0.5 ${subClass}`}>{sub}</p>}
+      </div>
+    </div>
+  );
+}
+
+/** 详情面板分节 */
+export function InspectorSection({ title, children }) {
+  return (
+    <section className="px-4 py-3 border-t border-zinc-100 dark:border-white/[0.06]">
+      <h3 className="text-[11px] font-medium text-zinc-400 mb-2">{title}</h3>
+      {children}
+    </section>
+  );
+}
+
+/**
+ * 右侧详情面板：宽屏 sticky 贴边，窄屏浮层抽屉。
+ * stats: [[label, value], ...]（最多 3 格）；footer 固定在面板底部。
+ */
+export function LibraryInspector({ logo, title, chips, desc, stats, onClose, closeLabel = 'Close', children, footer }) {
+  return (
+    <aside
+      className="fixed inset-y-3 right-3 z-40 w-[min(360px,calc(100vw-1.5rem))] overflow-y-auto rounded-2xl border border-zinc-200/80 dark:border-white/[0.08] bg-white/95 dark:bg-zinc-900/95 backdrop-blur shadow-2xl lg:sticky lg:top-0 lg:inset-auto lg:right-auto lg:z-auto lg:w-[340px] lg:shrink-0 lg:max-h-[calc(100vh-12rem)] lg:shadow-sm lg:bg-white/80 lg:dark:bg-zinc-900/70"
+      aria-label={typeof title === 'string' ? title : undefined}
+    >
+      <div className="flex items-start gap-3 p-4">
+        {logo}
+        <div className="min-w-0 flex-1">
+          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50 break-all">{title}</h2>
+          {chips && <div className="flex flex-wrap items-center gap-1.5 mt-1">{chips}</div>}
+        </div>
+        <button type="button" onClick={onClose} aria-label={closeLabel}
+          className="shrink-0 w-6 h-6 rounded-md text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800">×</button>
+      </div>
+      {desc && <p className="px-4 pb-3 -mt-1 text-xs leading-relaxed text-zinc-600 dark:text-zinc-300">{desc}</p>}
+      {stats && stats.length > 0 && (
+        <div className="grid border-t border-zinc-100 dark:border-white/[0.06]" style={{ gridTemplateColumns: `repeat(${stats.length}, minmax(0, 1fr))` }}>
+          {stats.map(([k, v], i) => (
+            <div key={k} className={`px-4 py-2.5 ${i ? 'border-l border-zinc-100 dark:border-white/[0.06]' : ''}`}>
+              <div className="text-[10px] text-zinc-400">{k}</div>
+              <div className="text-sm font-semibold tabular-nums text-zinc-800 dark:text-zinc-100 mt-0.5 truncate">{v}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      {children}
+      {footer && (
+        <div className="sticky bottom-0 flex flex-wrap gap-1.5 px-4 py-3 border-t border-zinc-100 dark:border-white/[0.06] bg-white/95 dark:bg-zinc-900/95">
+          {footer}
+        </div>
+      )}
+    </aside>
+  );
+}
+
+/** 详情内的正文预览 */
+export function InspectorPreview({ text }) {
+  return (
+    <pre className="text-[11px] leading-relaxed p-3 rounded-lg bg-zinc-50 dark:bg-zinc-950 text-zinc-600 dark:text-zinc-300 max-h-72 overflow-auto whitespace-pre-wrap break-words">
+      {text}
+    </pre>
+  );
+}

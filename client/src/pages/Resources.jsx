@@ -2,10 +2,14 @@ import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useSta
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
 import ServiceIcon from '../components/ServiceIcon';
-import { FilterMenu, SplitButton, AppIconStack, LIFE_DOT } from '../components/LibraryControls';
+import {
+  FilterMenu, SplitButton, AppIconStack, LIFE_DOT,
+  LIB_LIST_CLS, libRowCls, LibrarySectionHead, LibraryRowTitle,
+  LibraryInspector, InspectorSection, InspectorPreview,
+} from '../components/LibraryControls';
 import PersonalizedRecommend from '../components/PersonalizedRecommend';
 import SkillInstallDialog from '../components/SkillInstallDialog';
-import ResourceAssetCard, {
+import {
   ASSET_BTN_GHOST,
   ASSET_BTN_MANAGED,
   ASSET_BTN_PRIMARY,
@@ -444,8 +448,10 @@ export default function Resources() {
   const [typeFilter, setTypeFilter] = useState(readTypeFilter);
   const [query, setQuery] = useState('');
   const searchInputRef = useRef(null);
-  /** 资产库选中行（右侧详情面板） */
+  /** 选中行（右侧详情面板）：资产库 r-/d-，社区 cat:，推荐 reco: */
   const [selectedKey, setSelectedKey] = useState(null);
+  /** 推荐 Tab 详情面板挂载点（PersonalizedRecommend 通过 portal 渲染进来） */
+  const [inspectorHost, setInspectorHost] = useState(null);
   /** 当前可见行 key（键盘 ↑↓ 导航用，渲染时写入） */
   const visibleKeysRef = useRef([]);
   const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -941,6 +947,7 @@ export default function Resources() {
 
   function changeViewTab(tab) {
     setViewTab(tab);
+    setSelectedKey(null);
     saveViewTab(tab);
   }
 
@@ -2534,215 +2541,6 @@ export default function Resources() {
     );
   }
 
-  function renderResourceRow(resource, { catalogMode } = {}) {
-    const id = resource.id || resource.catalogId;
-    const expanded = expandedId === id;
-    const toggle = () => setExpandedId(expanded ? null : id);
-    const loc = resource.type === 'skill' ? getSkillLocation(resource) : null;
-    const builtin = isBuiltinResource(resource);
-    return (
-      <ResourceAssetCard
-        key={id}
-        type={resource.type}
-        item={resource}
-        typeLabel={typeBadge(resource.type, t)}
-        categoryLabel={resource.type === 'prompt'
-          ? t(promptKindOf(resource) === 'image' ? 'resources.promptKind.image' : 'resources.promptKind.text')
-          : undefined}
-        description={resourceDescription(resource)}
-        previewText={buildPreviewText(resource.type, resource)}
-        expanded={expanded}
-        onTogglePreview={toggle}
-        previewLabel={t('resources.preview')}
-        collapseLabel={t('resources.collapse')}
-        emptyPreviewLabel={t('resources.emptyDetail')}
-        layout={catalogMode ? 'stack' : 'row'}
-        className={catalogMode && expanded ? 'sm:col-span-2' : ''}
-        badges={(
-          <>
-            {/* 内置：目录/本机统一「内置」徽标，目录卡不再伪装成社区分享人 */}
-            {builtin && (
-              <span
-                className="text-[10px] px-1.5 py-0.5 rounded-md font-medium bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 whitespace-nowrap"
-                title={t('resources.builtinHint')}
-              >
-                {t('resources.source.builtin')}
-              </span>
-            )}
-            {catalogMode && !builtin && (
-              <span
-                className="text-[10px] px-1.5 py-0.5 rounded-md bg-zinc-100/90 dark:bg-zinc-800/80 text-zinc-500 dark:text-zinc-400 whitespace-nowrap"
-                title={t('resources.sharedByHint')}
-              >
-                {t('resources.sharedBy', { handle: catalogSharerHandle(resource) })}
-              </span>
-            )}
-            {!catalogMode && !builtin && (
-              <span className="text-[10px] text-zinc-400 tracking-wide">{sourceLabel(resource.source, t)}</span>
-            )}
-            {/* 用量次数：与排序一致，有命中才标 */}
-            {!catalogMode && renderUseCountBadge(resource)}
-            {/* 被智能体声明为 skill / prompt 依赖 */}
-            {!catalogMode && renderAssistantBoundBadge(resource.type, resource.name)}
-            {/* Hit-or-Exit 状态徽标（内置智能体不评估、不标） */}
-            {!catalogMode && (() => {
-              const life = classifyLifecycle(resource);
-              if (life.layer === 'exempt') return null;
-              if (life.layer === 'active') {
-                return (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 whitespace-nowrap">
-                    {t('resources.layer.active')}
-                  </span>
-                );
-              }
-              if (life.layer === 'pending') {
-                return (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 whitespace-nowrap">
-                    {t('resources.layer.pending')}
-                  </span>
-                );
-              }
-              if (life.layer === 'dormant') {
-                return (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 dark:bg-orange-900/40 text-orange-800 dark:text-orange-200 whitespace-nowrap">
-                    {t('resources.layer.dormant')}
-                  </span>
-                );
-              }
-              if (life.layer === 'cold') {
-                return (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300 whitespace-nowrap">
-                    {t('resources.layer.cold')}
-                  </span>
-                );
-              }
-              // shelf（未投射）不再单独标：下方投射行已显示「未投射到应用」
-              return null;
-            })()}
-            {/* 智能体声明的 prompt 目录与本机均无 → 依赖缺失（skill 可执行时自装，不标） */}
-            {resource.type === 'assistant' && resource.depsBroken && Array.isArray(resource.missingDeps) && (
-              <span
-                className="text-[10px] px-1.5 py-0.5 rounded-md bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 whitespace-nowrap"
-                title={t('resources.depsBrokenHint', {
-                  list: resource.missingDeps.map(d => `${d.type}:${d.name}`).join(', '),
-                })}
-              >
-                {t('resources.depsBroken')}
-              </span>
-            )}
-          </>
-        )}
-        meta={(
-          <>
-            {!catalogMode && resource.type === 'skill' && (
-              <p className="text-[11px] text-zinc-400 mt-2 font-mono truncate">
-                <span className="text-zinc-500">{t('resources.skillLocation')}：</span>
-                {loc ? (
-                  <button
-                    type="button"
-                    className="hover:text-blue-600 dark:hover:text-blue-400 hover:underline truncate align-baseline max-w-full"
-                    title={loc}
-                    onClick={() => handleOpenPath(loc)}
-                  >
-                    {shortenHomePath(loc)}
-                  </button>
-                ) : (
-                  t('resources.skillLocationPending')
-                )}
-              </p>
-            )}
-            {(!catalogMode || purposesOf(resource).length > 0) && (
-            <div className="flex flex-wrap items-center gap-1.5 mt-2">
-              {!catalogMode && renderProjections(resource, { inline: true })}
-              {!catalogMode && purposesOf(resource).length > 0 && (
-                <span className="w-px h-3 bg-zinc-200 dark:bg-zinc-700 mx-0.5" aria-hidden />
-              )}
-              {purposesOf(resource).length > 0 && (
-                purposesOf(resource).map(slug => (
-                  <button
-                    key={slug}
-                    type="button"
-                    title={t('resources.tagFilterHint')}
-                    onClick={() => setTagFilter(tagFilter === slug ? '' : slug)}
-                    className={purposeChipClass(tagFilter === slug, 'sm')}
-                  >
-                    {purposeLabel(slug)}
-                  </button>
-                ))
-              )}
-            </div>
-            )}
-          </>
-        )}
-        actions={catalogMode ? (
-          <button
-            type="button"
-            disabled={(!!busy && busy !== resource.catalogId) || resource.installed || builtin}
-            onClick={() => handleInstall(resource.catalogId)}
-            className={(resource.installed || builtin) ? ASSET_BTN_MANAGED : ASSET_BTN_PRIMARY}
-          >
-            {busy === resource.catalogId
-              ? t('resources.busy')
-              : (resource.installed || builtin)
-                ? t('resources.managed')
-                : t('resources.addManage')}
-          </button>
-        ) : (
-          <>
-            <button
-              type="button"
-              disabled={!!busy && busy !== resource.id}
-              onClick={(e) => openProjectMenu(e, resource.id)}
-              className={ASSET_BTN_PRIMARY}
-            >
-              {busy === resource.id ? t('resources.busy') : t('resources.project')}
-            </button>
-            <AssetMoreMenu
-              label={t('resources.moreActions')}
-              items={[
-                {
-                  key: 'edit',
-                  label: t('resources.edit'),
-                  disabled: busy === 'editor' || busy === 'cleanup',
-                  onClick: () => openEditEditor(resource),
-                },
-                (resource.type === 'skill' || resource.type === 'prompt' || resource.type === 'assistant')
-                  && !builtin && resource.source !== 'builtin' && !resource.metadata?.builtin && {
-                  key: 'rec',
-                  label: busy === `rec-${resource.id}`
-                    ? t('resources.busy')
-                    : (isPushedToCommunity(resource, catalog)
-                      ? t('resources.pushedCommunity')
-                      : t('resources.recommendCommunity')),
-                  title: isPushedToCommunity(resource, catalog)
-                    ? t('resources.pushedCommunityHint')
-                    : t('resources.recommendHint'),
-                  disabled: !!busy && busy !== `rec-${resource.id}`,
-                  onClick: () => handleRecommendToCommunity(resource),
-                },
-                loc && {
-                  key: 'open',
-                  label: t('resources.openFolder'),
-                  onClick: () => handleOpenPath(loc),
-                },
-                resource.source !== 'builtin' && !resource.metadata?.builtin && {
-                  key: 'delete',
-                  label: t('resources.delete'),
-                  danger: true,
-                  title: resource.type === 'assistant' && hasProjectedLinks(resource.projections, resource.authorityPath || getSkillLocation(resource))
-                    ? t('resources.deleteNeedUnproject')
-                    : undefined,
-                  disabled: !!busy && busy !== resource.id,
-                  onClick: () => handleDelete(resource),
-                },
-              ]}
-            />
-          </>
-        )}
-      />
-    );
-  }
-
   /**
    * 「本机」Tab 列表：按类型筛选分流。
    * 技能→扫描行(discovered);提示词/助手→managed 行。
@@ -2896,7 +2694,7 @@ export default function Resources() {
     return (
       <div className="flex gap-4 items-start">
         <div className="flex-1 min-w-0 space-y-2">
-          <div className="rounded-2xl border border-zinc-200/70 dark:border-white/[0.07] bg-white/55 dark:bg-zinc-900/40 overflow-hidden">
+          <div className={LIB_LIST_CLS}>
             <div className={`hidden md:grid ${LIB_GRID} gap-3 px-4 py-2 text-[11px] text-zinc-400 border-b border-zinc-100 dark:border-white/[0.05]`}>
               <span>{t('resources.col.name')}</span>
               <span>{t('resources.col.apps')}</span>
@@ -3013,15 +2811,14 @@ export default function Resources() {
         role="option"
         aria-selected={sel}
         onClick={() => setSelectedKey(sel ? null : li.key)}
-        className={`group grid grid-cols-[minmax(0,1fr)_auto] ${LIB_GRID_MD} items-center gap-3 px-4 py-2.5 cursor-pointer border-b last:border-b-0 border-zinc-100/90 dark:border-white/[0.05] transition-colors ${
-          sel ? 'bg-blue-50/80 dark:bg-blue-950/30' : 'hover:bg-zinc-50/90 dark:hover:bg-white/[0.03]'
-        }`}
+        className={`${libRowCls(sel)} grid-cols-[minmax(0,1fr)_auto] ${LIB_GRID_MD}`}
       >
-        <div className="flex items-center gap-3 min-w-0">
-          <AssetLogo type={li.type} icon={it.icon || it.metadata?.icon} name={li.name || it.id} />
-          <div className="min-w-0">
-            <div className="flex items-center gap-1.5 min-w-0">
-              <span className="text-[13px] font-medium text-zinc-900 dark:text-zinc-50 truncate">{li.name}</span>
+        <LibraryRowTitle
+          logo={<AssetLogo type={li.type} icon={it.icon || it.metadata?.icon} name={li.name || it.id} />}
+          name={li.name}
+          sub={li.desc || (li.path ? shortenHomePath(li.path) : t('resources.emptyDetail'))}
+          chips={(
+            <>
               <span className={`shrink-0 text-[10px] px-1.5 py-px rounded font-medium ${visual.chip}`}>{typeBadge(li.type, t)}</span>
               {it.contentChanged && (
                 <span className="shrink-0 text-[10px] px-1.5 py-px rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">{t('resources.contentChanged')}</span>
@@ -3029,12 +2826,9 @@ export default function Resources() {
               {li.type === 'assistant' && it.depsBroken && (
                 <span className="shrink-0 text-[10px] px-1.5 py-px rounded bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300">{t('resources.depsBroken')}</span>
               )}
-            </div>
-            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate mt-0.5">
-              {li.desc || (li.path ? shortenHomePath(li.path) : t('resources.emptyDetail'))}
-            </p>
-          </div>
-        </div>
+            </>
+          )}
+        />
         <div className="hidden md:block min-w-0"><AppIconStack apps={li.apps} emptyLabel="—" /></div>
         <div className="hidden md:block text-right text-xs tabular-nums text-zinc-600 dark:text-zinc-300">{li.useCount || <span className="text-zinc-300 dark:text-zinc-600">—</span>}</div>
         <div className="hidden md:flex items-center gap-1.5 text-[11px] text-zinc-600 dark:text-zinc-300 min-w-0">
@@ -3070,55 +2864,49 @@ export default function Resources() {
     return new Date(ms).toLocaleDateString(lang === 'en' ? 'en-US' : 'zh-CN');
   }
 
-  /** 右侧详情面板：宽屏贴边常驻，窄屏浮层抽屉 */
+  /** 右侧详情面板（资产库） */
   function renderInspector(li) {
     const it = li.item;
     const visual = typeVisual(li.type);
     const previewSrc = li.kind === 'discovered' ? (li.linked || it) : it;
     const menu = libraryMenuItems(li);
-    const section = (title, children) => (
-      <section className="px-4 py-3 border-t border-zinc-100 dark:border-white/[0.06]">
-        <h3 className="text-[11px] font-medium text-zinc-400 mb-2">{title}</h3>
-        {children}
-      </section>
-    );
     return (
-      <aside
-        className="fixed inset-y-3 right-3 z-40 w-[min(360px,calc(100vw-1.5rem))] overflow-y-auto rounded-2xl border border-zinc-200/80 dark:border-white/[0.08] bg-white/95 dark:bg-zinc-900/95 backdrop-blur shadow-2xl lg:sticky lg:top-0 lg:inset-auto lg:right-auto lg:z-auto lg:w-[340px] lg:shrink-0 lg:max-h-[calc(100vh-12rem)] lg:shadow-sm lg:bg-white/80 lg:dark:bg-zinc-900/70"
-        aria-label={li.name}
+      <LibraryInspector
+        logo={<AssetLogo type={li.type} icon={it.icon || it.metadata?.icon} name={li.name || it.id} />}
+        title={li.name}
+        closeLabel={t('resources.collapse')}
+        onClose={() => setSelectedKey(null)}
+        chips={(
+          <>
+            <span className={`text-[10px] px-1.5 py-px rounded font-medium ${visual.chip}`}>{typeBadge(li.type, t)}</span>
+            <span className="inline-flex items-center gap-1 text-[11px] text-zinc-500">
+              <span className={`w-1.5 h-1.5 rounded-full ${LIFE_DOT[li.life.layer] || 'bg-zinc-300'}`} aria-hidden />
+              {lifeLabel(li.life)}
+            </span>
+            {!li.builtin && li.kind !== 'discovered' && (
+              <span className="text-[10px] text-zinc-400">{sourceLabel(it.source, t)}</span>
+            )}
+          </>
+        )}
+        desc={li.desc}
+        stats={[
+          [t('resources.col.uses'), li.useCount || '0'],
+          [t('resources.stat.lastUsed'), fmtAgo(li.lastUsed)],
+          [t('resources.col.apps'), li.apps.length],
+        ]}
+        footer={menu.length > 0 ? (
+          <>
+            {menu.filter(m => !m.danger).map(m => (
+              <button key={m.key} type="button" disabled={m.disabled} title={m.title} onClick={m.onClick} className={ASSET_BTN_GHOST}>{m.label}</button>
+            ))}
+            {menu.filter(m => m.danger).map(m => (
+              <button key={m.key} type="button" disabled={m.disabled} title={m.title} onClick={m.onClick}
+                className="ml-auto text-xs px-3 py-1.5 rounded-xl text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-45">{m.label}</button>
+            ))}
+          </>
+        ) : null}
       >
-        <div className="flex items-start gap-3 p-4">
-          <AssetLogo type={li.type} icon={it.icon || it.metadata?.icon} name={li.name || it.id} />
-          <div className="min-w-0 flex-1">
-            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50 break-all">{li.name}</h2>
-            <div className="flex flex-wrap items-center gap-1.5 mt-1">
-              <span className={`text-[10px] px-1.5 py-px rounded font-medium ${visual.chip}`}>{typeBadge(li.type, t)}</span>
-              <span className="inline-flex items-center gap-1 text-[11px] text-zinc-500">
-                <span className={`w-1.5 h-1.5 rounded-full ${LIFE_DOT[li.life.layer] || 'bg-zinc-300'}`} aria-hidden />
-                {lifeLabel(li.life)}
-              </span>
-              {!li.builtin && li.kind !== 'discovered' && (
-                <span className="text-[10px] text-zinc-400">{sourceLabel(it.source, t)}</span>
-              )}
-            </div>
-          </div>
-          <button type="button" onClick={() => setSelectedKey(null)} aria-label={t('resources.collapse')}
-            className="shrink-0 w-6 h-6 rounded-md text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800">×</button>
-        </div>
-        {li.desc && <p className="px-4 pb-3 -mt-1 text-xs leading-relaxed text-zinc-600 dark:text-zinc-300">{li.desc}</p>}
-        <div className="grid grid-cols-3 border-t border-zinc-100 dark:border-white/[0.06]">
-          {[
-            [t('resources.col.uses'), li.useCount || '0'],
-            [t('resources.stat.lastUsed'), fmtAgo(li.lastUsed)],
-            [t('resources.col.apps'), li.apps.length],
-          ].map(([k, v], i) => (
-            <div key={k} className={`px-4 py-2.5 ${i ? 'border-l border-zinc-100 dark:border-white/[0.06]' : ''}`}>
-              <div className="text-[10px] text-zinc-400">{k}</div>
-              <div className="text-sm font-semibold tabular-nums text-zinc-800 dark:text-zinc-100 mt-0.5">{v}</div>
-            </div>
-          ))}
-        </div>
-        {section(t('resources.col.apps'), (
+        <InspectorSection title={t('resources.col.apps')}>
           <div className="space-y-2.5">
             {li.resourceId ? renderProjections({
               id: li.resourceId,
@@ -3134,39 +2922,117 @@ export default function Resources() {
               </button>
             )}
           </div>
-        ))}
-        {li.purposes.length > 0 && section(t('resources.filter.purpose'), (
-          <div className="flex flex-wrap gap-1.5">
-            {li.purposes.map(slug => (
-              <button key={slug} type="button" onClick={() => setTagFilter(tagFilter === slug ? '' : slug)}
-                className={purposeChipClass(tagFilter === slug, 'sm')}>{purposeLabel(slug)}</button>
-            ))}
-            {renderAssistantBoundBadge(li.type, it.name)}
-          </div>
-        ))}
-        {li.path && section(t('resources.skillLocation'), (
-          <button type="button" onClick={() => handleOpenPath(li.path)} title={li.path}
-            className="text-[11px] font-mono text-zinc-500 hover:text-blue-600 dark:hover:text-blue-400 break-all text-left">
-            {shortenHomePath(li.path)} ↗
-          </button>
-        ))}
-        {section(t('resources.preview'), (
-          <pre className="text-[11px] leading-relaxed p-3 rounded-lg bg-zinc-50 dark:bg-zinc-950 text-zinc-600 dark:text-zinc-300 max-h-72 overflow-auto whitespace-pre-wrap break-words">
-            {buildPreviewText(li.type, previewSrc) || t('resources.emptyDetail')}
-          </pre>
-        ))}
-        {menu.length > 0 && (
-          <div className="sticky bottom-0 flex flex-wrap gap-1.5 px-4 py-3 border-t border-zinc-100 dark:border-white/[0.06] bg-white/95 dark:bg-zinc-900/95">
-            {menu.filter(m => !m.danger).map(m => (
-              <button key={m.key} type="button" disabled={m.disabled} title={m.title} onClick={m.onClick} className={ASSET_BTN_GHOST}>{m.label}</button>
-            ))}
-            {menu.filter(m => m.danger).map(m => (
-              <button key={m.key} type="button" disabled={m.disabled} title={m.title} onClick={m.onClick}
-                className="ml-auto text-xs px-3 py-1.5 rounded-xl text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-45">{m.label}</button>
-            ))}
-          </div>
+        </InspectorSection>
+        {li.purposes.length > 0 && (
+          <InspectorSection title={t('resources.filter.purpose')}>
+            <div className="flex flex-wrap gap-1.5">
+              {li.purposes.map(slug => (
+                <button key={slug} type="button" onClick={() => setTagFilter(tagFilter === slug ? '' : slug)}
+                  className={purposeChipClass(tagFilter === slug, 'sm')}>{purposeLabel(slug)}</button>
+              ))}
+              {renderAssistantBoundBadge(li.type, it.name)}
+            </div>
+          </InspectorSection>
         )}
-      </aside>
+        {li.path && (
+          <InspectorSection title={t('resources.skillLocation')}>
+            <button type="button" onClick={() => handleOpenPath(li.path)} title={li.path}
+              className="text-[11px] font-mono text-zinc-500 hover:text-blue-600 dark:hover:text-blue-400 break-all text-left">
+              {shortenHomePath(li.path)} ↗
+            </button>
+          </InspectorSection>
+        )}
+        <InspectorSection title={t('resources.preview')}>
+          <InspectorPreview text={buildPreviewText(li.type, previewSrc) || t('resources.emptyDetail')} />
+        </InspectorSection>
+      </LibraryInspector>
+    );
+  }
+
+  /** 社区目录行（为你推荐 Tab 下半部分）：与资产库同一列表样式 */
+  function renderCatalogRow(item) {
+    const key = `cat:${item.catalogId}`;
+    const sel = selectedKey === key;
+    const builtin = isBuiltinResource(item);
+    const visual = typeVisual(item.type);
+    const name = resourceDisplayName(item.type, item);
+    return (
+      <li
+        key={key}
+        role="option"
+        aria-selected={sel}
+        onClick={() => setSelectedKey(sel ? null : key)}
+        className={`${libRowCls(sel)} grid-cols-[minmax(0,1fr)_auto]`}
+      >
+        <LibraryRowTitle
+          logo={<AssetLogo type={item.type} icon={item.icon || item.metadata?.icon} name={name || item.catalogId} />}
+          name={name}
+          sub={resourceDescription(item) || t('resources.emptyDetail')}
+          chips={(
+            <>
+              <span className={`shrink-0 text-[10px] px-1.5 py-px rounded font-medium ${visual.chip}`}>{typeBadge(item.type, t)}</span>
+              <span className="shrink-0 text-[10px] text-zinc-400 truncate">
+                {builtin ? t('resources.source.builtin') : t('resources.sharedBy', { handle: catalogSharerHandle(item) })}
+              </span>
+            </>
+          )}
+        />
+        <div onClick={e => e.stopPropagation()}>{renderCatalogAction(item)}</div>
+      </li>
+    );
+  }
+
+  function renderCatalogAction(item, { block = false } = {}) {
+    const builtin = isBuiltinResource(item);
+    const done = item.installed || builtin;
+    return (
+      <button
+        type="button"
+        disabled={(!!busy && busy !== item.catalogId) || done}
+        onClick={() => handleInstall(item.catalogId)}
+        className={`${done ? ASSET_BTN_MANAGED : ASSET_BTN_PRIMARY} ${block ? 'w-full' : '!px-3 !py-1 !text-[11px] !rounded-lg'}`}
+      >
+        {busy === item.catalogId ? t('resources.busy') : done ? t('resources.managed') : t('resources.addManage')}
+      </button>
+    );
+  }
+
+  function renderCatalogInspector(item) {
+    const visual = typeVisual(item.type);
+    const name = resourceDisplayName(item.type, item);
+    const builtin = isBuiltinResource(item);
+    const purposes = purposesOf(item);
+    return (
+      <LibraryInspector
+        logo={<AssetLogo type={item.type} icon={item.icon || item.metadata?.icon} name={name || item.catalogId} />}
+        title={name}
+        closeLabel={t('resources.collapse')}
+        onClose={() => setSelectedKey(null)}
+        chips={(
+          <>
+            <span className={`text-[10px] px-1.5 py-px rounded font-medium ${visual.chip}`}>{typeBadge(item.type, t)}</span>
+            <span className="text-[10px] text-zinc-400">
+              {builtin ? t('resources.source.builtin') : t('resources.sharedBy', { handle: catalogSharerHandle(item) })}
+            </span>
+          </>
+        )}
+        desc={resourceDescription(item)}
+        footer={renderCatalogAction(item, { block: true })}
+      >
+        {purposes.length > 0 && (
+          <InspectorSection title={t('resources.filter.purpose')}>
+            <div className="flex flex-wrap gap-1.5">
+              {purposes.map(slug => (
+                <button key={slug} type="button" onClick={() => setTagFilter(tagFilter === slug ? '' : slug)}
+                  className={purposeChipClass(tagFilter === slug, 'sm')}>{purposeLabel(slug)}</button>
+              ))}
+            </div>
+          </InspectorSection>
+        )}
+        <InspectorSection title={t('resources.preview')}>
+          <InspectorPreview text={buildPreviewText(item.type, item) || t('resources.emptyDetail')} />
+        </InspectorSection>
+      </LibraryInspector>
     );
   }
 
@@ -3592,38 +3458,51 @@ export default function Resources() {
         ) : viewTab === 'managed' ? (
           renderLocalList()
         ) : viewTab === 'recommend' ? (
-          <div className="space-y-6">
-            {/* 画像挖掘 + 基于画像推荐（同一板块） */}
-            <PersonalizedRecommend
-              typeFilter={typeFilter}
-              purposeFilter={tagFilter}
-              searchQuery={debouncedQuery}
-              LogoComp={AssetLogo}
-              onNeedProject={() => changeViewTab('managed')}
-              onNeedAgent={() => navigate('/gateway')}
-              onRefresh={refreshAfterAdopt}
-              onAdopted={handleRecoAdopted}
-              onItemsChange={() => setRecoPurposeRev((n) => n + 1)}
-            />
-            {/* 下半:社区目录 */}
-            <div className="space-y-2 border-t border-zinc-200/80 dark:border-zinc-800 pt-4">
-              <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{t('resources.catalogSection')}</p>
-              {filteredCatalog.length === 0 ? (
-                <div className="text-center py-6 space-y-2">
-                  <p className="text-xs text-zinc-400">
-                    {tagFilter ? t('resources.emptyTagFiltered') : t('resources.emptyCatalog')}
-                  </p>
-                  {tagFilter && (
-                    <button type="button" onClick={() => setTagFilter('')} className="text-xs text-blue-600 hover:underline">
-                      {t('resources.clearTagFilter')}
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {filteredCatalog.map(item => renderResourceRow(item, { catalogMode: true }))}
-                </div>
-              )}
+          <div className="flex gap-4 items-start">
+            <div className="flex-1 min-w-0 space-y-6">
+              {/* 画像 + 基于画像的推荐（列表 / 详情与资产库一致） */}
+              <PersonalizedRecommend
+                typeFilter={typeFilter}
+                purposeFilter={tagFilter}
+                searchQuery={debouncedQuery}
+                LogoComp={AssetLogo}
+                onNeedProject={() => changeViewTab('managed')}
+                onNeedAgent={() => navigate('/gateway')}
+                onRefresh={refreshAfterAdopt}
+                onAdopted={handleRecoAdopted}
+                onItemsChange={() => setRecoPurposeRev((n) => n + 1)}
+                selectedKey={selectedKey}
+                onSelect={setSelectedKey}
+                inspectorHost={inspectorHost}
+              />
+              {/* 社区精选 */}
+              <section>
+                <LibrarySectionHead title={t('resources.catalogSection')} count={filteredCatalog.length || null} />
+                {filteredCatalog.length === 0 ? (
+                  <div className={`${LIB_LIST_CLS} text-center py-8 space-y-2`}>
+                    <p className="text-xs text-zinc-400">
+                      {tagFilter ? t('resources.emptyTagFiltered') : t('resources.emptyCatalog')}
+                    </p>
+                    {tagFilter && (
+                      <button type="button" onClick={() => setTagFilter('')} className="text-xs text-blue-600 hover:underline">
+                        {t('resources.clearTagFilter')}
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <ul className={LIB_LIST_CLS} role="listbox" aria-label={t('resources.catalogSection')}>
+                    {filteredCatalog.map(item => renderCatalogRow(item))}
+                  </ul>
+                )}
+              </section>
+            </div>
+            {/* 详情面板挂载点：社区条目由本页渲染，推荐条目由 PersonalizedRecommend portal 进来 */}
+            <div ref={setInspectorHost} className="contents">
+              {(() => {
+                if (!selectedKey?.startsWith('cat:')) return null;
+                const item = filteredCatalog.find(c => `cat:${c.catalogId}` === selectedKey);
+                return item ? renderCatalogInspector(item) : null;
+              })()}
             </div>
           </div>
         ) : null}
