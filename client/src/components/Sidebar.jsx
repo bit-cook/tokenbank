@@ -130,7 +130,8 @@ export default function Sidebar({ onToggleCollapse }) {
               ? 'bg-white/55 dark:bg-white/[0.12] text-zinc-900 dark:text-white font-semibold shadow-[0_1px_0_rgba(255,255,255,0.45)_inset] ring-1 ring-white/40 dark:ring-white/10'
               : 'text-zinc-600 dark:text-zinc-300 hover:bg-white/35 dark:hover:bg-white/5 hover:text-zinc-900 dark:hover:text-zinc-100');
 
-          if (!user && LOGIN_PATHS.has(to)) {
+          // 游客进入圈子 / 交易看到价值预览页（由路由层渲染），非游客才直接去登录
+          if (!user && !guest && LOGIN_PATHS.has(to)) {
             return (
               <button
                 key={to}

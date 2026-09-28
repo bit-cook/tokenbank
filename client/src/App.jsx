@@ -33,13 +33,13 @@ function readSidebarCollapsed() {
 
 /** 侧边栏主页面：切换时保持挂载以保留 state（如 Debug Agent 会话） */
 const KEEP_ALIVE_ROUTE_CONFIGS = [
-  { path: '/circles/browse', Component: CircleBrowse, requireLogin: true },
-  { path: '/circles/:circleId', Component: CircleDetail, requireLogin: true },
-  { path: '/circles', Component: Circles, end: true, requireLogin: true },
+  { path: '/circles/browse', Component: CircleBrowse, requireLogin: true, guestPreview: 'circles' },
+  { path: '/circles/:circleId', Component: CircleDetail, requireLogin: true, guestPreview: 'circles' },
+  { path: '/circles', Component: Circles, end: true, requireLogin: true, guestPreview: 'circles' },
   { path: '/gateway', Component: Gateway, requireAuthed: true },
   { path: '/providers', Component: Providers, requireAuthed: true },
   { path: '/resources', Component: Resources, requireAuthed: true },
-  { path: '/contribute', Component: Contribute, requireLogin: true },
+  { path: '/contribute', Component: Contribute, requireLogin: true, guestPreview: 'trade' },
   { path: '/dashboard', Component: Dashboard, requireAuthed: true },
   { path: '/network', Component: Network },
   { path: '/config', Component: Config },

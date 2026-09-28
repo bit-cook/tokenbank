@@ -115,7 +115,7 @@ const TYPE_OPTIONS = [
 function readViewTab() {
   try {
     const v = localStorage.getItem(VIEW_TAB_KEY);
-    // 默认「为你推荐」；旧 portrait 并入 recommend
+    // 未选过时先显示「为你推荐」，加载后若本机已有资产再切到「已纳管」；旧 portrait 并入 recommend
     if (v === 'catalog' || v === 'portrait') return 'recommend';
     if (v === 'managed' || v === 'recommend') return v;
     if (v === 'discovered' || v === 'agents') return 'managed';
@@ -2133,6 +2133,17 @@ export default function Resources() {
       ? managedCount
       : resources.filter(r => r.type !== 'skill').length + discoveredCount;
 
+  // 用户没手动选过 Tab 时：本机已有资产就默认落在「已纳管」，避免首屏停在空的推荐页
+  const autoViewTabRef = useRef(false);
+  useEffect(() => {
+    if (autoViewTabRef.current || loading) return;
+    let saved = null;
+    try { saved = localStorage.getItem(VIEW_TAB_KEY); } catch { /* ignore */ }
+    // 扫描结果可能晚于首屏加载到达：计数仍为 0 时不锁定，等后续计数更新再判断
+    if (saved || localCount > 0) autoViewTabRef.current = true;
+    if (!saved && localCount > 0) setViewTab('managed');
+  }, [loading, localCount]);
+
   // 应用筛选：prompt / skill / 智能体均按已纳管应用
   const installedFilterAgents = agents;
   const appFilterOptions = (() => {
@@ -3161,6 +3172,34 @@ export default function Resources() {
         </div>
       </div>,
       document.body,
+    );
+  }
+
+  // Web / Docker 模式没有本机文件访问能力：整页换成说明卡，不展示点了才报错的按钮
+  if (!window.electronAPI?.resource) {
+    return (
+      <div className="flex flex-col h-full min-h-0 bg-transparent">
+        <header className="shrink-0 px-4 pt-4 pb-2">
+          <h1 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{t('resources.title')}</h1>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">{t('resources.subtitle')}</p>
+        </header>
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3.5">
+          <div className="tb-soft-card rounded-2xl px-6 py-8 max-w-xl mx-auto text-center space-y-4">
+            <div className="text-3xl" aria-hidden>🖥️</div>
+            <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{t('resources.webOnly.title')}</h2>
+            <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">{t('resources.webOnly.desc')}</p>
+            <ul className="text-xs text-left text-zinc-600 dark:text-zinc-300 space-y-1.5 inline-block">
+              {['p1', 'p2', 'p3'].map(k => <li key={k}>✓ {t(`resources.webOnly.${k}`)}</li>)}
+            </ul>
+            <div>
+              <a href="https://github.com/wink-run/tokenbank/releases" target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center px-4 py-2 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition-colors">
+                {t('resources.webOnly.download')}
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
     );
   }
 
