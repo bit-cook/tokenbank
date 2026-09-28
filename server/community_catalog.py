@@ -227,6 +227,46 @@ def _clip_desc(text: str, max_len: int = 180) -> str:
     return s
 
 
+def _is_blank_desc(text: str) -> bool:
+    """空说明，或扫描时误存的 YAML 块标记。"""
+    t = str(text or "").strip()
+    return (not t) or bool(re.fullmatch(r"[|>][+-]?", t))
+
+
+def _frontmatter_description(raw: str) -> str:
+    """读取 SKILL.md 的 description，含 `description: |` 多行第一段。"""
+    m = re.match(r"^---\r?\n([\s\S]*?)\r?\n---", str(raw or ""))
+    if not m:
+        return ""
+    lines = m.group(1).splitlines()
+    for i, line in enumerate(lines):
+        mm = re.match(r"^description\s*:\s*(.*)$", line)
+        if not mm:
+            continue
+        val = mm.group(1).strip()
+        if re.fullmatch(r"[|>][+-]?", val):
+            block: list[str] = []
+            base = None
+            for nxt in lines[i + 1:]:
+                if not nxt.strip():
+                    if block:
+                        break
+                    continue
+                indent = len(nxt) - len(nxt.lstrip(" "))
+                if indent == 0:
+                    break
+                if base is None:
+                    base = indent
+                if indent < base:
+                    break
+                block.append(nxt[base:].strip())
+            return " ".join(block).strip()
+        if (val.startswith('"') and val.endswith('"')) or (val.startswith("'") and val.endswith("'")):
+            val = val[1:-1]
+        return val
+    return ""
+
+
 def _extract_description_from_content(rtype: str, content: str, name: str = "") -> str:
     """推荐时若无说明，从正文提炼短简介（提示词/智能体/技能通用）。"""
     raw = str(content or "").strip()
@@ -247,6 +287,12 @@ def _extract_description_from_content(rtype: str, content: str, name: str = "") 
         m = re.match(r"^[\s\S]+?[。.!！]", soul)
         one = (m.group(0) if m else soul).strip()
         return _clip_desc(one or name)
+
+    # Skill：优先 frontmatter 里的多行 description，避免卡片只有 `|`
+    if rtype == "skill":
+        from_fm = _frontmatter_description(raw)
+        if from_fm and not _is_blank_desc(from_fm):
+            return _clip_desc(from_fm)
 
     # 去掉 YAML frontmatter
     body = re.sub(r"^---\r?\n[\s\S]*?\r?\n---\s*", "", raw, count=1).strip()
@@ -294,6 +340,27 @@ async def set_pricing(*, install_cost: float | None = None, recommend_reward: fl
     if recommend_reward is not None:
         await db.set_config(RECOMMEND_REWARD_KEY, str(max(0.0, float(recommend_reward))))
     return await get_pricing()
+
+
+def _own_recommendation_index(bucket: list, catalog_id: str, user_id: int, name: str) -> int | None:
+    """同一 catalog_id，或同一推荐人的同名条目。他人的同名推荐不碰。"""
+    name_key = str(name or "").strip().lower()
+    name_hit: int | None = None
+    for i, old in enumerate(bucket or []):
+        if not isinstance(old, dict):
+            continue
+        if _item_catalog_id(old) == catalog_id:
+            return i
+        meta = old.get("metadata") if isinstance(old.get("metadata"), dict) else {}
+        try:
+            owner = int(meta.get("recommender_user_id") or 0)
+        except (TypeError, ValueError):
+            owner = 0
+        if owner != int(user_id):
+            continue
+        if name_key and str(old.get("name") or "").strip().lower() == name_key:
+            name_hit = i
+    return name_hit
 
 
 def find_item(doc: dict, catalog_id: str) -> tuple[str | None, dict | None]:
@@ -345,7 +412,7 @@ async def upsert_user_recommendation(
         raise ValueError(f"{rtype} 正文不能为空")
 
     description = str(description or "").strip()
-    if not description:
+    if _is_blank_desc(description):
         description = _extract_description_from_content(rtype, content, name)
 
     catalog_id = f"user-{rtype}-{int(user_id)}-{_slug_name(name)}"
@@ -375,17 +442,21 @@ async def upsert_user_recommendation(
     }
 
     bucket = list(doc.get(section) or [])
-    replaced = False
-    for i, old in enumerate(bucket):
-        if _item_catalog_id(old) == catalog_id:
-            # 保留管理员下架状态
-            old_meta = old.get("metadata") if isinstance(old.get("metadata"), dict) else {}
-            if old_meta.get("enabled") is False:
-                meta["enabled"] = False
-            bucket[i] = item
-            replaced = True
-            break
-    if not replaced:
+    # 同一用户、同一名称已在社区：沿用原 catalog_id 覆盖，避免重复推送拆成两条
+    hit = _own_recommendation_index(bucket, catalog_id, int(user_id), name)
+    replaced = hit is not None
+    if replaced:
+        old = bucket[hit]
+        old_id = _item_catalog_id(old)
+        if old_id:
+            catalog_id = old_id
+            item["catalog_id"] = old_id
+        old_meta = old.get("metadata") if isinstance(old.get("metadata"), dict) else {}
+        if old_meta.get("enabled") is False:
+            meta["enabled"] = False
+            item["metadata"] = meta
+        bucket[hit] = item
+    else:
         bucket.append(item)
     doc[section] = bucket
     await save_catalog_doc(doc)

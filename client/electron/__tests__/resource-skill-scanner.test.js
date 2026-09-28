@@ -43,6 +43,29 @@ name: agent-memory
   );
 });
 
+test('parseSkillFrontmatter reads multiline description block', () => {
+  const content = `---
+name: ai-image-prompts-skill
+description: |
+  Recommend curated prompts from a 10,000+ library.
+  Works with any image model.
+
+  Use this skill when users want to:
+  - Find prompts
+platforms:
+  - cursor
+---
+
+# Title
+`;
+  const meta = parseSkillFrontmatter(content);
+  assert.equal(meta.name, 'ai-image-prompts-skill');
+  assert.match(meta.description, /^Recommend curated prompts/);
+  assert.match(meta.description, /any image model/);
+  assert.equal(meta.description.includes('Find prompts'), false);
+  assert.equal(extractSkillDescription(content, meta).startsWith('Recommend curated prompts'), true);
+});
+
 test('extractSkillDescription prefers frontmatter over body', () => {
   const content = `---
 name: x

@@ -106,22 +106,9 @@ function hashContent(content) {
 
 /** 解析 SKILL.md YAML frontmatter */
 function parseSkillFrontmatter(content) {
-  const text = String(content || '');
-  const match = text.match(/^---\r?\n([\s\S]*?)\r?\n---/);
-  if (!match) return {};
-
-  const meta = {};
-  for (const line of match[1].split(/\r?\n/)) {
-    const m = line.match(/^([A-Za-z0-9_-]+)\s*:\s*(.+)$/);
-    if (!m) continue;
-    const key = m[1].toLowerCase();
-    let val = m[2].trim();
-    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
-      val = val.slice(1, -1);
-    }
-    meta[key] = val;
-  }
-  return meta;
+  // 与说明提炼共用同一解析，才能读到 `description: |` 多行块
+  const { parseFrontmatterLite } = require('./resource-description');
+  return parseFrontmatterLite(content);
 }
 
 /**

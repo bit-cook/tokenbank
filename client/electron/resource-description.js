@@ -81,19 +81,67 @@ function collectProseLines(body, { skipRole = true } = {}) {
   return buf;
 }
 
+/** YAML 块标量标记，或被误存成说明的 `|` / `>` */
+function isYamlBlockMarker(text) {
+  return /^[|>][+-]?$/.test(String(text || '').trim());
+}
+
+/** 空说明，或只剩块标量符号（扫描时没读到多行 description） */
+function isBlankCardDesc(text) {
+  const t = String(text || '').trim();
+  return !t || isYamlBlockMarker(t);
+}
+
+/** 多行说明只取第一段，避免把后续列表整段塞进卡片 */
+function firstParagraph(text) {
+  const parts = String(text || '').split(/\n\s*\n/);
+  return (parts[0] || '').trim();
+}
+
+/**
+ * 解析 SKILL.md frontmatter。支持单行值，以及 `description: |` / `>` 多行块。
+ * 列表项（platforms 等）保持忽略。
+ */
 function parseFrontmatterLite(content) {
   const text = String(content || '');
   const match = text.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   if (!match) return {};
+  const lines = match[1].split(/\r?\n/);
   const meta = {};
-  for (const line of match[1].split(/\r?\n/)) {
-    const m = line.match(/^([A-Za-z0-9_-]+)\s*:\s*(.+)$/);
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    if (!line.trim() || /^\s/.test(line) || /^\s*#/.test(line)) continue;
+    const m = line.match(/^([A-Za-z0-9_-]+)\s*:\s*(.*)$/);
     if (!m) continue;
+    const key = m[1].toLowerCase();
     let val = m[2].trim();
-    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+    if (isYamlBlockMarker(val)) {
+      const folded = val.startsWith('>');
+      const block = [];
+      let baseIndent = null;
+      while (i + 1 < lines.length) {
+        const next = lines[i + 1];
+        if (!next.trim()) {
+          // 空行结束第一段；后面的列表不进简介
+          if (block.length) break;
+          i += 1;
+          continue;
+        }
+        const indent = (next.match(/^(\s*)/) || ['', ''])[1].length;
+        if (indent === 0) break;
+        if (baseIndent == null) baseIndent = indent;
+        if (indent < baseIndent) break;
+        block.push(next.slice(baseIndent));
+        i += 1;
+      }
+      val = folded
+        ? block.join(' ').replace(/\s+/g, ' ').trim()
+        : block.join('\n').trim();
+    } else if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
       val = val.slice(1, -1);
     }
-    meta[m[1].toLowerCase()] = val;
+    if (!val) continue;
+    meta[key] = val;
   }
   return meta;
 }
@@ -107,8 +155,8 @@ function extractSkillDescription(content, fm = null) {
   const text = String(content || '');
   const meta = fm || parseFrontmatterLite(text);
 
-  const fromFm = String(meta.description || '').trim();
-  if (fromFm && !isRawRoleBlurb(fromFm)) return clipDesc(fromFm);
+  const fromFm = firstParagraph(meta.description || '');
+  if (fromFm && !isBlankCardDesc(fromFm) && !isRawRoleBlurb(fromFm)) return clipDesc(fromFm);
   if (fromFm && isRawRoleBlurb(fromFm)) {
     const body = text.replace(/^---\r?\n[\s\S]*?\r?\n---\s*/, '');
     const refined = refineRolePromptBlurb(fromFm, firstHeading(body) || meta.name || '');
@@ -170,7 +218,7 @@ function extractAssistantDescription(content) {
  */
 function extractResourceDescription(type, content, opts = {}) {
   const existing = String(opts.description || '').trim();
-  if (existing && !isRawRoleBlurb(existing)) return clipDesc(existing);
+  if (existing && !isBlankCardDesc(existing) && !isRawRoleBlurb(existing)) return clipDesc(existing);
 
   const t = type === 'agent' ? 'assistant' : type;
   let next = '';
@@ -191,7 +239,7 @@ function shouldReplaceDescription(oldDesc, nextDesc) {
   const next = String(nextDesc || '').trim();
   if (!next) return false;
   const old = String(oldDesc || '').trim();
-  if (!old) return true;
+  if (isBlankCardDesc(old)) return true;
   if (isRawRoleBlurb(old) && !isRawRoleBlurb(next)) return true;
   return false;
 }
@@ -199,6 +247,8 @@ function shouldReplaceDescription(oldDesc, nextDesc) {
 module.exports = {
   MAX_DESC,
   clipDesc,
+  isBlankCardDesc,
+  parseFrontmatterLite,
   isRawRoleBlurb,
   refineRolePromptBlurb,
   extractSkillDescription,

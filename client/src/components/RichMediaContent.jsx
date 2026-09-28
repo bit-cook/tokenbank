@@ -5,6 +5,7 @@ import {
   looksLikeLocalPath,
   openLocalPath,
   splitGluedLocalPath,
+  unwrapLocalPathToken,
 } from '../lib/local-path';
 
 const IMG_RE = /!\[([^\]]*)\]\(([^)]+)\)/g;
@@ -176,10 +177,9 @@ function renderInline(text, codeClassName = 'bg-gray-100 dark:bg-gray-800') {
     if (p.type === 'italic') return <em key={i}>{p.value}</em>;
     if (p.type === 'code') {
       const trimmed = p.value.trim();
-      // 整段已是合法路径时直接可点，避免粘连剥离误伤 .pptx 等
-      let codePath = trimmed;
-      let rest = '';
-      if (!looksLikeLocalPath(trimmed)) {
+      // 整段已是合法路径时直接可点；折行后的路径先拼回再识别
+      let { path: codePath, rest } = unwrapLocalPathToken(trimmed);
+      if (!looksLikeLocalPath(codePath)) {
         ({ path: codePath, rest } = splitGluedLocalPath(trimmed));
       }
       if (looksLikeLocalPath(codePath)) {
@@ -369,12 +369,11 @@ function renderTextBlock(text, keyPrefix, theme = 'default') {
     }
     if (b.type === 'code') {
       const trimmedCode = String(b.text || '').trim();
-      // 整块已是路径优先原样使用；否则再剥离粘连后缀
-      const codePath = looksLikeLocalPath(trimmedCode)
-        ? trimmedCode
-        : splitGluedLocalPath(trimmedCode).path;
-      // 单行本地路径代码块：点击即可打开
-      if (looksLikeLocalPath(codePath) && !trimmedCode.includes('\n')) {
+      // 整块已是路径优先原样使用；折行路径拼回后再判断
+      const codePath = unwrapLocalPathToken(trimmedCode).path
+        || splitGluedLocalPath(trimmedCode).path;
+      // 本地路径代码块（含气泡里被折行的单条路径）：点击即可打开
+      if (looksLikeLocalPath(codePath) && !/\n\s*\n/.test(trimmedCode)) {
         return (
           <pre
             key={key}

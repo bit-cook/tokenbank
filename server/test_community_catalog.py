@@ -57,6 +57,29 @@ class TestDefaultDoc(unittest.TestCase):
         self.assertIn("c", ids)
         self.assertNotIn("b", ids)
 
+    def test_repeat_push_matches_own_item_by_name(self):
+        bucket = [
+            {
+                "catalog_id": "user-skill-7-old-slug",
+                "name": "handdraw-style-prompter",
+                "metadata": {"user_recommended": True, "recommender_user_id": 7, "enabled": True},
+            },
+            {
+                "catalog_id": "user-skill-8-handdraw-style-prompter",
+                "name": "handdraw-style-prompter",
+                "metadata": {"user_recommended": True, "recommender_user_id": 8},
+            },
+        ]
+        # 同名但 catalog_id 变了：命中自己的旧条目，不碰别人的
+        hit = cc._own_recommendation_index(
+            bucket, "user-skill-7-handdraw-style-prompter", 7, "handdraw-style-prompter",
+        )
+        self.assertEqual(hit, 0)
+        other = cc._own_recommendation_index(
+            bucket, "user-skill-9-handdraw-style-prompter", 9, "handdraw-style-prompter",
+        )
+        self.assertIsNone(other)
+
     def test_slug_and_paid_flag(self):
         self.assertEqual(cc._slug_name("Hello World!"), "hello-world")
         paid = {"metadata": {"user_recommended": True, "recommender_user_id": 3}}
@@ -71,6 +94,22 @@ class TestDefaultDoc(unittest.TestCase):
         self.assertTrue(desc)
         self.assertIn("小黑", desc)
         self.assertNotEqual(desc, "—")
+
+    def test_extract_description_from_multiline_skill_frontmatter(self):
+        content = (
+            "---\nname: ai-image-prompts-skill\ndescription: |\n"
+            "  Recommend curated prompts from a 10,000+ library.\n"
+            "  Works with any image model.\n\n"
+            "  Use this skill when users want to:\n"
+            "  - Find prompts\n---\n\nYou are an expert.\n"
+        )
+        desc = cc._extract_description_from_content("skill", content, "ai-image-prompts-skill")
+        self.assertIn("Recommend curated prompts", desc)
+        self.assertNotIn("|", desc)
+        self.assertNotIn("Find prompts", desc)
+        # 推荐时若客户端把块标记当说明传来，应改用正文里的真介绍
+        fixed = "| "
+        self.assertTrue(cc._is_blank_desc(fixed.strip()))
 
     def test_extract_description_from_skill_frontmatter_body(self):
         content = "---\nname: html2app\n---\n\n# html2app\n\nPackage a local site into an Electron app.\n\n## Steps\n- clone\n"

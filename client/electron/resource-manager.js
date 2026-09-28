@@ -38,6 +38,7 @@ const {
 } = require('./skill-github-install');
 const {
   extractResourceDescription,
+  isBlankCardDesc,
   shouldReplaceDescription,
 } = require('./resource-description');
 /** 缺失依赖（数据异常）每种只报一次，避免刷屏 */
@@ -2108,10 +2109,10 @@ class ResourceManager {
     for (const group of grouped) {
       const managedRes = managedByName.get(group.name);
       const contentChanged = managedRes && managedRes.hash && managedRes.hash !== group.hash;
-      // 已纳管但说明为空、扫描已补出正文说明 → 回写库
+      // 已纳管但说明为空（或只剩误解析的 `|`）、扫描已补出正文说明 → 回写库
       const descMissing = managedRes
-        && !(managedRes.description || '').trim()
-        && !!(group.description || '').trim();
+        && isBlankCardDesc(managedRes.description)
+        && !isBlankCardDesc(group.description);
       if (managedRes && !contentChanged && !descMissing) {
         // 已纳管未变更：仍尝试一次 .agents 默认投射（幂等，靠 metadata 防重）
         this._maybeAutoProjectFromAgentsHub(managedRes.id, group);

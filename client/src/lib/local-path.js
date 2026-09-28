@@ -147,6 +147,21 @@ export function splitGluedLocalPath(raw) {
 }
 
 /**
+ * 反引号 / 代码块里被折行的本地路径。
+ * 换行会让 looksLikeLocalPath 失败，链接就点不开。
+ */
+export function unwrapLocalPathToken(raw) {
+  const trimmed = String(raw || '').trim();
+  if (!trimmed) return { path: '', rest: '' };
+  if (looksLikeLocalPath(trimmed)) return { path: trimmed, rest: '' };
+  const collapsed = trimmed.replace(/[\s\u200b]+/g, '');
+  if (collapsed && looksLikeLocalPath(collapsed)) return { path: collapsed, rest: '' };
+  const split = splitGluedLocalPath(collapsed || trimmed);
+  if (looksLikeLocalPath(split.path)) return split;
+  return { path: '', rest: '' };
+}
+
+/**
  * 优先应用内预览：
  * - 目录 / 可预览文件 → 应用内打开
  * - 其它文件（pptx / mp4 等）→ 系统默认应用打开

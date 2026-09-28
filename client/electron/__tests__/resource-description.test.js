@@ -41,6 +41,25 @@ You are a professional music video director and editor. Your job: take a music a
   assert.ok(/music audio|shot-by-shot|edit plan/i.test(desc), desc);
 });
 
+test('extractSkillDescription: 多行 description 不用 | 当介绍', () => {
+  const content = `---
+name: ai-image-prompts-skill
+description: |
+  Recommend curated prompts from a 10,000+ library.
+  Works with any image model.
+---
+
+You are an expert.
+`;
+  const desc = extractSkillDescription(content);
+  assert.equal(desc.includes('|'), false);
+  assert.match(desc, /Recommend curated prompts/);
+  assert.equal(
+    shouldReplaceDescription('|', desc),
+    true,
+  );
+});
+
 test('extractSkillDescription: 优先像样的 YAML description', () => {
   const content = `---
 name: x

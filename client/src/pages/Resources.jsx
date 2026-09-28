@@ -847,12 +847,18 @@ export default function Resources() {
     return () => window.removeEventListener('keydown', onKey);
   }, [editorOpen, cleanupOpen, busy, idleLoading]);
 
-  // 成功提示 3 秒后自动消失
+  // 成功提示 3 秒后自动消失；错误同样收起，避免挡住操作
   useEffect(() => {
     if (!msg) return undefined;
     const timer = setTimeout(() => setMsg(''), 3000);
     return () => clearTimeout(timer);
   }, [msg]);
+
+  useEffect(() => {
+    if (!error) return undefined;
+    const timer = setTimeout(() => setError(''), 4000);
+    return () => clearTimeout(timer);
+  }, [error]);
 
   useEffect(() => {
     if (!projectMenu) return undefined;
@@ -1104,6 +1110,7 @@ export default function Resources() {
       return;
     }
     let content = String(managed?.content || resourceLike?.content || '').trim();
+    const storedContent = content;
     // 扫描后本机列表可能尚未带上正文：再拉一次库
     if (!content && window.electronAPI?.resource?.listResources) {
       try {
@@ -1119,14 +1126,16 @@ export default function Resources() {
         }
       } catch { /* ignore */ }
     }
-    // Skill 仍无正文：从权威目录读 SKILL.md（勿直接 preview 目录）
-    if (!content && rtype === 'skill') {
+    // Skill：重复推送时以磁盘上的 SKILL.md 为准，社区副本才能更新到最新正文
+    if (rtype === 'skill') {
       const authPath = resourceLike?.authorityPath
         || managed?.authorityPath
         || managed?.metadata?.authorityPath
         || managed?.metadata?.scannedFrom
+        || resourceLike?.skillDir
         || '';
-      content = await readSkillBodyFromPath(authPath);
+      const fresh = await readSkillBodyFromPath(authPath);
+      if (fresh) content = fresh;
     }
     if (!content) {
       setError(t('resources.recommendNeedContent'));
@@ -1134,7 +1143,10 @@ export default function Resources() {
     }
     // 无说明时从正文提炼，写入社区条目；本机若也缺说明则一并补上
     let description = String(managed?.description || resourceLike?.description || '').trim();
-    if (!description) {
+    const contentChanged = content !== storedContent;
+    // `|` / `>` 是没读到的多行 YAML 标记；正文已变时重新提炼，避免社区介绍停在旧版
+    if (!description || /^[|>][+-]?$/.test(description) || contentChanged) {
+      description = '';
       try {
         const api = window.electronAPI?.resource;
         if (api?.extractDescription) {
@@ -1166,7 +1178,9 @@ export default function Resources() {
     setMsg('');
     try {
       // 本机缺说明时先落库，卡片也能立刻显示
-      if (description && managed?.id && !(managed.description || '').trim()
+      const storedDesc = String(managed?.description || '').trim();
+      const storedBlank = !storedDesc || /^[|>][+-]?$/.test(storedDesc);
+      if (description && managed?.id && storedBlank
         && window.electronAPI?.resource?.saveResource) {
         try {
           const saved = await window.electronAPI.resource.saveResource({
@@ -1229,7 +1243,9 @@ export default function Resources() {
         const catRes = await window.electronAPI.resource.listCatalog({});
         if (catRes.success) setCatalog(catRes.items || []);
       } catch { /* ignore */ }
-      setMsg(t('resources.recommendOk', { name: data?.item?.display_name || name }));
+      setMsg(t(data?.updated ? 'resources.recommendUpdated' : 'resources.recommendOk', {
+        name: data?.item?.display_name || name,
+      }));
     } catch (e) {
       setError(formatApiError(e, t('resources.recommendFailed')));
     } finally {
@@ -3459,8 +3475,21 @@ export default function Resources() {
           )}
         </div>
 
-        {msg && <p className="text-xs text-blue-600 dark:text-blue-400">{msg}</p>}
-        {error && <p className="text-xs text-red-500">{error}</p>}
+        {(msg || error) && createPortal(
+          <div className="electron-no-drag fixed inset-0 z-[10050] flex items-center justify-center p-4 pointer-events-none">
+            <div
+              role="alert"
+              className={`pointer-events-auto max-w-md text-center rounded-xl border px-4 py-3 text-sm shadow-lg ${
+                error
+                  ? 'border-red-200 bg-white text-red-600 dark:border-red-900/60 dark:bg-zinc-900 dark:text-red-400'
+                  : 'border-blue-200 bg-white text-blue-700 dark:border-blue-900/50 dark:bg-zinc-900 dark:text-blue-300'
+              }`}
+            >
+              {error || msg}
+            </div>
+          </div>,
+          document.body,
+        )}
 
         {loading ? (
           <div className="space-y-3 py-2" aria-busy="true">
