@@ -263,3 +263,22 @@ export function InspectorPreview({ text }) {
     </pre>
   );
 }
+
+/**
+ * 通用详情抽屉：与 LibraryInspector 同位置/尺寸规则，但内容完全由调用方提供
+ * （如供给源页直接放入原有配置卡，复用其全部编辑逻辑）。
+ */
+export function LibraryPanel({ title, onClose, closeLabel = 'Close', children }) {
+  return (
+    <aside
+      className="fixed inset-y-3 right-3 z-40 w-[min(440px,calc(100vw-1.5rem))] overflow-y-auto rounded-2xl border border-zinc-200/80 dark:border-white/[0.08] bg-white/95 dark:bg-zinc-900/95 backdrop-blur shadow-2xl lg:sticky lg:top-0 lg:inset-auto lg:right-auto lg:z-auto lg:w-[420px] lg:shrink-0 lg:max-h-[calc(100vh-10rem)] lg:shadow-sm lg:bg-white/80 lg:dark:bg-zinc-900/70"
+    >
+      <div className="sticky top-0 z-10 flex items-center justify-between gap-2 px-4 py-2.5 border-b border-zinc-100 dark:border-white/[0.06] bg-white/95 dark:bg-zinc-900/95">
+        <h2 className="text-xs font-medium text-zinc-500 dark:text-zinc-400 truncate">{title}</h2>
+        <button type="button" onClick={onClose} aria-label={closeLabel}
+          className="shrink-0 w-6 h-6 rounded-md text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800">×</button>
+      </div>
+      <div className="p-3">{children}</div>
+    </aside>
+  );
+}
