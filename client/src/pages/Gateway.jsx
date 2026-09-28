@@ -2887,6 +2887,76 @@ function AppDetailModal({ app, onClose }) {
   );
 }
 
+const MANAGE_ALL_DISMISS_KEY = 'tb-manage-all-dismissed';
+
+/**
+ * 首次使用引导：检测到尚未纳管的 AI 工具 → 一键全部纳管（仅统计 + 官方订阅，可随时还原）。
+ * 关闭后记住当时的应用集合；之后再识别到新工具会重新出现。
+ */
+function ManageAllBanner({ pending, busy, done, onManageAll, onDismissDone }) {
+  const { t } = useLang();
+  const navigate = useNavigate();
+  const signature = pending.map(a => a.id).sort().join(',');
+  const [dismissed, setDismissed] = useState(() => {
+    try { return localStorage.getItem(MANAGE_ALL_DISMISS_KEY) || ''; } catch { return ''; }
+  });
+
+  if (done > 0) {
+    return (
+      <div className="mb-3 rounded-xl border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/70 dark:bg-emerald-900/15 px-3.5 py-2.5 flex items-center gap-3 flex-wrap">
+        <span className="text-xs text-emerald-700 dark:text-emerald-300 font-medium">{t('gateway.manageAll.done', { n: done })}</span>
+        <span className="text-xs text-emerald-700/80 dark:text-emerald-300/80">{t('gateway.manageAll.doneHint')}</span>
+        <div className="ml-auto flex items-center gap-2">
+          <button onClick={() => navigate('/dashboard')}
+            className="text-xs px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-medium transition-colors">
+            {t('gateway.manageAll.viewUsage')}
+          </button>
+          <button onClick={onDismissDone}
+            className="text-xs px-2 py-1.5 rounded-lg text-emerald-700/70 dark:text-emerald-300/70 hover:bg-emerald-100 dark:hover:bg-emerald-900/30 transition-colors">
+            {t('gateway.common.close')}
+          </button>
+        </div>
+      </div>
+    );
+  }
+  if (!pending.length || dismissed === signature) return null;
+
+  function dismiss() {
+    try { localStorage.setItem(MANAGE_ALL_DISMISS_KEY, signature); } catch { /* 隐私模式等写入失败：仅本次会话隐藏 */ }
+    setDismissed(signature);
+  }
+
+  return (
+    <div className="mb-3 rounded-xl border border-blue-200 dark:border-[#3f6699]/60 bg-blue-50/70 dark:bg-[#3f6699]/10 px-3.5 py-3 flex items-center gap-3 flex-wrap">
+      <div className="flex -space-x-1.5 shrink-0">
+        {pending.slice(0, 6).map(a => {
+          const brand = brandIconFor(a);
+          return (
+            <span key={a.id} className="w-6 h-6 rounded-full bg-white dark:bg-zinc-800 border border-blue-100 dark:border-zinc-700 flex items-center justify-center overflow-hidden" title={a.name}>
+              {brand ? <img src={brand} alt="" className="w-3.5 h-3.5 object-contain" />
+                : isAppIcon(a.icon) ? appIconSvg(a.icon, 'w-3.5 h-3.5') : <span className="text-[11px]">{a.icon}</span>}
+            </span>
+          );
+        })}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="text-xs font-semibold text-zinc-800 dark:text-zinc-100">{t('gateway.manageAll.title', { n: pending.length })}</div>
+        <div className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">{t('gateway.manageAll.hint')}</div>
+      </div>
+      <div className="flex items-center gap-2 shrink-0">
+        <button onClick={onManageAll} disabled={busy}
+          className="text-xs px-3 py-1.5 rounded-lg bg-blue-500 hover:bg-blue-600 dark:bg-[#3f6699] dark:hover:bg-[#4a73a8] text-white font-medium transition-colors disabled:opacity-50 disabled:cursor-wait">
+          {busy ? t('gateway.manageAll.busy') : t('gateway.manageAll.cta', { n: pending.length })}
+        </button>
+        <button onClick={dismiss} disabled={busy}
+          className="text-xs px-2 py-1.5 rounded-lg text-zinc-500 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors disabled:opacity-40">
+          {t('gateway.manageAll.later')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function AppManager({ externalRoutes, availableModels = [], onActivity, onAppTotals }) {
   const refresh = typeof onActivity === 'function' ? onActivity : () => {};
   const { t } = useLang();
@@ -3099,7 +3169,8 @@ function AppManager({ externalRoutes, availableModels = [], onActivity, onAppTot
   //   纳管 = hosted:true + route_id:null + 官方订阅（还原配置/撤 shim，不走网关）
   //   还原 = hosted:false + route_id:null + 官方订阅（同上，停止纳管统计）
   // 走网关由路由下拉单独选择模型/路由触发。
-  async function setTracked(app, on) {
+  // batch=true：批量纳管时由调用方统一刷新列表、同步配置，这里不逐个 load()
+  async function setTracked(app, on, { batch = false } = {}) {
     let appId = app.id;
     if (app._virtual && app.link_method === 'shim') {
       const c = await appsApi.ensureShimApp({ agent_id: app.agent_id, name: app.name, icon: app.icon }).catch(() => null);
@@ -3139,8 +3210,26 @@ function AppManager({ externalRoutes, availableModels = [], onActivity, onAppTot
       if (settings?.id === appId) setSettings(null);
     }
     setBusyId(null);
+    if (batch) return;
     try { await window.electronAPI.claude3p?.sync(); } catch {}
     await load();
+  }
+
+  // 一键全部纳管：只对「已识别、可直接托管、尚未纳管」的应用生效。
+  // 纳管 = 仅统计 + 官方订阅，不改路由，随时可逐个还原，所以可以安全批量执行。
+  const [batchManaging, setBatchManaging] = useState(false);
+  const [batchDone, setBatchDone] = useState(0);
+  async function manageAll(pending) {
+    if (!pending.length || batchManaging) return;
+    setBatchManaging(true);
+    let n = 0;
+    for (const app of pending) {
+      try { await setTracked(app, true, { batch: true }); n += 1; } catch { /* 单个失败不阻断其余 */ }
+    }
+    try { await window.electronAPI.claude3p?.sync(); } catch {}
+    await load();
+    setBatchManaging(false);
+    setBatchDone(n);
   }
 
   // 转发测试：用该应用的 api_key 向网关发一个最小请求，验证转发是否成功
@@ -3328,6 +3417,12 @@ function AppManager({ externalRoutes, availableModels = [], onActivity, onAppTot
 
   // 列表只显示非草稿条目（新建面板未保存的临时条目 draft:true 不进列表）
   const visibleApps = apps.filter(a => !a.draft);
+  // 与行内「纳管」按钮同一判定：shim / 仅官方订阅 / 会话统计 / 配置文件型（开发者模式就绪）
+  const pendingManage = visibleApps.filter(a => {
+    if (a._virtual_apikey || a.hosted === true) return false;
+    if (a.link_method === 'shim' || a.link_method === 'direct' || a.link_method === 'session') return true;
+    return isKeyApp(a.link_method) && a.host_method === 'config-file' && !a.needs_dev_mode;
+  });
 
   // CLI 多账号分组：同 agent_id 的 shim 实例 ≥2 → 插一条父行 + 子行；单实例(或非实例)照旧一行。
   const renderList = (() => {
@@ -3427,6 +3522,14 @@ function AppManager({ externalRoutes, availableModels = [], onActivity, onAppTot
                 syncError={toolboxSyncError}
               />
             </div>
+
+            <ManageAllBanner
+              pending={pendingManage}
+              busy={batchManaging}
+              done={batchDone}
+              onManageAll={() => manageAll(pendingManage)}
+              onDismissDone={() => setBatchDone(0)}
+            />
 
             {/* 手工添加 → 弹层（ManualAddPanel，portal 到 body，避免被应用列表卡片裁切）*/}
             {manualDraft && (

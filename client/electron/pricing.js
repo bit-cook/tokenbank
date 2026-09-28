@@ -181,4 +181,30 @@ function estimatePaygCost(model, inputTokens, outputTokens, cacheWriteTokens, ca
   return inCost + outCost + cwCost + crCost;
 }
 
-module.exports = { estimateCost, estimatePaygCost, hasProviderPricing, PRICING, applyOverrides, applyProviderPricing };
+/** 仅命中已知模型的全局刊例价（精确或包含匹配）；不回退 auto / _default。 */
+function _lookupKnownGlobal(model) {
+  if (!model) return null;
+  const m = String(model).toLowerCase();
+  if (m === 'auto') return null;
+  if (PRICING[m]) return PRICING[m];
+  for (const k of _sortedKeys) {
+    if (k !== 'auto' && m.includes(k)) return PRICING[k];
+  }
+  return null;
+}
+
+/**
+ * 官方刊例价估算（用于「帮你省了多少」）：只认识别得出的模型，认不出就返回 0，
+ * 宁可少算也不拿兜底价虚增节省额。
+ */
+function estimateListCost(model, inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens) {
+  const p = _lookupKnownGlobal(model);
+  if (!p) return 0;
+  const inCost = ((inputTokens      || 0) / 1e6) * (p.in  || 0);
+  const outCost= ((outputTokens     || 0) / 1e6) * (p.out || 0);
+  const cwCost = ((cacheWriteTokens || 0) / 1e6) * (p.cacheWrite || p.in * 1.25 || 0);
+  const crCost = ((cacheReadTokens  || 0) / 1e6) * (p.cacheRead  != null ? p.cacheRead : p.in * 0.10);
+  return inCost + outCost + cwCost + crCost;
+}
+
+module.exports = { estimateCost, estimatePaygCost, estimateListCost, hasProviderPricing, PRICING, applyOverrides, applyProviderPricing };

@@ -3392,7 +3392,7 @@ async function route(model, reqPath, body, res, callerKey, skipP2P = false) {
                   tier: c.provider.type, via: c.provider.id, via_label: c.provider.label,
                   latency_ms: result.latency, first_token_ms: result.first_token_ms, status: 'ok',
                   worker: result.worker_id || undefined });
-        recordStats(c.provider.id, c.model, fillMissingInputTokens(result, body), _providerTier(c.provider), callerKey, streaming, c.provider.billing_type || null, reqPath);
+        recordStats(c.provider.id, c.model, fillMissingInputTokens(result, body), _providerTier(c.provider), callerKey, streaming, c.provider.billing_type || null, reqPath, origModel);
         reportUsage(c.provider.id, c.model, (result.input_tokens || 0) + (result.output_tokens || 0));
         cooldown.clear(coolKey(c.provider, c.model, stratSharer));   // 成功 → 源已恢复，清除冷却
         recordRouteReward(routeReqCtx, c.model, 1);   // 自进化路由：成功 → reward 1（暖启动所有策略路由）
@@ -3480,7 +3480,7 @@ async function route(model, reqPath, body, res, callerKey, skipP2P = false) {
               tried: failedModels.length ? [...failedModels] : undefined,
               tier: c.provider.type, via: c.provider.id, via_label: c.provider.label,
               latency_ms: result.latency, first_token_ms: result.first_token_ms, status: 'ok', worker: result.worker_id || undefined });
-            recordStats(c.provider.id, c.model, fillMissingInputTokens(result, body), _providerTier(c.provider), callerKey, streaming, c.provider.billing_type || null, reqPath);
+            recordStats(c.provider.id, c.model, fillMissingInputTokens(result, body), _providerTier(c.provider), callerKey, streaming, c.provider.billing_type || null, reqPath, origModel);
             reportUsage(c.provider.id, c.model, (result.input_tokens || 0) + (result.output_tokens || 0));
             if (result.latency) reqRouter.recordLatency(c.provider.id, result.latency);
             recordProviderSpeed(c.model, c.provider, result, streaming);
@@ -3566,7 +3566,7 @@ async function route(model, reqPath, body, res, callerKey, skipP2P = false) {
           });
           const stepTok  = (result.input_tokens || 0) + (result.output_tokens || 0);
           const stepTier = _providerTier(provider);
-          recordStats(provider.id, stepModel, fillMissingInputTokens(result, stepBody), stepTier, callerKey, streaming, provider.billing_type || null, reqPath);
+          recordStats(provider.id, stepModel, fillMissingInputTokens(result, stepBody), stepTier, callerKey, streaming, provider.billing_type || null, reqPath, origModel);
           reportUsage(provider.id, stepModel, stepTok);
           if (result.latency) reqRouter.recordLatency(provider.id, result.latency);
           recordProviderSpeed(stepModel, provider, result, streaming);
@@ -3711,7 +3711,7 @@ async function route(model, reqPath, body, res, callerKey, skipP2P = false) {
       });
       const directTok  = (result.input_tokens || 0) + (result.output_tokens || 0);
       const directTier = _providerTier(provider);
-      recordStats(provider.id, model, fillMissingInputTokens(result, body), directTier, callerKey, streaming, provider.billing_type || null, reqPath);
+      recordStats(provider.id, model, fillMissingInputTokens(result, body), directTier, callerKey, streaming, provider.billing_type || null, reqPath, origModel);
       reportUsage(provider.id, model, directTok);
       return;
     } catch (err) {
@@ -3777,7 +3777,7 @@ function resolveStatsAppId(apiKey, reqPath) {
   return appIdForKey(apiKey) || (reqPath && resolveAppControl(apiKey, reqPath)?.app_id) || null;
 }
 
-function recordStats(providerId, model, usage, tier, apiKey, streaming, billingType, reqPath) {
+function recordStats(providerId, model, usage, tier, apiKey, streaming, billingType, reqPath, requestedModel) {
   const inTok   = usage?.input_tokens        || 0;
   const outTok  = usage?.output_tokens       || 0;
   const cCreate = usage?.cache_create_tokens || 0;
@@ -3803,6 +3803,8 @@ function recordStats(providerId, model, usage, tier, apiKey, streaming, billingT
     // 否则免费/P2P 流量会按 Claude/GPT 刊例价虚增 dashboard 的 total_cost。
     cost_usd:             (tier === 'free' || tier === 'p2p') ? 0 : estimateCost(model, inTok, outTok, cCreate, cRead, providerId),
     billing_type:         billingType || null,
+    // 客户端原本请求的模型（换模后与 model 不同）：盘点页据此估算「帮你省了多少」
+    requested_model:      requestedModel || null,
   });
 }
 
@@ -4078,7 +4080,7 @@ function handleRequest(req, res) {
             if (ok && provider) {
               recordStats(provider.id, model, {
                 status_code: status, latency: latencyMs, first_token_ms: latencyMs,
-              }, _providerTier(provider), callerKey, false, provider.billing_type || null, cleanPath);
+              }, _providerTier(provider), callerKey, false, provider.billing_type || null, cleanPath, origModel);
             } else if (provider) {
               recordProviderFail(provider, model, { status, message: error || `HTTP_${status}` }, latencyMs, callerKey, cleanPath);
             } else {
