@@ -11,8 +11,8 @@ export default function GuestPreview({ kind, from }) {
   const { t } = useLang();
   const prefix = `guestPreview.${kind}`;
   return (
-    <div className="h-full min-h-0 overflow-y-auto px-4 py-10">
-      <div className="tb-soft-card rounded-2xl px-6 py-8 max-w-xl mx-auto space-y-5">
+    <div className="h-full min-h-0 overflow-y-auto px-4 py-10 flex">
+      <div className="tb-soft-card rounded-2xl px-6 py-8 max-w-xl w-full m-auto space-y-5">
         <div className="text-center space-y-2">
           <div className="text-3xl" aria-hidden>{kind === 'circles' ? '👥' : '💱'}</div>
           <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">{t(`${prefix}.title`)}</h1>

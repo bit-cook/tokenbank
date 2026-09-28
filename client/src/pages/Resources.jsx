@@ -3183,8 +3183,8 @@ export default function Resources() {
           <h1 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{t('resources.title')}</h1>
           <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">{t('resources.subtitle')}</p>
         </header>
-        <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3.5">
-          <div className="tb-soft-card rounded-2xl px-6 py-8 max-w-xl mx-auto text-center space-y-4">
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3.5 flex">
+          <div className="tb-soft-card rounded-2xl px-6 py-8 max-w-xl w-full m-auto text-center space-y-4">
             <div className="text-3xl" aria-hidden>🖥️</div>
             <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{t('resources.webOnly.title')}</h2>
             <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">{t('resources.webOnly.desc')}</p>
