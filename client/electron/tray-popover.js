@@ -100,7 +100,7 @@ function labelsFor(lang) {
     squadToday: 'Used today {n}',
     squadCopy: 'Copy invoke',
     squadCopied: 'Copied',
-    postsUnit: 'posts',
+    postsUnit: ' posts',
     circleLogin: 'Sign in',
     circleEmpty: 'No posts',
     showWindow: 'Main Panel',

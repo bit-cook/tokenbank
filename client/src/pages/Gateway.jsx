@@ -632,7 +632,7 @@ function tildify(p) {
 // 应用列表统一栅格：固定短列 + minmax(0,fr) 弹性列，避免内容撑开导致各行列宽不一致
 // 应用列保留 modest 最小宽；不设表格 min-width，避免常态出现横向滚动条
 // 应用列加大最小宽；固定短列与路由 min 适当压缩，空间让给应用名
-const APPS_TABLE_GRID = 'grid w-full grid-cols-[1.75rem_minmax(8rem,2fr)_3.75rem_1.75rem_3.75rem_3.5rem_3.75rem_minmax(4.5rem,1.6fr)_minmax(7.75rem,auto)] gap-x-2 items-center px-2.5 [&>*]:min-w-0';
+const APPS_TABLE_GRID = 'grid w-full grid-cols-[1.75rem_minmax(8rem,2fr)_5rem_1.75rem_3.75rem_3.5rem_3.75rem_minmax(4.5rem,1.6fr)_minmax(7.75rem,auto)] gap-x-2 items-center px-2.5 [&>*]:min-w-0';
 
 /** 应用行测试状态：成功/进行中行内短提示；失败用浮层展示完整错误（避免窄列截断） */
 function AppTestResultHint({ ts, t }) {
