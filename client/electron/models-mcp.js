@@ -150,7 +150,7 @@ async function handleToolCall(name, args = {}) {
       if (!filtered.length) {
         const hint = args.type && args.type !== 'all'
           ? `（无 type=${args.type} 的可用模型）`
-          : '（网关暂无可用模型；请确认 Token Bank 网关已启动并已配置供给源）';
+          : '（网关暂无可用模型；请确认 Token Bank 网关已启动，并已在「模型」页配置模型来源）';
         return textResult(hint);
       }
       const byType = { chat: 0, image: 0, embedding: 0 };

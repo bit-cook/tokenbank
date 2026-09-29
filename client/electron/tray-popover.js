@@ -75,9 +75,9 @@ function labelsFor(lang) {
     appsTitle: '活跃应用',
     appsEmpty: '近 3 天无活跃应用',
     appsTag: 'APPS',
-    usageTitle: '供给源额度',
+    usageTitle: '模型来源额度',
     usageTag: 'QUOTA',
-    usageEmpty: '近 3 天无活跃供给源',
+    usageEmpty: '近 3 天无活跃模型来源',
     usageLoading: '额度加载中…',
   } : {
     notRefreshed: 'Not tested yet',

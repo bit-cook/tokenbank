@@ -3369,7 +3369,7 @@ async function route(model, reqPath, body, res, callerKey, skipP2P = false) {
       (c) => coolKey(c.provider, c.model, stratSharer));   // 冷却中的候选下沉到末尾（fresh 先试，成功即返回，省空跑）
     if (!ordered.length) {
       const _flt = [_stratStep.scope, _stratStep.tier].filter(Boolean).join('/');
-      lastErr = new Error(`该路由过滤(${_flt || _stratStep.strategy || 'any'})下没有可用的${modalityOf(reqPath)}模型/供给源`);
+      lastErr = new Error(`该路由过滤(${_flt || _stratStep.strategy || 'any'})下没有可用的${modalityOf(reqPath)}模型/模型来源`);
       fail(_stratScene.scene_name, null); return;
     }
     const routeErrors = [];

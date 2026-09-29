@@ -81,7 +81,7 @@ The system automatically extracts work portraits from real call records and sess
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  Desktop (Electron · Mac / Windows) or CLI / Docker Web UI      │
-│  Gateway · Providers · Resources · Playground · Usage · …       │
+│  Gateway · Models · Resources · Playground · Usage · …          │
 └────────────────────────────┬────────────────────────────────────┘
                              │ loopback
                              ▼
@@ -217,17 +217,17 @@ Desktop, CLI, and server gateways each register as a device — **usage is repor
 
 ### Unified subscription management
 
-The **Profile** tab is the single hub for all billing accounts; **Providers** handles keys and routing:
+The **Profile** tab is the single hub for all billing accounts; **Models** handles keys and routing:
 
 | Type | How it's managed | Typical use |
 |---|---|---|
 | **APP subscription** | Register ChatGPT / Claude / Gemini / Cursor plans and monthly cost | Stats-only on official sub, or OAuth → API gateway |
 | **API subscription** | Separate catalog for vendor API plans (e.g. Volcengine Coding Plan) | API Key gateway, billed separately from APP subs |
-| **Pay-as-you-go** | Register providers, model lists, and USD/M-token list prices | Providers page only exposes models configured here; cost estimates use these rates |
+| **Pay-as-you-go** | Register providers, model lists, and USD/M-token list prices | The Models page only exposes models configured here; cost estimates use these rates |
 
 - **Cloud sync** — subscriptions and PAYG config download on login; Mac / Windows / Linux stay in sync
 - **Billing overlay** — daily subscription amortization + PAYG estimates alongside raw token stats
-- **Supply linkage** — Profile defines *what you use and what it costs*; Providers defines *how to connect and route*
+- **Supply linkage** — Profile defines *what you use and what it costs*; Models defines *how to connect and route*
 
 ### Dynamic supply delivery
 
@@ -429,11 +429,11 @@ Per-session steps, tool calls, skills used, and token breakdown (sealed reasonin
 
 ![Session Trace](server/static/screenshots/session-trace.webp)
 
-### Providers · personal compute + community sharing
+### Models · personal compute + community sharing
 
 Speed-test personal models with status lights; spend credits on community-shared models.
 
-![Providers](server/static/screenshots/providers.webp)
+![Models](server/static/screenshots/providers.webp)
 
 ### Assets · Agents / Skills / Prompts
 
@@ -485,7 +485,7 @@ Gateway status, per-app TTFT / today’s usage; open the main panel in one click
 | **Gateway** | **One-click onboarding** (WorkBuddy / Trae / …) + **multi-account CLI**; session Trace; scene / task-type routes |
 | **Playground** | **Agent orchestration** (community agents, image input); tool streams, stop/resume |
 | **Assets** | Community **MCP / Skill / Prompt / Agent** catalog; projection gating; **built-in MCP relay**; portrait recommendations |
-| **Providers** | **Local sources** and **community sharing**; modalities (text/vision/image/embedding); speed tests & dynamic catalog |
+| **Models** | **Local sources** and **community sharing**; modalities (text/vision/image/embedding); speed tests & dynamic catalog |
 | **Circles / Trade / Network** | Circles · contributor nodes / **hire agents** · global node map (also usable on the web) |
 | **Config** | Gateway port, timeout, concurrency · lossless compression · cloud account & relay key |
 
