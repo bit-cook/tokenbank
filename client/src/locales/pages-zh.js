@@ -1740,6 +1740,8 @@ export default {
   'resources.mcp.builtinDone': '已为 {app} 配置内置工具',
   'resources.mcp.relayCmdCopied': '已复制命令，在终端运行即可把中转网关加入 Claude Code',
   'resources.mcp.thirdParty': '第三方 MCP',
+  'resources.mcp.builtinLocked': '默认内置',
+  'resources.mcp.builtinLockedHint': '内置 MCP 默认投射到所有已纳管应用，不可取消；新纳管的应用会自动获得。',
   'resources.mcp.projectN': '投射到应用（{n}）',
   'resources.mcp.legacyConfig': '本地配置',
   'resources.mcp.legacyConfigHint': '早先直接写入该应用配置的条目；取消勾选即删除',

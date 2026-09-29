@@ -1733,6 +1733,8 @@ export default {
   'resources.mcp.builtinDone': 'Built-in tools set up for {app}',
   'resources.mcp.relayCmdCopied': 'Command copied — run it in a terminal to add the relay gateway to Claude Code',
   'resources.mcp.thirdParty': 'Third-party MCP',
+  'resources.mcp.builtinLocked': 'built-in',
+  'resources.mcp.builtinLockedHint': 'Built-in MCP servers are projected to every managed app by default and can\'t be removed; newly managed apps get them automatically.',
   'resources.mcp.projectN': 'Project to app ({n})',
   'resources.mcp.legacyConfig': 'local config',
   'resources.mcp.legacyConfigHint': 'Written directly into this app\'s config earlier; uncheck to remove',

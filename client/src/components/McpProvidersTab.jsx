@@ -590,7 +590,8 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
             const how = autoTransport(s, tg);
             if (how === 'relay') relayAdd.push(tg.id);
             else if (how === 'project') projAdd.push(tg);
-          } else if (!want && cur && single) {
+          } else if (!want && cur && single && !s.builtin) {
+            // 内置 MCP 默认投射到所有应用，不可取消
             if (cur === 'relay') relayRemove.push(tg.id);
             else projRemove.push(tg);
           }
@@ -671,7 +672,7 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
               ? t('resources.mcp.addTitle', { name: single.display_name || single.name })
               : t('resources.mcp.addTitleBatch', { n: batchServers.length })}
           </p>
-          <p className="text-[10px] text-zinc-400 mt-0.5">{t('resources.mcp.addHint')}</p>
+          <p className="text-[10px] text-zinc-400 mt-0.5">{single?.builtin ? t('resources.mcp.builtinLockedHint') : t('resources.mcp.addHint')}</p>
         </div>
         <div className="p-2 min-h-0 flex-1 overflow-y-auto space-y-0.5">
           {targets.length === 0 && <p className="text-xs text-zinc-400 px-2 py-2">{t('providers.mcp.noAgents')}</p>}
@@ -679,20 +680,26 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
             const checked = syncSelectedIds.includes(tg.id);
             const cur = probe ? connectionOf(probe, tg.id) : null;
             const how = cur || (probe ? autoTransport(probe, tg) : (tg.kind === 'api-app' ? 'relay' : 'project'));
-            const blocked = !cur && !how;
+            // 内置 MCP 已投射的应用锁定（不可取消）；未投射的仍可补上
+            const locked = !!(probe?.builtin && cur);
+            const blocked = locked || (!cur && !how);
             return (
-              <div key={tg.id} className={`rounded-lg ${checked ? 'bg-blue-50 dark:bg-blue-950/30' : ''}`}>
-                <label className={`flex items-center gap-2 px-2 py-1.5 text-xs ${blocked ? 'opacity-45 cursor-not-allowed' : 'cursor-pointer hover:bg-zinc-50/60 dark:hover:bg-zinc-700/40 rounded-lg'}`}>
+              <div key={tg.id} className={`rounded-lg ${checked || locked ? 'bg-blue-50 dark:bg-blue-950/30' : ''}`}>
+                <label className={`flex items-center gap-2 px-2 py-1.5 text-xs ${locked ? 'cursor-default' : blocked ? 'opacity-45 cursor-not-allowed' : 'cursor-pointer hover:bg-zinc-50/60 dark:hover:bg-zinc-700/40 rounded-lg'}`}>
                   <input
                     type="checkbox"
-                    checked={checked}
+                    checked={checked || locked}
                     disabled={blocked}
                     onChange={() => toggleAddSelected(tg.id)}
                     className="rounded border-zinc-300 dark:border-zinc-600"
                   />
                   <ServiceIcon id={tg.id} name={tg.label} boxClass="w-6 h-6" imgClass="w-3.5 h-3.5" />
                   <span className="flex-1 truncate text-zinc-700 dark:text-zinc-200" title={tg.label}>{tg.label}</span>
-                  {cur === 'project' && (
+                  {locked ? (
+                    <span className="shrink-0 text-[10px] text-sky-600 dark:text-sky-300" title={t('resources.mcp.builtinLockedHint')}>
+                      {t('resources.mcp.builtinLocked')}
+                    </span>
+                  ) : cur === 'project' && (
                     <span className="shrink-0 text-[10px] text-zinc-400" title={t('resources.mcp.legacyConfigHint')}>
                       {t('resources.mcp.legacyConfig')}
                     </span>
@@ -1373,7 +1380,11 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
                       <div className="flex items-center gap-2">
                         <ServiceIcon id={a.id} name={a.label} boxClass="w-5 h-5" imgClass="w-3 h-3" className="!rounded-md" />
                         <span className="flex-1 truncate text-zinc-700 dark:text-zinc-200">{a.label}</span>
-                        {a.how === 'project' && (
+                        {s.builtin ? (
+                          <span className="text-[10px] text-sky-600 dark:text-sky-300" title={t('resources.mcp.builtinLockedHint')}>
+                            {t('resources.mcp.builtinLocked')}
+                          </span>
+                        ) : a.how === 'project' && (
                           <span className="text-[10px] text-zinc-400" title={t('resources.mcp.legacyConfigHint')}>
                             {t('resources.mcp.legacyConfig')}
                           </span>
@@ -1384,7 +1395,9 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
                   ))}
                 </ul>
               )}
-              <p className="text-[10px] text-zinc-400 leading-relaxed">{t('resources.mcp.accessHint')}</p>
+              <p className="text-[10px] text-zinc-400 leading-relaxed">
+                {s.builtin ? t('resources.mcp.builtinLockedHint') : t('resources.mcp.accessHint')}
+              </p>
               {renderServerActions(s, { block: true })}
             </div>
           </InspectorSection>
