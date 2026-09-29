@@ -10,6 +10,7 @@ const USAGE_SUPPORTED = new Set([
 /** 切 tab 会卸载/重挂用量卡；短缓存避免重复打钥匙串 / 重复拉额度 */
 const USAGE_CACHE_TTL_MS = 60 * 1000;
 const usageResultCache = new Map();
+const usageInflight = new Map();
 
 /** 火山：Coding 订阅 vs 方舟按量（/api/v3/）分流 */
 function volcUsageKeyFromBase(base) {
@@ -174,17 +175,8 @@ function AccessKeyEditor({
   );
 }
 
-/**
- * 供给源 / 直连 App 订阅卡片上的用量条。
- * accessKey：可选，火山 IAM 凭证与额度同卡展示。
- * defaultOpen：额度条默认是否展开（火山卡传 true）。
- */
-export default function UsageMeter({
-  provider,
-  planHint = null,
-  defaultOpen = false,
-  accessKey = null, // { ak, sk, showSecret, onAkChange, onSkChange, onCommit }
-}) {
+/** 额度抓取（带 60s 缓存）：卡片与列表行内共用 */
+function useUsageData(provider, accessKey = null) {
   const api = typeof window !== 'undefined' ? window.electronAPI?.usage : null;
   const k = usageKey(provider);
   const supported = USAGE_SUPPORTED.has(k) && !(k === 'gemini' && !provider?.credentials?.access_token);
@@ -199,7 +191,6 @@ export default function UsageMeter({
     accessKey?.ak || '',
     accessKey?.sk ? 'sk2' : '',
   ].join('|');
-  const [open, setOpen] = useState(!!defaultOpen);
   const [state, setState] = useState({ loading: false, data: null, error: '' });
   const load = useCallback((force = false) => {
     if (!api || !supported || !fetchId) return;
@@ -212,21 +203,40 @@ export default function UsageMeter({
       }
     }
     setState(s => ({ ...s, loading: true, error: '' }));
-    api.fetch(fetchId)
-      .then(r => {
-        const next = r && r.error && !r.plan && !(r.windows || []).length && !r.credits
+    // 同一账户的列表行与展开卡片同时挂载时只发一次请求
+    let pending = !force && usageInflight.get(ck);
+    if (!pending) {
+      pending = api.fetch(fetchId)
+        .then(r => (r && r.error && !r.plan && !(r.windows || []).length && !r.credits
           ? { loading: false, data: null, error: r.error }
-          : { loading: false, data: r, error: (r && r.error) || '' };
-        usageResultCache.set(ck, { state: next, at: Date.now() });
-        setState(next);
-      })
-      .catch(e => {
-        const next = { loading: false, data: null, error: e?.message || String(e) };
-        usageResultCache.set(ck, { state: next, at: Date.now() });
-        setState(next);
-      });
+          : { loading: false, data: r, error: (r && r.error) || '' }))
+        .catch(e => ({ loading: false, data: null, error: e?.message || String(e) }))
+        .then(next => {
+          usageResultCache.set(ck, { state: next, at: Date.now() });
+          usageInflight.delete(ck);
+          return next;
+        });
+      usageInflight.set(ck, pending);
+    }
+    pending.then(next => setState(next));
   }, [api, supported, fetchId, credFp]);
   useEffect(() => { load(false); }, [load]);
+  return { api, supported, state, load };
+}
+
+/**
+ * 供给源 / 直连 App 订阅卡片上的用量条。
+ * accessKey：可选，火山 IAM 凭证与额度同卡展示。
+ * defaultOpen：额度条默认是否展开（火山卡传 true）。
+ */
+export default function UsageMeter({
+  provider,
+  planHint = null,
+  defaultOpen = false,
+  accessKey = null, // { ak, sk, showSecret, onAkChange, onSkChange, onCommit }
+}) {
+  const { api, supported, state, load } = useUsageData(provider, accessKey);
+  const [open, setOpen] = useState(!!defaultOpen);
 
   // 仅 AccessKey、无 usage API 时仍展示同卡编辑区
   if (!api || !supported) {
@@ -405,4 +415,46 @@ export function usageProviderForDirect(instance) {
     return { id: 'claude', auth_type: 'oauth', oauth_provider: 'claude' };
   }
   return null;
+}
+
+/**
+ * 列表行内的紧凑额度：细进度条 + 已用百分比 / 余额（不支持或无数据时不渲染）。
+ * 与卡片共用抓取缓存，展开详情时不重复请求。
+ */
+export function UsageInline({ provider }) {
+  const { api, supported, state } = useUsageData(provider);
+  if (!api || !supported) return null;
+  const d = state.data;
+  if (!d) {
+    return state.loading
+      ? <span className="inline-block w-10 h-1 rounded-full bg-zinc-200/80 dark:bg-zinc-700/80 animate-pulse align-middle" aria-hidden />
+      : null;
+  }
+  const wins = (d.windows || []).filter(w => w.usageKnown);
+  // 多窗口（5 小时 / 每周）取最紧的一条，避免行内堆叠
+  const tight = wins.reduce((a, w) => (a == null || Number(w.usedPercent) > Number(a.usedPercent) ? w : a), null);
+  const bal = d.credits && fmtBalance(d.credits);
+  if (!tight && !bal) return null;
+  const pct = tight ? Math.min(100, Math.max(0, Number(tight.usedPercent) || 0)) : null;
+  const warn = pct != null && pct >= 90;
+  const tip = [
+    ...wins.map(w => `${w.title} ${fmtUsedPercent(w.usedPercent, { exhaustedLabel: true })}${w.resetsAt ? ` · ${fmtReset(w.resetsAt)}` : ''}`),
+    bal ? `${d.credits.unlimited ? '累计花费' : '余额'} ${bal.replace(/^已用\s*/, '')}` : null,
+  ].filter(Boolean).join('\n');
+  return (
+    <span className="inline-flex items-center gap-1.5 min-w-0 tabular-nums" title={tip}>
+      {pct != null && (
+        <>
+          <span className="relative inline-block w-12 h-1 rounded-full bg-zinc-200/90 dark:bg-zinc-700/80 overflow-hidden shrink-0" aria-hidden>
+            <span className={`absolute inset-y-0 left-0 rounded-full ${usageBarColor(pct)}`} style={{ width: `${pct}%` }} />
+          </span>
+          <span className={warn ? 'text-red-500 dark:text-red-400' : ''}>
+            {fmtUsedPercent(pct, { exhaustedLabel: true })}
+            {wins.length > 1 && tight?.title ? <span className="text-zinc-400 dark:text-zinc-500"> · {tight.title}</span> : null}
+          </span>
+        </>
+      )}
+      {bal && <span className={pct != null ? 'text-zinc-400 dark:text-zinc-500' : ''}>{pct != null ? '· ' : ''}{bal}</span>}
+    </span>
+  );
 }

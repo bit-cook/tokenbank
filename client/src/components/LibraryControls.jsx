@@ -199,7 +199,7 @@ export function LibraryRowTitle({ logo, name, chips, sub, subClass = 'text-zinc-
           <span className="text-[13px] font-medium text-zinc-900 dark:text-zinc-50 truncate">{name}</span>
           {chips}
         </div>
-        {sub && <p className={`text-[11px] truncate mt-0.5 ${subClass}`}>{sub}</p>}
+        {sub && <p className={`text-[11px] truncate mt-0.5 empty:hidden ${subClass}`}>{sub}</p>}
       </div>
     </div>
   );

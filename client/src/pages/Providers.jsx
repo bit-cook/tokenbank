@@ -17,7 +17,7 @@ import { resolveModelsForModelView } from '../lib/personalAvailableModels';
 import { buildPersonalModelTypeMap, inferModelTypeFromName } from '../api/gatewayModels';
 import { encodeRoute } from '../lib/route-binding';
 import { avatarColor } from '../components/UserAvatar';
-import UsageMeter from '../components/UsageMeter';
+import UsageMeter, { UsageInline, usageProviderForDirect } from '../components/UsageMeter';
 
 /** 按当前语言覆盖 meta 中的 label / hint / getKey / oauth.label */
 function localizeProviderMeta(metaMap, t) {
@@ -4752,6 +4752,7 @@ export default function Providers() {
         enabled: p.enabled !== false, models: (p.models || []).length,
         cooldown: cooldownFor(p.id, inst?.gateway_id, inst?.source_id), verified: p.test_verified === true,
         gwIds: [p.id], modelNames: modelNameList(p.models),
+        usageProvider: usageProviderOf(p, inst),
       };
     }
     const inst = row.inst;
@@ -4769,7 +4770,14 @@ export default function Providers() {
       cooldown: direct ? cooldownFor(direct.agent_id, direct.source_id, direct.id) : cooldownFor(gw, prov?.id, inst.source_id),
       verified: prov?.test_verified === true,
       gwIds: [gw, prov?.id, direct?.agent_id].filter(Boolean), modelNames: modelNameList(models),
+      usageProvider: direct ? usageProviderForDirect(inst) : (prov ? usageProviderOf(prov, inst) : null),
     };
+  }
+
+  /** 与卡片内 UsageMeter 同口径：API 订阅按 plan_provider_id 抓取 */
+  function usageProviderOf(provider, inst) {
+    const pid = inst?.plan_provider_id || provider.id;
+    return pid && pid !== provider.id ? { ...provider, id: pid } : provider;
   }
 
   function modelNameList(list) {
@@ -4852,8 +4860,10 @@ export default function Providers() {
             />
           )}
           name={sm.name}
-          sub={sm.cooldown ? t('providers.list.coolingHint') : undefined}
-          subClass="text-amber-600 dark:text-amber-400"
+          sub={sm.cooldown
+            ? t('providers.list.coolingHint')
+            : (sm.usageProvider && sm.enabled ? <UsageInline provider={sm.usageProvider} /> : undefined)}
+          subClass={sm.cooldown ? 'text-amber-600 dark:text-amber-400' : undefined}
         />
         <div className="hidden md:flex items-center gap-1.5 min-w-0 text-[11px] text-zinc-600 dark:text-zinc-300">
           <PersonalTypeIcon tag={sm.tag} />
