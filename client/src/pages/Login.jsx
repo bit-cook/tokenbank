@@ -96,7 +96,7 @@ export default function Login() {
     }
     // 有邀请圈子结果时跳转到圈子页并传递提示
     if (circleResult) {
-      navigate('/circles', { replace: true, state: { circleResult } });
+      navigate('/contribute', { replace: true, state: { tradeTab: 'circles', circleResult } });
     } else {
       navigate(returnTo, { replace: true });
     }

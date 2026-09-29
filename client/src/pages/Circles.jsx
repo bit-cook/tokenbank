@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useLang } from '../store/lang';
 import {
   createCircle, listMyCircles, listJoinedCircles,
@@ -13,11 +13,14 @@ import {
   SplitButton, LIB_LIST_CLS, libRowCls, LibrarySectionHead, LibraryRowTitle,
 } from '../components/LibraryControls';
 import { AssetMoreMenu } from '../components/ResourceAssetCard';
-import CirclesTabs from '../components/CirclesTabs';
+import CircleBrowse from './CircleBrowse';
 
-export default function Circles() {
+/**
+ * 圈子 = 交易范围：嵌在「交易 → 圈子」页签里管理我的圈子 / 发现公开圈子。
+ * view / circleResult 由交易页按导航 state 传入（旧 /circles 路由与邀请链接都会落到这里）。
+ */
+export default function Circles({ view: viewProp = 'mine', circleResult = null, onChanged }) {
   const { t } = useLang();
-  const location = useLocation();
   const navigate = useNavigate();
   const [owned, setOwned]           = useState([]);
   const [joined, setJoined]         = useState([]);
@@ -36,14 +39,19 @@ export default function Circles() {
   const [joinPreview, setJoinPreview] = useState(null);  // { circle, already_member, full }
   const [joinLoading, setJoinLoading] = useState(false);
   const [joinError, setJoinError]   = useState('');
-  const [joinBanner, setJoinBanner] = useState(() => {
-    const r = location.state?.circleResult;
-    if (!r) return null;
-    if (r.already_member) return { type: 'info',    key: 'circles.alreadyMember' };
-    if (r.full)           return { type: 'warning', key: 'circles.fullAutoJoinFailed' };
-    if (r.ok)             return { type: 'success', key: 'circles.joinSuccess' };
-    return null;
-  });
+  const [view, setView] = useState(viewProp);
+  const [joinBanner, setJoinBanner] = useState(null);
+  useEffect(() => { setView(viewProp); }, [viewProp]);
+  // 邀请链接登录后自动入圈的结果
+  useEffect(() => {
+    const r = circleResult;
+    if (!r) return;
+    if (r.already_member) setJoinBanner({ type: 'info', key: 'circles.alreadyMember' });
+    else if (r.full) setJoinBanner({ type: 'warning', key: 'circles.fullAutoJoinFailed' });
+    else if (r.ok) setJoinBanner({ type: 'success', key: 'circles.joinSuccess' });
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅随新的入圈结果触发
+  }, [circleResult]);
 
   async function load() {
     setListLoading(true);
@@ -66,6 +74,7 @@ export default function Circles() {
       }));
 
       setOwned(ownedList.map(c => ({ ...c, members: memberMap[c.id] || [] })));
+      onChanged?.([...ownedList, ...joinedList]);
       // 待审批申请数不阻塞列表渲染
       Promise.all(ownedList.map(c => listCircleJoinRequests(c.id)
         .then(r => [c.id, (r.data?.requests || []).length])
@@ -232,29 +241,34 @@ export default function Circles() {
   const fieldCls = 'tb-soft-field w-full text-xs px-3 py-2 rounded-lg text-zinc-900 dark:text-zinc-100';
 
   return (
-    <div className="flex flex-col h-full min-h-0">
-      <header className="shrink-0 px-5 pt-5">
-        <div className="flex flex-wrap items-start gap-3">
-          <div className="min-w-0 flex-1">
-            <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{t('circles.pageTitle')}</h1>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">{t('circles.pageSubtitle')}</p>
-          </div>
-          <div className="electron-no-drag relative z-50">
-            <SplitButton
-              label={t('circles.createBtn')}
-              onClick={openCreate}
-              menuLabel={t('circles.moreActions')}
-              items={[
-                { key: 'join', label: t('circles.menu.join'), hint: t('circles.menu.joinHint'), onClick: openJoin },
-                { key: 'discover', label: t('circles.menu.discover'), hint: t('circles.browse.subtitle'), onClick: () => navigate('/circles/browse') },
-              ]}
-            />
-          </div>
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <div role="tablist" className="inline-flex p-0.5 rounded-lg bg-zinc-100/90 dark:bg-zinc-800/80">
+          {[['mine', t('circles.tab.mine'), all.length], ['discover', t('circles.tab.discover'), null]].map(([v, label, n]) => (
+            <button key={v} type="button" role="tab" aria-selected={view === v} onClick={() => setView(v)}
+              className={`text-xs px-3 py-1.5 rounded-md transition-colors ${
+                view === v
+                  ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-50 shadow-sm font-medium'
+                  : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+              }`}>
+              {label}
+              {n > 0 && <span className="ml-1 text-[11px] font-normal text-zinc-400 tabular-nums">{n}</span>}
+            </button>
+          ))}
         </div>
-        <CirclesTabs active="mine" count={listLoading ? null : all.length} />
-      </header>
+        <p className="flex-1 min-w-[12rem] text-[11px] text-zinc-500 dark:text-zinc-400">{t('circles.scopeHint')}</p>
+        <SplitButton
+          label={t('circles.createBtn')}
+          onClick={() => { setView('mine'); openCreate(); }}
+          menuLabel={t('circles.moreActions')}
+          items={[
+            { key: 'join', label: t('circles.menu.join'), hint: t('circles.menu.joinHint'), onClick: () => { setView('mine'); openJoin(); } },
+          ]}
+        />
+      </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4">
+      {view === 'discover' ? <CircleBrowse embedded onJoined={load} /> : (
+      <>
       {/* 入圈结果横幅 */}
       {joinBanner && (
         <div className={`flex items-center justify-between rounded-xl px-4 py-2.5 text-xs
@@ -331,7 +345,7 @@ export default function Circles() {
               className="tb-press text-xs font-medium px-3.5 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-500">
               {t('circles.createBtn')}
             </button>
-            <button type="button" onClick={() => navigate('/circles/browse')}
+            <button type="button" onClick={() => setView('discover')}
               className="text-xs px-3.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-white/70 dark:hover:bg-zinc-800">
               {t('circles.menu.discover')}
             </button>
@@ -358,7 +372,7 @@ export default function Circles() {
             {joined.length === 0 ? (
               <div className={`${LIB_LIST_CLS} px-4 py-5 text-xs text-zinc-500 dark:text-zinc-400`}>
                 {t('circles.noJoined')}，
-                <button type="button" onClick={() => navigate('/circles/browse')} className="text-blue-600 dark:text-blue-400 hover:underline">
+                <button type="button" onClick={() => setView('discover')} className="text-blue-600 dark:text-blue-400 hover:underline">
                   {t('circles.menu.discover')}
                 </button>
               </div>
@@ -368,7 +382,8 @@ export default function Circles() {
           </section>
         </>
       )}
-      </div>
+      </>
+      )}
 
       {/* 邀请同好弹框：挂 body，避开主栏 backdrop-filter 裁切 fixed */}
       {inviteModal && createPortal(

@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getNetwork, getStats, browseCircles, applyJoinCircle } from '../api/client';
+import { getNetwork, getStats, browseCircles } from '../api/client';
 import { modelStatsForIds, normalizeNetworkPayload } from '../lib/networkModelStats';
 import { fetchServerCommunityModels } from '../lib/communityModels';
 import { useLang } from '../store/lang';
@@ -217,7 +217,6 @@ export default function Network() {
   const [circleModelMap, setCircleModelMap] = useState({});
   const [communityIds,   setCommunityIds]   = useState([]);
   const [circles,        setCircles]        = useState([]);
-  const [circleBusyId,   setCircleBusyId]   = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -283,43 +282,14 @@ export default function Network() {
     ?? 0;
 
   /** 已入圈 → 主页；否则确认后申请加入 */
-  async function onCircleClick(c) {
+  // 申请加入统一在「交易 → 圈子 → 发现」完成，这里只做入口
+  function onCircleClick(c) {
     if (!c?.id) return;
     if (c.join_status === 'member') {
       navigate(`/circles/${c.id}`);
       return;
     }
-    if (c.join_status === 'pending') {
-      window.alert(t('network.circlePending'));
-      return;
-    }
-    if (c.full) {
-      window.alert(t('circles.browse.full'));
-      return;
-    }
-    const name = c.name || '';
-    if (!window.confirm(t('network.circleApplyConfirm').replace('{name}', name))) return;
-    setCircleBusyId(c.id);
-    try {
-      const r = await applyJoinCircle(c.id);
-      const d = r?.data || {};
-      if (d.already_member) {
-        setCircles((prev) => prev.map((x) => (x.id === c.id ? { ...x, join_status: 'member' } : x)));
-        navigate(`/circles/${c.id}`);
-        return;
-      }
-      if (d.full) {
-        window.alert(t('circles.browse.full'));
-        setCircles((prev) => prev.map((x) => (x.id === c.id ? { ...x, full: true } : x)));
-        return;
-      }
-      window.alert(t('network.circleApplySent').replace('{name}', name));
-      setCircles((prev) => prev.map((x) => (x.id === c.id ? { ...x, join_status: 'pending' } : x)));
-    } catch (err) {
-      window.alert(err?.response?.data?.detail || t('circles.browse.applyFailed'));
-    } finally {
-      setCircleBusyId(null);
-    }
+    navigate('/contribute', { state: { tradeTab: 'circles', circlesView: 'discover' } });
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -331,7 +301,7 @@ export default function Network() {
       <div className="flex items-start justify-between">
         <div>
           <div className="mb-1">
-            <button onClick={() => navigate('/providers')}
+            <button onClick={() => navigate(-1)}
               className="text-xs text-zinc-400 hover:text-zinc-600 dark:text-zinc-400 transition-colors">
               {t('network.backProviders')}
             </button>
@@ -344,9 +314,9 @@ export default function Network() {
           </h1>
           <p className="text-sm text-zinc-400 mt-0.5">{t('network.subtitle')}</p>
         </div>
-        <button onClick={() => navigate('/contribute')}
+        <button onClick={() => navigate('/contribute', { state: { tradeTab: 'supply' } })}
           className="text-xs bg-blue-600 hover:bg-blue-500 dark:bg-[#3f6699] dark:hover:bg-[#4a73a8] text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2">
-          <span>💪</span> {t('network.join')}
+          {t('network.join')}
         </button>
       </div>
 
@@ -523,7 +493,7 @@ export default function Network() {
                       </div>
                       <button
                         type="button"
-                        onClick={() => navigate('/contribute')}
+                        onClick={() => navigate('/contribute', { state: { tradeTab: 'hire', scope: 'all', agentQuery: g.name } })}
                         className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline"
                       >
                         {t('network.hireOnContribute')}
@@ -541,7 +511,7 @@ export default function Network() {
               <h2 className="text-sm font-semibold tracking-tight text-zinc-800 dark:text-zinc-100">{t('network.circlesTitle')}</h2>
               <button
                 type="button"
-                onClick={() => navigate('/circles/browse')}
+                onClick={() => navigate('/contribute', { state: { tradeTab: 'circles', circlesView: 'discover' } })}
                 className="tb-table-cell-meta text-blue-600 dark:text-blue-400 hover:underline"
               >
                 {t('network.circlesMore')}
@@ -554,12 +524,10 @@ export default function Network() {
                 const isMember = c.join_status === 'member';
                 const isPending = c.join_status === 'pending';
                 const desc = String(c.description || '').trim();
-                const busy = circleBusyId === c.id;
                 return (
                   <button
                     key={c.id}
                     type="button"
-                    disabled={busy}
                     onClick={() => onCircleClick(c)}
                     className="tb-soft-tile w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-800/60 transition-colors disabled:opacity-60"
                   >
@@ -586,9 +554,7 @@ export default function Network() {
                         {t('circles.members', { n: c.member_count ?? 0 })}
                       </div>
                       <div className="text-[10px] text-zinc-400 mt-0.5">
-                        {busy
-                          ? t('circles.browse.applying')
-                          : isMember
+                        {isMember
                             ? t('network.circleJoined')
                             : isPending
                               ? t('circles.browse.pending')

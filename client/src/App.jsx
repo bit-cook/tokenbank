@@ -17,8 +17,6 @@ import Network    from './pages/Network';
 import Config     from './pages/Config';
 import Login      from './pages/Login';
 import Debug      from './pages/Debug';
-import Circles    from './pages/Circles';
-import CircleBrowse from './pages/CircleBrowse';
 import CircleDetail from './pages/CircleDetail';
 import UpdateNotification from './components/UpdateNotification';
 import ResourceHitToast from './components/ResourceHitToast';
@@ -33,9 +31,7 @@ function readSidebarCollapsed() {
 
 /** 侧边栏主页面：切换时保持挂载以保留 state（如 Debug Agent 会话） */
 const KEEP_ALIVE_ROUTE_CONFIGS = [
-  { path: '/circles/browse', Component: CircleBrowse, requireLogin: true, guestPreview: 'circles' },
   { path: '/circles/:circleId', Component: CircleDetail, requireLogin: true, guestPreview: 'circles' },
-  { path: '/circles', Component: Circles, end: true, requireLogin: true, guestPreview: 'circles' },
   { path: '/gateway', Component: Gateway, requireAuthed: true },
   { path: '/providers', Component: Providers, requireAuthed: true },
   { path: '/resources', Component: Resources, requireAuthed: true },
@@ -70,6 +66,7 @@ function Layout() {
   useDeviceReporter(user);
 
   const location = useLocation();
+  const isLegacyCircles = location.pathname === '/circles' || location.pathname === '/circles/browse';
   const keepAliveMatch = useMemo(
     () => findRouteConfig(KEEP_ALIVE_ROUTE_CONFIGS, location.pathname),
     [location.pathname],
@@ -139,7 +136,15 @@ function Layout() {
             <Login />
           </div>
         )}
-        {!keepAliveMatch && location.pathname !== '/login' && location.pathname !== '/' && (
+        {/* 圈子已并入「交易」：旧入口统一转到交易 → 圈子 */}
+        {isLegacyCircles && (
+          <Navigate
+            to="/contribute"
+            replace
+            state={{ ...(location.state || {}), tradeTab: 'circles', circlesView: location.pathname === '/circles/browse' ? 'discover' : 'mine' }}
+          />
+        )}
+        {!keepAliveMatch && !isLegacyCircles && location.pathname !== '/login' && location.pathname !== '/' && (
           <Navigate to={authed ? '/gateway' : '/login'} replace />
         )}
       </main>

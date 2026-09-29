@@ -1,16 +1,12 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useLang } from '../store/lang';
-import { useAuth } from '../store/index';
 import {
   getCircleDetail,
   listCircleMembers,
   createCirclePost,
   updateCirclePost,
   deleteCirclePost,
-  createCirclePostReply,
-  updateCirclePostReply,
-  deleteCirclePostReply,
   listCircleJoinRequests,
   approveCircleJoinRequest,
   rejectCircleJoinRequest,
@@ -21,6 +17,7 @@ import RichMediaInput from '../components/RichMediaInput';
 import RichMediaContent from '../components/RichMediaContent';
 import UserAvatar, { userDisplayName, avatarColor } from '../components/UserAvatar';
 import { AssetMoreMenu } from '../components/ResourceAssetCard';
+import { LIB_LIST_CLS, libRowCls, LibraryRowTitle, LibrarySectionHead } from '../components/LibraryControls';
 import { getServerUrl } from '../config';
 
 /** 侧栏卡片：与资产 / 模型列表容器同款描边 */
@@ -60,32 +57,6 @@ function CircleAgentIcon({ name }) {
 }
 
 /** 操作按钮：回复 / 编辑 / 删除 */
-function ActionBar({ onReply, onEdit, onDelete, replyCount, showReply = true }) {
-  const { t } = useLang();
-  return (
-    <div className="flex items-center gap-2 pt-0.5">
-      {showReply && (
-        <button type="button" onClick={onReply}
-          className="text-xs px-2.5 py-1 rounded-lg bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600">
-          {t('circles.detail.reply')}
-          {replyCount > 0 && ` · ${replyCount}`}
-        </button>
-      )}
-      {onEdit && (
-        <button type="button" onClick={onEdit}
-          className="text-xs px-2.5 py-1 rounded-lg bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-600">
-          {t('circles.detail.edit')}
-        </button>
-      )}
-      {onDelete && (
-        <button type="button" onClick={onDelete}
-          className="text-xs px-2.5 py-1 rounded-lg text-red-500 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20">
-          {t('circles.detail.delete')}
-        </button>
-      )}
-    </div>
-  );
-}
 
 function MemberAvatar({ user }) {
   const name = userDisplayName(user);
@@ -133,11 +104,9 @@ export default function CircleDetail({ routeParams }) {
   const params = useParams();
   const navigate = useNavigate();
   const { t } = useLang();
-  const { user } = useAuth();
   // KeepAlive 下 useParams 会随当前 URL 漂移；优先用缓存 key 解析出的稳定 id
   const circleId = routeParams?.circleId ?? params.circleId;
   const id = Number(circleId);
-  const myId = user?.id;
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -151,15 +120,10 @@ export default function CircleDetail({ routeParams }) {
   const [posting, setPosting] = useState(false);
   const [editId, setEditId] = useState(null);
   const [editText, setEditText] = useState('');
-  const [editReply, setEditReply] = useState(null); // { postId, replyId, text }
-  const [replyingId, setReplyingId] = useState(null);
-  const [replyDraft, setReplyDraft] = useState('');
-  const [replying, setReplying] = useState(false);
   const [showComposer, setShowComposer] = useState(false);
   const [joinRequests, setJoinRequests] = useState([]);
   const [requestBusy, setRequestBusy] = useState(null); // request id
 
-  const isAuthor = (item) => myId != null && item?.author_id === myId;
   const [inviteCopied, setInviteCopied] = useState(false);
 
   function copyInvite() {
@@ -173,12 +137,12 @@ export default function CircleDetail({ routeParams }) {
 
   async function handleDissolve() {
     if (!circle || !window.confirm(t('circles.dissolveConfirm').replace('{name}', circle.name))) return;
-    try { await dissolveCircle(id); navigate('/circles'); } catch (err) { setError(err?.response?.data?.detail || err.message); }
+    try { await dissolveCircle(id); navigate('/contribute', { state: { tradeTab: 'circles' } }); } catch (err) { setError(err?.response?.data?.detail || err.message); }
   }
 
   async function handleLeave() {
     if (!circle || !window.confirm(t('circles.leaveConfirm').replace('{name}', circle.name))) return;
-    try { await leaveCircle(id); navigate('/circles'); } catch (err) { setError(err?.response?.data?.detail || err.message); }
+    try { await leaveCircle(id); navigate('/contribute', { state: { tradeTab: 'circles' } }); } catch (err) { setError(err?.response?.data?.detail || err.message); }
   }
 
   const load = useCallback(async () => {
@@ -266,62 +230,6 @@ export default function CircleDetail({ routeParams }) {
     }
   }
 
-  async function handleReply(e, post) {
-    e.preventDefault();
-    const text = replyDraft.trim();
-    if (!text) return;
-    setReplying(true);
-    try {
-      const r = await createCirclePostReply(id, post.id, text);
-      const reply = r.data.reply;
-      setPosts(prev => prev.map(p =>
-        p.id === post.id ? { ...p, replies: [...(p.replies || []), reply] } : p,
-      ));
-      setReplyDraft('');
-      setReplyingId(null);
-    } catch (err) {
-      setError(err?.response?.data?.detail || t('circles.detail.replyFailed'));
-    } finally {
-      setReplying(false);
-    }
-  }
-
-  async function handleSaveEditReply(post) {
-    if (!editReply) return;
-    const text = editReply.text.trim();
-    if (!text) return;
-    setPosting(true);
-    try {
-      const r = await updateCirclePostReply(id, post.id, editReply.replyId, text);
-      const updated = r.data.reply;
-      setPosts(prev => prev.map(p =>
-        p.id === post.id
-          ? { ...p, replies: (p.replies || []).map(r => r.id === updated.id ? updated : r) }
-          : p,
-      ));
-      setEditReply(null);
-    } catch (err) {
-      setError(err?.response?.data?.detail || t('circles.detail.editFailed'));
-    } finally {
-      setPosting(false);
-    }
-  }
-
-  async function handleDeleteReply(post, reply) {
-    if (!window.confirm(t('circles.detail.deleteConfirm'))) return;
-    setPosting(true);
-    try {
-      await deleteCirclePostReply(id, post.id, reply.id);
-      setPosts(prev => prev.map(p =>
-        p.id === post.id ? { ...p, replies: (p.replies || []).filter(r => r.id !== reply.id) } : p,
-      ));
-    } catch (err) {
-      setError(err?.response?.data?.detail || t('circles.detail.deleteFailed'));
-    } finally {
-      setPosting(false);
-    }
-  }
-
   async function handleApproveRequest(req) {
     setRequestBusy(req.id);
     try {
@@ -361,7 +269,7 @@ export default function CircleDetail({ routeParams }) {
     return (
       <div className="px-5 py-5 text-center space-y-3">
         <p className="text-sm text-red-500">{error}</p>
-        <button type="button" onClick={() => navigate('/circles')}
+        <button type="button" onClick={() => navigate('/contribute', { state: { tradeTab: 'circles' } })}
           className="electron-no-drag relative z-50 text-xs text-zinc-400 hover:text-zinc-600 dark:text-zinc-400 transition-colors">
           {t('circles.detail.back')}
         </button>
@@ -371,6 +279,9 @@ export default function CircleDetail({ routeParams }) {
 
   const color = avatarColor(circle?.name);
 
+  // 圈主最新一条即公告（按时间倒序）
+  const announcement = posts.find(p => circle?.owner_id == null || p.author_id === circle.owner_id) || null;
+
   const memberLabel = circle?.max_members
     ? t('circles.memberSlots', { current: circle?.member_count ?? 0, max: circle.max_members })
     : t('circles.members', { n: circle?.member_count ?? 0 });
@@ -378,7 +289,7 @@ export default function CircleDetail({ routeParams }) {
   return (
     <div className="px-5 py-5 space-y-4">
       <div>
-        <button type="button" onClick={() => navigate('/circles')}
+        <button type="button" onClick={() => navigate('/contribute', { state: { tradeTab: 'circles' } })}
           className="electron-no-drag relative z-50 mb-2 text-xs text-zinc-400 hover:text-zinc-600 dark:text-zinc-400 transition-colors">
           {t('circles.detail.back')}
         </button>
@@ -420,192 +331,123 @@ export default function CircleDetail({ routeParams }) {
 
       {error && <p className="text-xs text-red-500">{error}</p>}
 
-      {/* 动态为主栏；成员 / 共享资源 / 入圈申请收进侧栏 */}
+      {/* 圈子 = 交易范围：主栏是「本圈可用」；公告只一条、仅圈主可发 */}
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px] items-start">
-        <div className="min-w-0">
-      {/* 消息：卡片列表，正文无气泡；回复有气泡 */}
-      <div className="space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <h2 className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-100">{t('circles.detail.announcements')}</h2>
-          {!showComposer && (
-            <button type="button" onClick={() => setShowComposer(true)}
-              className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shrink-0">
-              {t('circles.detail.composePost')}
-            </button>
-          )}
-        </div>
-
-        {showComposer && (
-          <div className="tb-soft-card rounded-xl px-4 py-4 space-y-2">
-            <p className="text-xs font-medium text-gray-500 dark:text-gray-400">{t('circles.detail.composePost')}</p>
-            <form onSubmit={handlePost} className="space-y-2">
-              <RichMediaInput
-                circleId={id}
-                value={draft}
-                onChange={setDraft}
-                maxLength={2000}
-                rows={4}
-                placeholder={t('circles.detail.announcePh')}
-                autoFocus
-              />
-              <div className="flex gap-2">
-                <button type="submit" disabled={posting || !draft.trim()}
-                  className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors">
-                  {posting ? t('circles.detail.posting') : t('circles.detail.post')}
-                </button>
-                <button type="button"
-                  onClick={() => { setShowComposer(false); setDraft(''); }}
-                  className="px-3 py-1.5 text-sm border border-gray-200 dark:border-gray-600 rounded-lg text-gray-600 dark:text-gray-300">
-                  {t('circles.detail.cancel')}
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
-
-        {posts.length === 0 && !showComposer && (
-          <div className="tb-soft-card rounded-xl px-4 py-8 text-center">
-            <p className="text-xs text-gray-400">{t('circles.detail.noAnnouncements')}</p>
-          </div>
-        )}
-
-        {posts.map(post => (
-          <article key={post.id}
-            className="tb-soft-tile rounded-xl px-4 py-3.5 space-y-2">
-            <div className="flex items-center gap-2.5">
-              <AuthorAvatar author={post} />
-              <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
-                <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
-                  {authorName(post)}
-                </span>
-                <span className="text-xs text-gray-400 shrink-0">
-                  {fmtTime(post.updated_at || post.created_at)}
-                </span>
-              </div>
-            </div>
-
-            {editId === post.id ? (
-              <div className="space-y-2">
-                <RichMediaInput
-                  circleId={id}
-                  value={editText}
-                  onChange={setEditText}
-                  maxLength={2000}
-                  rows={4}
-                />
-                <div className="flex gap-2">
-                  <button type="button" onClick={() => handleSaveEdit(post)} disabled={posting}
-                    className="px-3 py-1 text-xs bg-blue-600 text-white rounded-lg disabled:opacity-50">
-                    {t('circles.detail.save')}
-                  </button>
-                  <button type="button" onClick={() => { setEditId(null); setEditText(''); }}
-                    className="px-3 py-1 text-xs border border-gray-200 dark:border-gray-600 rounded-lg text-gray-600 dark:text-gray-300">
-                    {t('circles.detail.cancel')}
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <>
-                <RichMediaContent content={post.content} />
-                <ActionBar
-                  replyCount={post.replies?.length || 0}
-                  onReply={() => {
-                    setReplyingId(replyingId === post.id ? null : post.id);
-                    setReplyDraft('');
-                  }}
-                  onEdit={isAuthor(post) ? () => { setEditId(post.id); setEditText(post.content); } : null}
-                  onDelete={isAuthor(post) ? () => handleDeletePost(post) : null}
-                />
-              </>
-            )}
-
-            {/* 回复区：气泡样式 */}
-            {(post.replies?.length > 0 || replyingId === post.id) && (
-              <div className="pt-2 border-t border-gray-100 dark:border-gray-700 space-y-2">
-                {post.replies?.map(reply => (
-                  <div key={reply.id} className="flex gap-2">
-                    <AuthorAvatar author={reply} />
-                    <div className="flex-1 min-w-0 space-y-1">
-                      <div className="flex items-baseline justify-between gap-2 px-0.5">
-                        <span className="text-xs font-semibold text-gray-800 dark:text-gray-200">
-                          {authorName(reply)}
-                        </span>
-                        <span className="text-xs text-gray-400 shrink-0">{fmtTime(reply.created_at)}</span>
-                      </div>
-
-                      {editReply?.replyId === reply.id ? (
-                        <div className="space-y-2">
-                          <RichMediaInput
-                            circleId={id}
-                            value={editReply.text}
-                            onChange={text => setEditReply(prev => ({ ...prev, text }))}
-                            maxLength={1000}
-                            rows={3}
-                            className="rounded-xl bg-gray-50 dark:bg-gray-700/50"
-                          />
-                          <div className="flex gap-2">
-                            <button type="button" onClick={() => handleSaveEditReply(post)} disabled={posting}
-                              className="px-3 py-1 text-xs bg-blue-600 text-white rounded-lg disabled:opacity-50">
-                              {t('circles.detail.save')}
-                            </button>
-                            <button type="button" onClick={() => setEditReply(null)}
-                              className="px-3 py-1 text-xs border border-gray-200 dark:border-gray-600 rounded-lg text-gray-600 dark:text-gray-300">
-                              {t('circles.detail.cancel')}
-                            </button>
-                          </div>
-                        </div>
-                      ) : (
-                        <>
-                          <div className="rounded-xl bg-gray-50 dark:bg-gray-700/45 px-3.5 py-2.5">
-                            <RichMediaContent
-                              content={reply.content}
-                              className="[&_p]:text-gray-700 [&_p]:dark:text-gray-300"
-                            />
-                          </div>
-                          {isAuthor(reply) && (
-                            <ActionBar
-                              showReply={false}
-                              onEdit={() => setEditReply({ postId: post.id, replyId: reply.id, text: reply.content })}
-                              onDelete={() => handleDeleteReply(post, reply)}
-                            />
-                          )}
-                        </>
-                      )}
-                    </div>
+        <div className="min-w-0 space-y-4">
+          {(announcement || circle?.is_owner) && (
+            <section className={SIDE_CARD}>
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-100">{t('circles.detail.notice')}</h2>
+                {circle?.is_owner && !showComposer && editId == null && (
+                  <div className="flex items-center gap-2 text-[11px]">
+                    {announcement && (
+                      <>
+                        <button type="button" onClick={() => { setEditId(announcement.id); setEditText(announcement.content); }}
+                          className="text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200">{t('circles.detail.edit')}</button>
+                        <button type="button" onClick={() => handleDeletePost(announcement)}
+                          className="text-zinc-400 hover:text-red-500">{t('circles.detail.delete')}</button>
+                      </>
+                    )}
+                    {!announcement && (
+                      <button type="button" onClick={() => setShowComposer(true)}
+                        className="text-blue-600 dark:text-blue-400 hover:underline">{t('circles.detail.noticeCreate')}</button>
+                    )}
                   </div>
-                ))}
-
-                {replyingId === post.id && (
-                  <form onSubmit={e => handleReply(e, post)} className="space-y-2 pl-10">
-                    <RichMediaInput
-                      circleId={id}
-                      value={replyDraft}
-                      onChange={setReplyDraft}
-                      maxLength={1000}
-                      rows={3}
-                      placeholder={t('circles.detail.replyPh')}
-                      autoFocus
-                      className="rounded-xl bg-gray-50 dark:bg-gray-700/50"
-                    />
-                    <div className="flex gap-2">
-                      <button type="submit" disabled={replying || !replyDraft.trim()}
-                        className="px-3 py-1 text-xs bg-blue-600 text-white rounded-lg disabled:opacity-50">
-                        {replying ? t('circles.detail.replying') : t('circles.detail.reply')}
-                      </button>
-                      <button type="button"
-                        onClick={() => { setReplyingId(null); setReplyDraft(''); }}
-                        className="px-3 py-1 text-xs border border-gray-200 dark:border-gray-600 rounded-lg text-gray-600 dark:text-gray-300">
-                        {t('circles.detail.cancel')}
-                      </button>
-                    </div>
-                  </form>
                 )}
               </div>
+              {showComposer ? (
+                <form onSubmit={handlePost} className="space-y-2">
+                  <RichMediaInput circleId={id} value={draft} onChange={setDraft} maxLength={2000} rows={3}
+                    placeholder={t('circles.detail.announcePh')} autoFocus />
+                  <div className="flex gap-2">
+                    <button type="submit" disabled={posting || !draft.trim()}
+                      className="tb-press text-xs font-medium px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50">
+                      {posting ? t('circles.detail.posting') : t('circles.detail.post')}
+                    </button>
+                    <button type="button" onClick={() => { setShowComposer(false); setDraft(''); }}
+                      className="text-xs px-3 py-1.5 rounded-lg text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">
+                      {t('circles.detail.cancel')}
+                    </button>
+                  </div>
+                </form>
+              ) : announcement && editId === announcement.id ? (
+                <div className="space-y-2">
+                  <RichMediaInput circleId={id} value={editText} onChange={setEditText} maxLength={2000} rows={3} />
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => handleSaveEdit(announcement)} disabled={posting}
+                      className="tb-press text-xs font-medium px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50">
+                      {t('circles.detail.save')}
+                    </button>
+                    <button type="button" onClick={() => { setEditId(null); setEditText(''); }}
+                      className="text-xs px-3 py-1.5 rounded-lg text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800">
+                      {t('circles.detail.cancel')}
+                    </button>
+                  </div>
+                </div>
+              ) : announcement ? (
+                <div className="text-xs text-zinc-700 dark:text-zinc-200">
+                  <RichMediaContent content={announcement.content} />
+                  <p className="mt-1.5 text-[11px] text-zinc-400">{authorName(announcement)} · {fmtTime(announcement.updated_at || announcement.created_at)}</p>
+                </div>
+              ) : (
+                <p className="text-xs text-zinc-400">{t('circles.detail.noticeEmptyOwner')}</p>
+              )}
+            </section>
+          )}
+
+          <section>
+            <LibrarySectionHead
+              title={t('circles.detail.available')}
+              count={agents.length + models.length}
+              extra={t('circles.detail.availableHint')}
+            />
+            {agents.length === 0 && models.length === 0 ? (
+              <div className={`${LIB_LIST_CLS} px-4 py-8 text-center text-xs text-zinc-500 dark:text-zinc-400`}>
+                {t('circles.detail.availableEmpty')}
+                <button type="button" onClick={() => navigate('/contribute', { state: { tradeTab: 'supply' } })}
+                  className="ml-1 text-blue-600 dark:text-blue-400 hover:underline">{t('circles.detail.shareToCircle')}</button>
+              </div>
+            ) : (
+              <ul className={LIB_LIST_CLS}>
+                {agents.map((a) => {
+                  const title = a.display_name || a.name || a.id;
+                  const blurb = String(a.description || '').trim();
+                  return (
+                    <li key={`${a.worker_id}:${a.id}`} className={`${libRowCls(false)} !cursor-default grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[minmax(0,1fr)_7rem_4.5rem]`}>
+                      <LibraryRowTitle
+                        logo={<CircleAgentIcon name={title} />}
+                        name={title}
+                        chips={<span className="shrink-0 text-[10px] px-1.5 py-px rounded font-medium bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300">{t('circles.detail.kindAgent')}</span>}
+                        sub={blurb || '—'}
+                      />
+                      <span className="hidden md:block text-[11px] text-zinc-500 dark:text-zinc-400 truncate">{a.runtime || '—'}</span>
+                      <div className="flex justify-end">
+                        <button type="button"
+                          onClick={() => navigate('/contribute', { state: { tradeTab: 'hire', scope: id, focusAgent: a.id } })}
+                          className="tb-press whitespace-nowrap text-[11px] px-2.5 py-1 rounded-lg bg-blue-600 text-white hover:bg-blue-500">
+                          {t('contribute.hireShort')}
+                        </button>
+                      </div>
+                    </li>
+                  );
+                })}
+                {models.map((m) => (
+                  <li key={m.id} className={`${libRowCls(false)} !cursor-default grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[minmax(0,1fr)_7rem_4.5rem]`}>
+                    <LibraryRowTitle
+                      logo={<div className="w-9 h-9 rounded-xl bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-sm shrink-0" aria-hidden>◆</div>}
+                      name={<span className="font-mono">{m.id}</span>}
+                      chips={<span className="shrink-0 text-[10px] px-1.5 py-px rounded font-medium bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-300">{t('circles.detail.kindModel')}</span>}
+                      sub={t('circles.detail.modelUsage')}
+                    />
+                    <span className="hidden md:block text-[11px] text-zinc-500 dark:text-zinc-400">{m.model_type && m.model_type !== 'chat' ? m.model_type : 'chat'}</span>
+                    <span />
+                  </li>
+                ))}
+              </ul>
             )}
-          </article>
-        ))}
-      </div>
+          </section>
         </div>
+
         <aside className="space-y-3 lg:sticky lg:top-0">
       {/* 圈主：待审批入圈申请 */}
       {circle?.is_owner && joinRequests.length > 0 && (
@@ -667,70 +509,6 @@ export default function CircleDetail({ routeParams }) {
           expanded={membersExpanded}
           onToggle={() => setMembersExpanded(v => !v)}
         />
-      </section>
-
-      {/* 共享模型 */}
-      <section className={SIDE_CARD}>
-        <h2 className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-100">{t('circles.detail.models')}</h2>
-        {models.length === 0
-          ? <p className="text-xs text-gray-400">{t('circles.detail.noModels')}</p>
-          : (
-            <div className="flex flex-wrap gap-2">
-              {models.map(m => (
-                <span key={m.id}
-                  className="text-xs px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-mono">
-                  {m.id}
-                  {m.model_type && m.model_type !== 'chat' && (
-                    <span className="ml-1 text-gray-400">({m.model_type})</span>
-                  )}
-                </span>
-              ))}
-            </div>
-          )}
-      </section>
-
-      {/* 共享智能体：与交易页社区智能体同款卡片（图标 + 标题 + runtime + 简介） */}
-      <section className={SIDE_CARD}>
-        <h2 className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-100">{t('circles.detail.agents')}</h2>
-        {agents.length === 0
-          ? <p className="text-xs text-gray-400">{t('circles.detail.noAgents')}</p>
-          : (
-            <div className="space-y-2.5">
-              <div className="grid grid-cols-1 gap-2">
-                {agents.map((a) => {
-                  const title = a.display_name || a.name || a.id;
-                  const blurb = String(a.description || '').trim();
-                  return (
-                    <div
-                      key={`${a.worker_id}:${a.id}`}
-                      className="tb-soft-tile flex gap-3 p-3 rounded-2xl"
-                    >
-                      <CircleAgentIcon name={title} />
-                      <div className="min-w-0 flex-1">
-                        <span className="text-sm font-semibold leading-snug text-gray-900 dark:text-gray-100 truncate block">
-                          {title}
-                        </span>
-                        {a.runtime && (
-                          <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 truncate">
-                            {a.runtime}
-                          </p>
-                        )}
-                        <p className={`text-[11px] mt-1.5 line-clamp-2 leading-relaxed ${
-                          blurb ? 'text-gray-500 dark:text-gray-400' : 'text-gray-400 italic'
-                        }`}>
-                          {blurb || '—'}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <button type="button" onClick={() => navigate('/contribute')}
-                className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline text-left">
-                {t('circles.detail.goHire')}
-              </button>
-            </div>
-          )}
       </section>
 
         </aside>

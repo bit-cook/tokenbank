@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { useLang } from '../store/lang';
 import { browseCircles, applyJoinCircle } from '../api/client';
 import { LIB_LIST_CLS, libRowCls, LibraryRowTitle } from '../components/LibraryControls';
-import CirclesTabs from '../components/CirclesTabs';
 
 const AVATAR_COLORS = [
   'bg-blue-600', 'bg-violet-600', 'bg-emerald-600',
@@ -16,7 +15,8 @@ function circleColor(name = '') {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
-export default function CircleBrowse() {
+/** 发现公开圈子（嵌在「交易 → 圈子」里） */
+export default function CircleBrowse({ onJoined }) {
   const { t } = useLang();
   const navigate = useNavigate();
   const [query, setQuery]       = useState('');
@@ -50,6 +50,7 @@ export default function CircleBrowse() {
       const d = r.data;
       if (d.already_member) {
         setBanner({ type: 'info', text: t('circles.browse.alreadyMember') });
+        onJoined?.();
         await load(query.trim());
       } else if (d.pending) {
         setBanner({ type: 'success', text: t('circles.browse.applySent').replace('{name}', circle.name) });
@@ -89,36 +90,26 @@ export default function CircleBrowse() {
     if (c.full) return <span className="text-[11px] text-zinc-400">{t('circles.browse.full')}</span>;
     return (
       <button type="button" onClick={() => handleApply(c)} disabled={applying === c.id}
-        className="tb-press text-[11px] px-2.5 py-1 rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50">
+        className="tb-press whitespace-nowrap text-[11px] px-2.5 py-1 rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50">
         {applying === c.id ? t('circles.browse.applying') : t('circles.browse.apply')}
       </button>
     );
   }
 
   return (
-    <div className="flex flex-col h-full min-h-0">
-      <header className="shrink-0 px-5 pt-5">
-        <div className="flex flex-wrap items-start gap-3">
-          <div className="min-w-0 flex-1">
-            <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{t('circles.pageTitle')}</h1>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">{t('circles.browse.subtitle')}</p>
-          </div>
-          <form onSubmit={handleSearch} className="electron-no-drag relative z-50 w-64 max-w-[45vw]">
-            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" aria-hidden>
-              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-3.5 h-3.5"><circle cx="9" cy="9" r="5.5" /><path d="M13.5 13.5 17 17" strokeLinecap="round" /></svg>
-            </span>
-            <input
-              className="tb-soft-field w-full text-xs pl-8 pr-3 py-1.5 rounded-lg text-zinc-900 dark:text-zinc-100"
-              placeholder={t('circles.browse.searchPh')}
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-            />
-          </form>
-        </div>
-        <CirclesTabs active="discover" />
-      </header>
+    <div className="space-y-3">
+      <form onSubmit={handleSearch} className="relative w-72 max-w-full">
+        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" aria-hidden>
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-3.5 h-3.5"><circle cx="9" cy="9" r="5.5" /><path d="M13.5 13.5 17 17" strokeLinecap="round" /></svg>
+        </span>
+        <input
+          className="tb-soft-field w-full text-xs pl-8 pr-3 py-1.5 rounded-lg text-zinc-900 dark:text-zinc-100"
+          placeholder={t('circles.browse.searchPh')}
+          value={query}
+          onChange={e => setQuery(e.target.value)}
+        />
+      </form>
 
-      <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4">
       {banner && (
         <div className={`flex items-center justify-between rounded-xl px-4 py-2.5 text-xs
           ${banner.type === 'success' ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300' :
@@ -141,7 +132,7 @@ export default function CircleBrowse() {
               <li
                 key={c.id}
                 onClick={() => { if (isMember) navigate(`/circles/${c.id}`); }}
-                className={`${libRowCls(false)} ${isMember ? '' : '!cursor-default'} grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[minmax(0,1fr)_7rem_6.5rem]`}
+                className={`${libRowCls(false)} ${isMember ? '' : '!cursor-default'} grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[minmax(0,1fr)_7.5rem_auto]`}
               >
                 <LibraryRowTitle
                   logo={(
@@ -166,7 +157,6 @@ export default function CircleBrowse() {
           })}
         </ul>
       )}
-      </div>
     </div>
   );
 }

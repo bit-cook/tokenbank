@@ -11,6 +11,7 @@ import {
   subscribeAgentEvents, useAgentPolling,
 } from '../api/agentControl';
 import RateChart from '../components/RateChart';
+import Circles from './Circles';
 import TruncTip from '../components/TruncTip';
 import { useLang } from '../store/lang';
 import { useAuth } from '../store/index';
@@ -128,7 +129,7 @@ function collectContributeAvailableModels(saved, accounts, localCfg) {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function ContributionConfigCard({ onStart, onStop, running, agentError, onAgentsRefresh }) {
+function ContributionConfigCard({ onStart, onStop, running, agentError, onAgentsRefresh, circles: circlesProp = null, onManageCircles }) {
   const { t } = useLang();
   const location = useLocation();
   const pageActive = location.pathname === '/contribute';
@@ -142,6 +143,8 @@ function ContributionConfigCard({ onStart, onStop, running, agentError, onAgents
   const [savedMsg,        setSavedMsg]        = useState('');
   const [localGw,         setLocalGw]         = useState(() => resolveLocalGatewayBase());
   const [circles,         setCircles]         = useState([]);         // 可分享的圈子
+  // 交易页「圈子」页签里新建 / 加入后同步到这里
+  useEffect(() => { if (circlesProp) setCircles(uniqueCircles(circlesProp)); }, [circlesProp]);
   const [circleScope,     setCircleScope]     = useState('public');   // 'public' | 'circle'
   const [selectedCircleIds, setSelectedCircleIds] = useState(new Set());
   const [showModelPicker, setShowModelPicker] = useState(false);
@@ -628,7 +631,16 @@ function ContributionConfigCard({ onStart, onStop, running, agentError, onAgents
       {circleScope === 'circle' && (
         <div className="space-y-2 -mt-1">
           {circles.length === 0
-            ? <p className="text-xs text-zinc-400">{t('contribute.noCircle')}</p>
+            ? (
+              <p className="text-xs text-zinc-400">
+                {t('contribute.noCircle')}
+                {onManageCircles && (
+                  <button type="button" onClick={onManageCircles} className="ml-1.5 text-blue-600 dark:text-blue-400 hover:underline">
+                    {t('contribute.createCircleLink')}
+                  </button>
+                )}
+              </p>
+            )
             : (
               <div className="flex flex-wrap items-center gap-1.5">
                 {circles.map(c => {
@@ -737,7 +749,7 @@ function CommunityAgentIcon({ name, selected, small = false }) {
 }
 
 /** 社区智能体：浏览在线名片 → 雇佣/取消雇佣（供游乐场与 MCP；此处不发起任务） */
-function CommunityAgentsCard({ refreshKey = 0 }) {
+function CommunityAgentsCard({ refreshKey = 0, circles = [], scope = 'all', onScopeChange, focusAgent = null }) {
   const { t } = useLang();
   const location = useLocation();
   const [agents, setAgents] = useState([]);
@@ -861,6 +873,21 @@ function CommunityAgentsCard({ refreshKey = 0 }) {
 
   const selectedHired = selected && hiredIds.has(selected.id);
 
+  // 从圈子详情 / 社区网络跳来：定位并展开该智能体
+  useEffect(() => {
+    if (focusAgent?.query) setQuery(focusAgent.query);
+  }, [focusAgent]);
+
+  useEffect(() => {
+    if (!focusAgent?.id || !agents.length) return;
+    const a = agents.find(x => x.id === focusAgent.id);
+    if (!a) return;
+    // 目标不在当前范围内时回到「全部」，避免选中了却看不到
+    if (!inScope(a)) onScopeChange?.('all');
+    selectAgent(a, { toggle: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅随跳转目标 / 列表就绪触发
+  }, [focusAgent, agents]);
+
   useEffect(() => {
     if (!pendingHire || !selected || selected.id !== pendingHire.id) return;
     setPendingHire(null);
@@ -890,8 +917,18 @@ function CommunityAgentsCard({ refreshKey = 0 }) {
     });
   }
 
+  const circleName = (cid) => circles.find(c => c.id === cid)?.name || '';
+  const inScope = (a) => {
+    if (scope === 'all') return true;
+    const isCircle = (a.visibility || 'public') !== 'public';
+    if (scope === 'public') return !isCircle;
+    // 旧服务端未返回 circle_ids 时，圈内项一律归入任意圈子
+    if (!Array.isArray(a.circle_ids)) return isCircle;
+    return a.circle_ids.includes(scope);
+  };
   const q = query.trim().toLowerCase();
-  const shown = !q ? agents : agents.filter((a) => {
+  const scoped = agents.filter(inScope);
+  const shown = !q ? scoped : scoped.filter((a) => {
     const { name, owner } = parseCommunityAgent(a);
     return [name, owner, a.runtime, a.description].some(v => String(v || '').toLowerCase().includes(q));
   });
@@ -899,8 +936,41 @@ function CommunityAgentsCard({ refreshKey = 0 }) {
     ? (selected.owner_nickname ? `${selected.owner_nickname}/${selected.display_name || selected.id}` : (selected.display_name || selected.id))
     : '';
 
+  const scopeOptions = [
+    { id: 'all', label: t('contribute.scope.all') },
+    { id: 'public', label: t('contribute.scope.public') },
+    ...circles.map(c => ({ id: c.id, label: c.name, circle: true })),
+  ];
+
   return (
     <div className="space-y-3">
+      {/* 交易范围：公开市场 / 我的圈子（圈子即交易范围） */}
+      {circles.length > 0 && (
+        <div role="radiogroup" aria-label={t('contribute.scope.label')} className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] text-zinc-400 mr-1">{t('contribute.scope.label')}</span>
+          {scopeOptions.map(o => {
+            const on = scope === o.id;
+            const n = agents.filter(a => {
+              if (o.id === 'all') return true;
+              const isCircle = (a.visibility || 'public') !== 'public';
+              if (o.id === 'public') return !isCircle;
+              return Array.isArray(a.circle_ids) ? a.circle_ids.includes(o.id) : isCircle;
+            }).length;
+            return (
+              <button key={o.id} type="button" role="radio" aria-checked={on} onClick={() => onScopeChange?.(o.id)}
+                className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                  on
+                    ? 'border-zinc-900 dark:border-zinc-100 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900'
+                    : 'border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-white/70 dark:hover:bg-zinc-800'
+                }`}>
+                {o.circle && <span className="mr-1 opacity-60" aria-hidden>◎</span>}
+                {o.label}
+                <span className={`ml-1 tabular-nums ${on ? 'opacity-70' : 'text-zinc-400'}`}>{n}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
       <div className="flex flex-wrap items-center gap-2">
         <div className="relative w-64 max-w-full">
           <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" aria-hidden>
@@ -985,11 +1055,21 @@ function CommunityAgentsCard({ refreshKey = 0 }) {
                           {title}
                         </>
                       ) : title}
-                      chips={hired ? (
-                        <span className="shrink-0 text-[10px] px-1.5 py-px rounded font-medium bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300">
-                          {t('contribute.hiredBadge')}
-                        </span>
-                      ) : null}
+                      chips={(
+                        <>
+                          {(a.visibility || 'public') !== 'public' && (
+                            <span className="shrink-0 text-[10px] px-1.5 py-px rounded font-medium bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300">
+                              ◎ {(a.circle_ids || []).map(circleName).filter(Boolean)[0] || t('contribute.scope.circleTag')}
+                              {(a.circle_ids || []).length > 1 ? ` +${a.circle_ids.length - 1}` : ''}
+                            </span>
+                          )}
+                          {hired && (
+                            <span className="shrink-0 text-[10px] px-1.5 py-px rounded font-medium bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300">
+                              {t('contribute.hiredBadge')}
+                            </span>
+                          )}
+                        </>
+                      )}
                       sub={blurb || t('contribute.noAgentDesc')}
                       subClass={blurb ? undefined : 'text-zinc-400 dark:text-zinc-500 italic'}
                     />
@@ -1072,9 +1152,35 @@ export default function Contribute() {
   const [agentError,  setAgentError]  = useState('');
   const [agentsRefreshKey, setAgentsRefreshKey] = useState(0);
   const logRef = useRef(null);
+  const location = useLocation();
   const [tab, setTab] = useState(() => {
     try { return localStorage.getItem('tokenbank.trade.tab') || 'hire'; } catch { return 'hire'; }
   });
+  // 圈子 = 交易范围：共享给雇佣筛选、上架范围、圈子管理
+  const [myCircles, setMyCircles] = useState(null);
+  const [scope, setScope] = useState('all');
+  const [focusAgent, setFocusAgent] = useState(null);
+  const [circlesView, setCirclesView] = useState('mine');
+  const [circleResult, setCircleResult] = useState(null);
+
+  useEffect(() => {
+    Promise.all([listMyCircles(), listJoinedCircles()])
+      .then(([o, j]) => setMyCircles(uniqueCircles([...(o.data?.circles || []), ...(j.data?.circles || [])])))
+      .catch(() => setMyCircles([]));
+  }, []);
+
+  // 跨页跳转（圈子详情 / 社区网络 / 邀请链接 / 旧 /circles 路由）带来的定位
+  useEffect(() => {
+    if (location.pathname !== '/contribute') return;
+    const st = location.state || {};
+    if (st.tradeTab) changeTab(st.tradeTab);
+    if (st.scope != null) setScope(st.scope);
+    if (st.focusAgent) setFocusAgent({ id: st.focusAgent, at: Date.now() });
+    if (st.agentQuery) setFocusAgent({ query: st.agentQuery, at: Date.now() });
+    if (st.circlesView) setCirclesView(st.circlesView);
+    if (st.circleResult) setCircleResult({ ...st.circleResult, at: Date.now() });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 每次导航触发一次
+  }, [location.key]);
   function changeTab(id) {
     setTab(id);
     try { localStorage.setItem('tokenbank.trade.tab', id); } catch { /* ignore */ }
@@ -1218,6 +1324,7 @@ export default function Contribute() {
   const TABS = [
     { id: 'hire', label: t('contribute.tab.hire') },
     { id: 'supply', label: t('contribute.tab.supply') },
+    { id: 'circles', label: t('contribute.tab.circles'), count: myCircles?.length || null },
     { id: 'earnings', label: t('contribute.tab.earnings'), count: settlements.length || null },
   ];
 
@@ -1288,7 +1395,13 @@ export default function Contribute() {
       <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
         {/* 三个页签常驻挂载：切换不丢未保存的上架配置 */}
         <div className={tab === 'hire' ? '' : 'hidden'}>
-          <CommunityAgentsCard refreshKey={agentsRefreshKey} />
+          <CommunityAgentsCard
+            refreshKey={agentsRefreshKey}
+            circles={myCircles || []}
+            scope={scope}
+            onScopeChange={setScope}
+            focusAgent={focusAgent}
+          />
         </div>
 
         <div className={tab === 'supply' ? 'space-y-2' : 'hidden'}>
@@ -1299,7 +1412,13 @@ export default function Contribute() {
             running={running}
             agentError={agentError}
             onAgentsRefresh={bumpAgentsRefresh}
+            circles={myCircles}
+            onManageCircles={() => changeTab('circles')}
           />
+        </div>
+
+        <div className={tab === 'circles' ? '' : 'hidden'}>
+          <Circles view={circlesView} circleResult={circleResult} onChanged={setMyCircles} />
         </div>
 
         <div className={tab === 'earnings' ? 'space-y-4' : 'hidden'}>

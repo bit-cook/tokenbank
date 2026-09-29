@@ -889,7 +889,7 @@
               <span style="font-family:'Space Mono',monospace;font-size:13px;color:#7b7b7b;flex:0 0 auto;width:24px;">03</span>
               <div>
                 <div data-i18n="cr.s3.h" style="font-size:16px;font-weight:600;color:#000;">Invite peers, earn together</div>
-                <div data-i18n="cr.s3.b" style="font-size:14px;color:#7b7b7b;line-height:1.5;margin-top:3px;">Share an invite link — when a friend joins, both earn credits. Post messages and replies to coordinate with circle mates.</div>
+                <div data-i18n="cr.s3.b" style="font-size:14px;color:#7b7b7b;line-height:1.5;margin-top:3px;">Share an invite link — when a friend joins, both earn credits. The owner can pin one announcement on what the circle shares.</div>
               </div>
             </div>
           </div>
@@ -1024,7 +1024,7 @@
             <span data-i18n="faq.q6">What are Circles?</span>
             <span class="tb-faq-mark" style="flex:0 0 auto;width:26px;height:26px;border-radius:8px;background:#f5f2f0;display:flex;align-items:center;justify-content:center;font-size:17px;color:#333;transition:transform .25s ease,background .25s ease;">+</span>
           </summary>
-          <p data-i18n="faq.a6" style="margin:0;padding:0 4px 26px;font-size:15px;line-height:1.6;color:#555;max-width:680px;">Circles are small communities inside Token Bank. Create or join via invite link, share models scoped to your circle, post messages to coordinate, and earn mutual credit rewards when friends join. You can contribute to multiple circles at once from the Contribute settings.</p>
+          <p data-i18n="faq.a6" style="margin:0;padding:0 4px 26px;font-size:15px;line-height:1.6;color:#555;max-width:680px;">Circles decide who you trade with. Create or join one via invite link under Trade → Circles, list your models and agents only to chosen circles, and hire only within them. Friends who join through your invite earn both of you credits.</p>
         </details>
 
         <details class="tb-faq" style="border-bottom:1px solid #ececec;">
@@ -1266,7 +1266,7 @@ class Component extends DCLogic {
     'cr.sub': '创建或加入志同道合的 AI 圈子。在圈内共享贡献的模型，邀请好友双方得积分，还可同时向多个圈子贡献算力。',
     'cr.s1.h': '创建或加入', 'cr.s1.b': '自建圈子，或通过邀请码 / 链接加入 — 圈主与成员角色清晰，圈友列表一目了然。',
     'cr.s2.h': '圈内共享模型', 'cr.s2.b': '贡献算力时可指定面向哪些圈子。圈友经同一网关调用共享模型，路由全程透明。',
-    'cr.s3.h': '邀请同好，积分互得', 'cr.s3.b': '分享邀请链接 — 好友加入后双方获得积分奖励。圈内可发帖、回复，与圈友交流协作。',
+    'cr.s3.h': '邀请同好，积分互得', 'cr.s3.b': '分享邀请链接 — 好友加入后双方获得积分奖励；圈主可发布一条公告，告诉圈友这里共享什么。',
     'cr.cta': '浏览圈子 →',
     'cr.card.name': 'AI 同好圈', 'cr.card.meta': '12 位圈友 · 你是圈主',
     'cr.card.invite': '邀请同好', 'cr.card.members': '圈友', 'cr.card.models': '共享模型',
@@ -1296,7 +1296,7 @@ class Component extends DCLogic {
     'faq.q5': '是免费且开源的吗？',
     'faq.a5': '是。Token Bank 采用 Apache-2.0 许可，macOS、Windows、Linux / Docker 均可免费下载使用。社区积分靠贡献获得，而非购买，仅少量云端托管功能收费。',
     'faq.q6': '什么是圈子？',
-    'faq.a6': '圈子是 Token Bank 内的小型社区：通过邀请链接创建或加入，向指定圈子共享模型，发帖与圈友交流协作，好友加入时双方获得积分奖励。在贡献设置中可同时向多个圈子共享算力。',
+    'faq.a6': '圈子决定你和谁交易：在「交易 → 圈子」通过邀请链接创建或加入，上架时可只给指定圈子，雇佣时可只看圈内；好友通过邀请加入时双方获得积分。',
     'faq.q7': 'v0.5 的 Agent 聚合编排是什么？',
     'faq.a7': '在游乐场选定主 Agent 作为聚合入口：它接收任务、可规划步骤，并派发到其他已纳管智能体（含已雇佣的社区智能体）。配合 CLI 多账号与 MCP / Skill / Prompt 资源中枢，Token Bank 成为本地 Agent 控制面，而不只是 Token 代理。',
     'faq.q8': '什么是雇佣智能体？',

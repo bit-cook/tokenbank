@@ -455,9 +455,9 @@ Requests / tokens / free-hit rate / estimated cost; per-app mix and daily trend.
 
 ![Usage](server/static/screenshots/usage.webp)
 
-### Circles · share compute with friends
+### Circles · trade only with people you trust
 
-Create or join circles; invite friends to share models and credits.
+Circles are the scope of trading: create or join one under **Trade → Circles**, list supply to chosen circles, and filter hiring to circle-only agents. Inviting friends earns both sides credits.
 
 ![Circles](server/static/screenshots/circles.webp)
 
@@ -486,7 +486,7 @@ Gateway status, per-app TTFT / today’s usage; open the main panel in one click
 | **Playground** | **Agent orchestration** (community agents, image input); tool streams, stop/resume |
 | **Assets** | Community **MCP / Skill / Prompt / Agent** catalog; projection gating; **built-in MCP relay**; portrait recommendations |
 | **Models** | **Local sources** and **community sharing**; modalities (text/vision/image/embedding); speed tests & dynamic catalog |
-| **Circles / Trade / Network** | Circles · contributor nodes / **hire agents** · global node map (also usable on the web) |
+| **Trade (incl. Circles) / Network** | **Hire agents** · list supply · circles as trade scope / community network map (also usable on the web) |
 | **Config** | Gateway port, timeout, concurrency · lossless compression · cloud account & relay key |
 
 ---
