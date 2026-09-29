@@ -170,6 +170,8 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
   const [selectedKey, setSelectedKey] = useState(null);
   /** 内置卡展开：null=自动（有未就绪应用时展开） */
   const [builtinCardOpen, setBuiltinCardOpen] = useState(null);
+  /** 展开了「启用原生工具」说明的应用 */
+  const [nativeOpenIds, setNativeOpenIds] = useState([]);
 
   useEffect(() => { if (createSignal) setShowCustom(true); }, [createSignal]);
   // 上报已纳管数量（资源页「资产库」计数）
@@ -631,7 +633,8 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
         if (added.length) parts.push(t('resources.mcp.addedTo', { name, apps: added.join('、') }));
         if (removed.length) parts.push(t('resources.mcp.removedFrom', { name, apps: removed.join('、') }));
       }
-      if (relayApps.size) parts.push(t('resources.mcp.relaySetupHint'));
+      const needManual = [...relayApps].filter((id) => gatewayApiApps.some((a) => a.id === id) || !relayUsableViaBuiltin(id));
+      if (needManual.length) parts.push(t('resources.mcp.relaySetupHint'));
       if (projectedToWorkbuddy) parts.push(t('providers.mcp.workbuddyTrustHint'));
       if (!single) setSelectedServerIds([]);
       await loadAll({ silent: true });
@@ -706,7 +709,11 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
                   )}
                 </label>
                 {checked && how === 'relay' && (
-                  <div className="pl-10 pr-2 pb-1.5 -mt-0.5">{renderRelayUrl(tg.id, { compact: true })}</div>
+                  tg.kind !== 'api-app' && relayUsableViaBuiltin(tg.id) ? (
+                    <p className="pl-10 pr-2 pb-1.5 -mt-0.5 text-[10px] text-zinc-400">{t('resources.mcp.viaBuiltinNote')}</p>
+                  ) : (
+                    <div className="pl-10 pr-2 pb-1.5 -mt-0.5">{renderRelayUrl(tg.id, { compact: true })}</div>
+                  )
                 )}
               </div>
             );
@@ -1390,7 +1397,11 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
                           </span>
                         )}
                       </div>
-                      {a.how === 'relay' && <div className="pl-7">{renderRelayUrl(a.id)}</div>}
+                      {a.how === 'relay' && (
+                        gatewayApiApps.some((x) => x.id === a.id) || !relayUsableViaBuiltin(a.id)
+                          ? <div className="pl-7">{renderRelayUrl(a.id)}</div>
+                          : <p className="pl-7 text-[10px] text-zinc-400">{t('resources.mcp.viaBuiltinNote')}</p>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -1446,13 +1457,24 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
     return set;
   }
 
+  /**
+   * 接入状态：
+   * - 桌面 / CLI：内置 Resources 写入后即可经 tb_call_mcp 调用中转 MCP（relayVia=builtin），
+   *   配置里另有 tokenbank-relay 条目则为原生接入（relayVia=native）；就绪只看内置工具。
+   * - API 应用：无法写配置、无内置工具，需在应用侧手动配置一次中转地址（状态无法探测）。
+   */
   function appSetupStatus(tg, relaySet) {
+    if (tg.kind === 'api-app') return { api: true, builtinOk: null, relayVia: null, ready: null };
     const builtins = builtinRequiredServers();
-    const builtinOk = tg.kind === 'api-app'
-      ? null
-      : builtins.length > 0 && builtins.every((b) => getInstalledAgentIds(b).includes(tg.id));
-    const relayOk = tg.kind === 'api-app' ? null : relaySet.has(tg.id);
-    return { builtinOk, relayOk, ready: builtinOk !== false && relayOk !== false };
+    const builtinOk = builtins.length > 0 && builtins.every((b) => getInstalledAgentIds(b).includes(tg.id));
+    const resourcesOk = servers.some((b) => b.id === 'tokenbank-resources' && getInstalledAgentIds(b).includes(tg.id));
+    const relayVia = relaySet.has(tg.id) ? 'native' : (resourcesOk ? 'builtin' : null);
+    return { api: false, builtinOk, relayVia, ready: builtinOk };
+  }
+
+  /** 桌面 / CLI 是否已可经内置工具使用中转 MCP */
+  function relayUsableViaBuiltin(appId) {
+    return servers.some((b) => b.id === 'tokenbank-resources' && getInstalledAgentIds(b).includes(appId));
   }
 
   /** 一键为某应用写入内置工具（模型 / 资源） */
@@ -1503,8 +1525,9 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
     const relaySet = relayConnectedIds();
     const targets = addTargets();
     const rows = targets.map((tg) => ({ tg, st: appSetupStatus(tg, relaySet) }));
-    const readyN = rows.filter((r) => r.st.ready).length;
-    const allReady = rows.length > 0 && readyN === rows.length;
+    const agentRows = rows.filter((r) => !r.st.api);
+    const readyN = agentRows.filter((r) => r.st.ready).length;
+    const allReady = agentRows.length > 0 && readyN === agentRows.length;
     const open = builtinCardOpen ?? !allReady;
     const builtins = servers.filter((s) => s.builtin);
     const pill = (ok, label) => (ok == null ? (
@@ -1530,7 +1553,7 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
             <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">{t('resources.mcp.builtinDesc')}</p>
           </div>
           <span className={`text-[11px] ${allReady ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
-            {t('resources.mcp.readyCount', { n: readyN, total: rows.length })}
+            {t('resources.mcp.readyCount', { n: readyN, total: agentRows.length })}
           </span>
           <button type="button" onClick={() => setBuiltinCardOpen(!open)} className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline">
             {open ? t('resources.collapse') : t('resources.mcp.setupExpand')}
@@ -1553,13 +1576,23 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
             </div>
             <ul className="border-t border-zinc-100 dark:border-white/[0.05]">
               {rows.length === 0 && <li className="px-4 py-3 text-[11px] text-zinc-400">{t('providers.mcp.noAgents')}</li>}
-              {rows.map(({ tg, st }) => (
+              {rows.map(({ tg, st }) => {
+                const nativeOpen = nativeOpenIds.includes(tg.id);
+                return (
                 <li key={tg.id} className="px-4 py-2 border-b last:border-b-0 border-zinc-100/90 dark:border-white/[0.05]">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                     <ServiceIcon id={tg.id} name={tg.label} boxClass="w-6 h-6" imgClass="w-3.5 h-3.5" className="!rounded-md" />
                     <span className="text-xs text-zinc-800 dark:text-zinc-100 min-w-[6rem]">{tg.label}</span>
-                    {pill(st.builtinOk, t('resources.mcp.builtinTools'))}
-                    {pill(st.relayOk, t('resources.mcp.gateway'))}
+                    {st.api ? (
+                      <span className="text-[10px] text-zinc-500">{t('resources.mcp.apiNeedsSetup')}</span>
+                    ) : (
+                      <>
+                        {pill(st.builtinOk, t('resources.mcp.builtinTools'))}
+                        {st.relayVia
+                          ? pill(true, st.relayVia === 'native' ? t('resources.mcp.relayNative') : t('resources.mcp.relayViaBuiltin'))
+                          : pill(false, t('resources.mcp.gateway'))}
+                      </>
+                    )}
                     <div className="ml-auto flex items-center gap-2">
                       {st.builtinOk === false && (
                         <button type="button" disabled={!!busy} onClick={() => setupBuiltinsFor(tg)}
@@ -1567,28 +1600,41 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
                           {busy === `setup-${tg.id}` ? t('providers.mcp.processing') : t('resources.mcp.setupBuiltin')}
                         </button>
                       )}
-                      {st.relayOk !== true && (
+                      {st.api && (
                         <button type="button" onClick={() => copyRelaySetup(tg)}
                           className="text-[11px] px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-white dark:hover:bg-zinc-800">
-                          {tg.id === 'claude-code' ? t('resources.mcp.copyCmd') : t('resources.mcp.copyRelay')}
+                          {t('resources.mcp.copyRelay')}
+                        </button>
+                      )}
+                      {!st.api && st.relayVia !== 'native' && (
+                        <button type="button"
+                          onClick={() => setNativeOpenIds((prev) => (prev.includes(tg.id) ? prev.filter((x) => x !== tg.id) : [...prev, tg.id]))}
+                          title={t('resources.mcp.nativeHint')}
+                          className="text-[11px] text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400">
+                          {t('resources.mcp.enableNative')} {nativeOpen ? '▴' : '▾'}
                         </button>
                       )}
                     </div>
                   </div>
-                  {st.relayOk !== true && (
-                    <div className="pl-9 mt-1 space-y-0.5">
+                  {(st.api || nativeOpen) && (
+                    <div className="pl-9 mt-1 space-y-1">
                       <p className="text-[10px] text-zinc-400">
-                        {tg.kind === 'api-app'
+                        {st.api
                           ? t('resources.mcp.guideApi')
-                          : tg.id === 'claude-code'
-                            ? t('resources.mcp.guideClaude')
-                            : t('resources.mcp.guideJson')}
+                          : `${t('resources.mcp.nativeHint')} ${tg.id === 'claude-code' ? t('resources.mcp.guideClaude') : t('resources.mcp.guideJson')}`}
                       </p>
                       {renderRelayUrl(tg.id, { compact: true, copy: false })}
+                      {!st.api && (
+                        <button type="button" onClick={() => copyRelaySetup(tg)}
+                          className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline">
+                          {tg.id === 'claude-code' ? t('resources.mcp.copyCmd') : t('resources.mcp.copyRelay')}
+                        </button>
+                      )}
                     </div>
                   )}
                 </li>
-              ))}
+                );
+              })}
             </ul>
           </>
         )}
