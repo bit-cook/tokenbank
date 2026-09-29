@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { matchPath, Navigate, useLocation } from 'react-router-dom';
+import GuestPreview from './GuestPreview';
 
 /** 按路由配置校验登录/游客权限（仅当前激活页可触发 Navigate，避免缓存页连环重定向） */
 function PageGate({ config, user, guest, active, children }) {
@@ -7,6 +8,9 @@ function PageGate({ config, user, guest, active, children }) {
   let blocked = null;
   if (config.requireUser && !user) {
     blocked = { to: '/login', state: undefined };
+  } else if (config.requireLogin && !user && guest && config.guestPreview) {
+    // 游客：先展示页面价值预览，由用户主动去登录
+    return <GuestPreview kind={config.guestPreview} from={location.pathname} />;
   } else if (config.requireLogin && !user) {
     blocked = { to: '/login', state: { from: location.pathname } };
   } else if (config.requireAuthed && !(user || guest)) {

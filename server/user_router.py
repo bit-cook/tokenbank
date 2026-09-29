@@ -296,7 +296,7 @@ async def my_settlements(uid: int = Depends(get_current_user_id)):
 
 @router.get("/contribute-summary")
 async def contribute_summary(uid: int = Depends(get_current_user_id)):
-    """贡献页：累计 token、赚取积分（折算人民币）、P2P 使用节省金额。"""
+    """交易页：累计 token、赚取积分（折算人民币）、P2P 使用节省金额。"""
     summary = await db.get_contribute_summary(uid)
     # 当前未结算周期内的实时贡献 token
     period_tokens = sum(

@@ -103,7 +103,7 @@ export function getSettlements() {
   return authRequest('GET', '/user/settlements', { token });
 }
 
-/** 贡献页汇总：累计 token、积分、P2P 节省金额 */
+/** 交易页汇总：累计 token、积分、P2P 节省金额 */
 export function getContributeSummary() {
   return http.get('/user/contribute-summary');
 }

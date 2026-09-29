@@ -1,6 +1,6 @@
 // client/src/pages/Contribute.jsx
 import React, { useCallback, useEffect, useState, useRef } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { getStats, getSettlements, getContributeSummary, listJoinedCircles, listMyCircles, listCommunityAgents, listPublicCommunityAgents } from '../api/client';
 import { getConfig, getGateway, getLocalConfig } from '../api/adapter';
 import { resolveLocalGatewayBase } from '../api/gatewayModels';
@@ -10,12 +10,17 @@ import {
   getAgentStatus, startAgent, stopAgent, getAgentLogs,
   subscribeAgentEvents, useAgentPolling,
 } from '../api/agentControl';
-import RateChart from '../components/RateChart';
+import Circles from './Circles';
+import Network from './Network';
 import TruncTip from '../components/TruncTip';
 import { useLang } from '../store/lang';
 import { useAuth } from '../store/index';
 import { fmtContribTokens, fmtCreditCny, creditsToCny } from '../lib/credit-pricing';
 import { avatarColor } from '../components/UserAvatar';
+import {
+  LIB_LIST_CLS, libRowCls, LibraryRowTitle, LibraryInspector, InspectorSection, LibrarySectionHead, FilterMenu,
+} from '../components/LibraryControls';
+import ServiceIcon from '../components/ServiceIcon';
 import { getServerUrl } from '../config';
 import { copyText } from '../lib/resource-enable';
 function multiplierToStars(m) {
@@ -125,7 +130,7 @@ function collectContributeAvailableModels(saved, accounts, localCfg) {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function ContributionConfigCard({ onStart, onStop, running, stats, agentError, onAgentsRefresh }) {
+function ContributionConfigCard({ onStart, onStop, running, agentError, onAgentsRefresh, circles: circlesProp = null, onManageCircles }) {
   const { t } = useLang();
   const location = useLocation();
   const pageActive = location.pathname === '/contribute';
@@ -139,6 +144,8 @@ function ContributionConfigCard({ onStart, onStop, running, stats, agentError, o
   const [savedMsg,        setSavedMsg]        = useState('');
   const [localGw,         setLocalGw]         = useState(() => resolveLocalGatewayBase());
   const [circles,         setCircles]         = useState([]);         // 可分享的圈子
+  // 交易页「圈子」页签里新建 / 加入后同步到这里
+  useEffect(() => { if (circlesProp) setCircles(uniqueCircles(circlesProp)); }, [circlesProp]);
   const [circleScope,     setCircleScope]     = useState('public');   // 'public' | 'circle'
   const [selectedCircleIds, setSelectedCircleIds] = useState(new Set());
   const [showModelPicker, setShowModelPicker] = useState(false);
@@ -352,39 +359,74 @@ function ContributionConfigCard({ onStart, onStop, running, stats, agentError, o
   }
 
   return (
-    <div className="tb-soft-card rounded-2xl p-5 space-y-3">
-      {/* 标题、运行状态、转发地址 — 单行；底部分隔收紧，避免上架模型上方空一大块 */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 pb-2 border-b border-white/40 dark:border-white/[0.06]">
-        <span className="text-sm font-medium text-zinc-800 dark:text-zinc-200 shrink-0">{t('contribute.configTitle')}</span>
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="relative flex h-2.5 w-2.5" aria-hidden>
-            <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${running ? 'bg-green-500' : 'bg-zinc-400 dark:bg-zinc-600'}`} />
-          </span>
-          <span className="text-sm text-zinc-700 dark:text-zinc-300 whitespace-nowrap">
-            {running ? t('contribute.running') : t('contribute.stopped')}
-          </span>
-          {stats && running && (
-            <span className="text-xs text-zinc-400 dark:text-zinc-500 whitespace-nowrap">
-              {t('contribute.agentRunning', { n: stats.contribute_req_per_min ?? 0 })}
-            </span>
-          )}
+    <div className="space-y-3">
+      {/* 状态头：一眼看清是否在线、对谁开放、上架了多少 */}
+      <div className={`relative overflow-hidden rounded-2xl border px-5 py-4 ${
+        running
+          ? 'border-green-200/80 dark:border-green-900/60 bg-gradient-to-br from-green-50/90 via-white/70 to-emerald-50/60 dark:from-green-950/40 dark:via-zinc-900/40 dark:to-emerald-950/20'
+          : 'border-zinc-200/70 dark:border-white/[0.07] bg-gradient-to-br from-zinc-50/90 via-white/70 to-blue-50/40 dark:from-zinc-900/60 dark:via-zinc-900/40 dark:to-blue-950/20'
+      }`}>
+        <div className="flex flex-wrap items-center gap-4">
+          <div className={`w-11 h-11 rounded-2xl flex items-center justify-center text-lg shrink-0 ${
+            running ? 'bg-green-500 text-white shadow-md shadow-green-500/30' : 'bg-white dark:bg-zinc-800 text-zinc-400 ring-1 ring-zinc-200 dark:ring-zinc-700'
+          }`} aria-hidden>
+            {running ? '⚡' : '⏸'}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="text-[15px] font-semibold text-zinc-900 dark:text-zinc-50">
+                {running ? t('contribute.heroOnline') : t('contribute.heroOffline')}
+              </span>
+              {running && <span className="relative flex w-2 h-2"><span className="absolute inline-flex w-full h-full rounded-full bg-green-400 opacity-60 animate-ping" /><span className="relative inline-flex w-2 h-2 rounded-full bg-green-500" /></span>}
+            </div>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+              {t('contribute.heroSummary', {
+                models: selectedNames.size,
+                agents: selectedAssistantIds.size,
+                scope: circleScope === 'public'
+                  ? t('contribute.scope.public')
+                  : t('contribute.heroCircles', { n: selectedCircleIds.size }),
+              })}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {savedMsg && <span className="text-xs text-green-600 dark:text-green-400">{savedMsg}</span>}
+            {running && (
+              <button
+                type="button"
+                onClick={() => {
+                  // 停止会下线算力，二次确认避免误触
+                  if (typeof window !== 'undefined' && !window.confirm(t('contribute.stopConfirm'))) return;
+                  onStop?.();
+                }}
+                className="text-xs px-3.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white/70 dark:bg-zinc-900/40 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30"
+              >
+                {t('contribute.stop')}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={save}
+              disabled={saving || (selectedNames.size === 0 && selectedAssistantIds.size === 0)}
+              className="tb-press text-xs font-medium px-4 py-1.5 rounded-lg bg-blue-600 text-white shadow-sm shadow-blue-600/25 hover:bg-blue-500 disabled:opacity-50"
+            >
+              {saving ? t('contribute.savingAndStarting') : (running ? t('contribute.saveAndApply') : t('contribute.saveAndStart'))}
+            </button>
+          </div>
         </div>
-        <div className="flex items-center gap-2 min-w-0 flex-1 bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700 rounded-lg px-2.5 py-1.5">
-          <span className="text-xs text-zinc-400 shrink-0">{t('contribute.forwardUrl')}</span>
-          <TruncTip as="span" title={localGw} className="text-xs font-mono text-green-600 dark:text-green-400">
-            {localGw}
-          </TruncTip>
-        </div>
-        {savedMsg && <span className="text-xs text-green-600 dark:text-green-400 shrink-0 ml-auto">{savedMsg}</span>}
+        {agentError && <p className="mt-2 text-xs text-red-600 dark:text-red-400">{agentError}</p>}
       </div>
-      {agentError && (
-        <p className="text-sm text-red-600 dark:text-red-400 -mt-1">{agentError}</p>
-      )}
 
+      {/* ① 上架什么 */}
+      <section className={`${LIB_LIST_CLS} p-5 space-y-4`}>
+        <SupplySectionHead n="1" title={t('contribute.secWhat')} hint={t('contribute.secWhatHint')} />
       {/* 贡献模型：默认只展示已选；点 + 从候选里添加，避免占满整页 */}
-      <div className="space-y-1">
+      <div className="space-y-2">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-xs text-zinc-400 dark:text-zinc-500">{t('contribute.models')}</span>
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200">
+            <span className="w-5 h-5 rounded-md bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-300 flex items-center justify-center text-[10px]" aria-hidden>◆</span>
+            {t('contribute.models')}
+          </span>
           {selectedNames.size > 0 && (
             <span className="text-[11px] text-zinc-400">{t('contribute.modelsSelected', { n: selectedNames.size })}</span>
           )}
@@ -428,14 +470,14 @@ function ContributionConfigCard({ onStart, onStop, running, stats, agentError, o
               <button
                 type="button"
                 onClick={() => setShowModelPicker((v) => !v)}
-                className={`tb-tag tb-tag-muted border-dashed justify-center min-w-[2rem] h-7 px-2 text-sm font-medium cursor-pointer ${
+                className={`tb-tag tb-tag-muted border-dashed justify-center h-7 px-2.5 text-xs cursor-pointer ${
                   showModelPicker ? '!border-solid !bg-white/75 dark:!bg-zinc-700/80 !text-zinc-900 dark:!text-zinc-100' : ''
                 }`}
                 title={t('contribute.addModel')}
                 aria-label={t('contribute.addModel')}
                 aria-expanded={showModelPicker}
               >
-                +
+                + {t('contribute.addShort')}
               </button>
             </div>
             {selectedNames.size === 0 && !showModelPicker && (
@@ -481,9 +523,12 @@ function ContributionConfigCard({ onStart, onStop, running, stats, agentError, o
       </div>
 
       {/* 贡献智能体：默认只展示已选；点 + 添加（须已投射） */}
-      <div className="space-y-1">
+      <div className="space-y-2 pt-4 border-t border-zinc-100 dark:border-white/[0.06]">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-xs text-zinc-400 dark:text-zinc-500">{t('contribute.assistants')}</span>
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200">
+            <span className="w-5 h-5 rounded-md bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-300 flex items-center justify-center text-[10px]" aria-hidden>✦</span>
+            {t('contribute.assistants')}
+          </span>
           {selectedAssistantIds.size > 0 && (
             <span className="text-[11px] text-zinc-400">
               {t('contribute.assistantsSelected', { n: selectedAssistantIds.size })}
@@ -532,14 +577,14 @@ function ContributionConfigCard({ onStart, onStop, running, stats, agentError, o
               <button
                 type="button"
                 onClick={() => setShowAssistantPicker((v) => !v)}
-                className={`tb-tag tb-tag-muted border-dashed justify-center min-w-[2rem] h-7 px-2 text-sm font-medium cursor-pointer ${
+                className={`tb-tag tb-tag-muted border-dashed justify-center h-7 px-2.5 text-xs cursor-pointer ${
                   showAssistantPicker ? '!border-solid !bg-white/75 dark:!bg-zinc-700/80 !text-zinc-900 dark:!text-zinc-100' : ''
                 }`}
                 title={t('contribute.addAssistant')}
                 aria-label={t('contribute.addAssistant')}
                 aria-expanded={showAssistantPicker}
               >
-                +
+                + {t('contribute.addShort')}
               </button>
             </div>
             {selectedAssistantIds.size === 0 && !showAssistantPicker && (
@@ -614,105 +659,305 @@ function ContributionConfigCard({ onStart, onStop, running, stats, agentError, o
         )}
       </div>
 
-      {/* Node name */}
-      <div>
-        <label className="block text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wide mb-1.5">{t('contribute.nodeName')}</label>
-        <input value={nodeName} onChange={e => setNodeName(e.target.value)} placeholder={t('contribute.nodeNamePh')}
-          className="w-full bg-zinc-100 dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-600 focus:outline-none focus:border-blue-500" />
-      </div>
+      </section>
 
-      {/* 自动启动：原生 button + switch，保证键盘与读屏可用 */}
-      <div className="flex items-center gap-3 select-none">
-        <button
-          type="button"
-          role="switch"
-          aria-checked={autoStart}
-          aria-label={t('contribute.autoStart')}
-          onClick={() => setAutoStart((v) => !v)}
-          className={`relative w-11 h-7 rounded-full transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-800 cursor-pointer ${
-            autoStart ? 'bg-blue-600' : 'bg-zinc-300 dark:bg-zinc-600'
-          }`}
-        >
-          <span
-            className={`absolute top-1 left-0 w-5 h-5 bg-white rounded-full shadow transition-transform duration-200 ${
-              autoStart ? 'translate-x-5' : 'translate-x-1'
-            }`}
-          />
-        </button>
-        <span className="text-sm text-zinc-700 dark:text-zinc-300">{t('contribute.autoStart')}</span>
-      </div>
-
-      {/* Contribution scope */}
-      <div className="mt-4">
-        <p className="text-sm font-medium mb-2">{t('contribute.scope')}</p>
-        <div className="flex flex-col gap-2">
-          <label className="flex items-center gap-2 text-sm cursor-pointer">
-            <input type="radio" name="scope" value="public"
-              checked={circleScope === 'public'}
-              onChange={() => setCircleScope('public')} />
-            {t('contribute.scopePublic')}
-          </label>
-          <label className="flex items-center gap-2 text-sm cursor-pointer">
-            <input type="radio" name="scope" value="circle"
-              checked={circleScope === 'circle'}
-              onChange={() => setCircleScope('circle')} />
-            {t('contribute.scopeCircle')}
-          </label>
+      {/* ② 给谁用：圈子即交易范围 */}
+      <section className={`${LIB_LIST_CLS} p-5 space-y-3`}>
+        <SupplySectionHead n="2" title={t('contribute.secWho')} hint={t('contribute.secWhoHint')} />
+        <div role="radiogroup" aria-label={t('contribute.scope')} className="grid gap-2.5 sm:grid-cols-2">
+          {[
+            ['public', '🌐', t('contribute.scopePublicTitle'), t('contribute.scopePublicDesc')],
+            ['circle', '◎', t('contribute.scopeCircleTitle'), t('contribute.scopeCircleDesc')],
+          ].map(([v, icon, title, desc]) => {
+            const on = circleScope === v;
+            return (
+              <button key={v} type="button" role="radio" aria-checked={on} onClick={() => setCircleScope(v)}
+                className={`relative text-left flex gap-3 p-3.5 rounded-xl border transition-all ${
+                  on
+                    ? 'border-blue-500 bg-blue-50/70 dark:bg-blue-950/30 ring-2 ring-blue-500/15'
+                    : 'border-zinc-200 dark:border-zinc-700 bg-white/60 dark:bg-zinc-900/30 hover:border-zinc-300 dark:hover:border-zinc-600'
+                }`}>
+                <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm shrink-0 ${
+                  on ? 'bg-blue-600 text-white' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500'
+                }`} aria-hidden>{icon}</span>
+                <span className="min-w-0">
+                  <span className={`block text-[13px] font-medium ${on ? 'text-blue-700 dark:text-blue-300' : 'text-zinc-800 dark:text-zinc-100'}`}>{title}</span>
+                  <span className="block text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed">{desc}</span>
+                </span>
+                <span className={`absolute top-3 right-3 w-4 h-4 rounded-full border-2 ${
+                  on ? 'border-blue-600 bg-blue-600 shadow-[inset_0_0_0_2px_white] dark:shadow-[inset_0_0_0_2px_rgb(24,24,27)]' : 'border-zinc-300 dark:border-zinc-600'
+                }`} aria-hidden />
+              </button>
+            );
+          })}
         </div>
+
         {circleScope === 'circle' && (
-          <div className="mt-2 space-y-2">
+          <div className="rounded-xl bg-zinc-50/80 dark:bg-zinc-900/40 px-3.5 py-3 space-y-2">
             {circles.length === 0
-              ? <p className="text-xs text-gray-400">{t('contribute.noCircle')}</p>
-              : (
-                <>
-                  <div className="flex flex-wrap gap-1.5">
-                    {circles.map(c => {
-                      const sel = selectedCircleIds.has(c.id);
-                      return (
-                        <button key={c.id} type="button" onClick={() => toggleCircle(c.id)}
-                          className={`tb-tag px-2.5 py-1 text-xs cursor-pointer ${
-                            sel ? 'tb-tag-blue' : 'tb-tag-muted !border-solid'
-                          }`}>
-                          {c.name}
-                        </button>
-                      );
-                    })}
-                  </div>
-                  {selectedCircleIds.size > 0 && (
-                    <p className="text-xs text-blue-600 dark:text-blue-400">
-                      {t('contribute.circlesSelected', { n: selectedCircleIds.size })}
-                    </p>
+              ? (
+                <p className="text-xs text-zinc-500">
+                  {t('contribute.noCircle')}
+                  {onManageCircles && (
+                    <button type="button" onClick={onManageCircles} className="ml-1.5 text-blue-600 dark:text-blue-400 hover:underline">
+                      {t('contribute.createCircleLink')}
+                    </button>
                   )}
-                </>
+                </p>
               )
-            }
-            <p className="text-xs text-gray-400 mt-1">{t('contribute.scopeHint')}</p>
+              : (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {circles.map(c => {
+                    const sel = selectedCircleIds.has(c.id);
+                    return (
+                      <button key={c.id} type="button" onClick={() => toggleCircle(c.id)} aria-pressed={sel}
+                        className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                          sel
+                            ? 'border-blue-500 bg-blue-600 text-white'
+                            : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 hover:border-zinc-300'
+                        }`}>
+                        <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-semibold ${sel ? 'bg-white/25' : `${avatarColor(c.name)} text-white`}`} aria-hidden>
+                          {sel ? '✓' : (c.name || '?')[0]}
+                        </span>
+                        {c.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            <p className="text-[11px] text-zinc-400">{t('contribute.scopeHint')}</p>
           </div>
         )}
+      </section>
+
+      {/* ③ 节点设置 */}
+      <section className={`${LIB_LIST_CLS} p-5 space-y-3`}>
+        <SupplySectionHead n="3" title={t('contribute.secNode')} />
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <div>
+            <label className="block text-[11px] font-medium text-zinc-500 dark:text-zinc-400 mb-1.5">{t('contribute.nodeName')}</label>
+            <input value={nodeName} onChange={e => setNodeName(e.target.value)} placeholder={t('contribute.nodeNamePh')}
+              className="tb-soft-field w-full text-xs px-3 py-2 rounded-lg text-zinc-900 dark:text-zinc-100" />
+          </div>
+          <div>
+            <label className="block text-[11px] font-medium text-zinc-500 dark:text-zinc-400 mb-1.5">{t('contribute.forwardUrl')}</label>
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-100 dark:border-white/[0.06]">
+              <TruncTip as="span" title={localGw} className="flex-1 min-w-0 text-xs font-mono text-zinc-600 dark:text-zinc-300">{localGw}</TruncTip>
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center justify-between gap-3 pt-1">
+          <div>
+            <p className="text-xs text-zinc-700 dark:text-zinc-200">{t('contribute.autoStart')}</p>
+            <p className="text-[11px] text-zinc-400 mt-0.5">{t('contribute.autoStartHint')}</p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={autoStart}
+            aria-label={t('contribute.autoStart')}
+            onClick={() => setAutoStart((v) => !v)}
+            className={`relative shrink-0 w-9 h-5 rounded-full transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+              autoStart ? 'bg-blue-600' : 'bg-zinc-300 dark:bg-zinc-600'
+            }`}
+          >
+            <span className={`absolute top-[2px] left-0 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ${
+              autoStart ? 'translate-x-[18px]' : 'translate-x-[2px]'
+            }`} />
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+/** 结算时间：今天 / 昨天 / 月-日 + 时:分 */
+function settlementWhen(iso, t) {
+  const full = formatSettlementTime(iso);
+  const m = full.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}:\d{2})$/);
+  if (!m) return { day: full, time: '' };
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const diff = Math.round((today - d) / 86400000);
+  const day = diff === 0 ? t('contribute.today') : diff === 1 ? t('contribute.yesterday') : `${m[2]}-${m[3]}`;
+  return { day, time: m[4] };
+}
+
+/** 收益记录：概览 + 每次结算积分柱图 + 结算明细 + 运行日志 */
+function EarningsView({ settlements, summary, stats, logs, logRef }) {
+  const { t } = useLang();
+  const [hover, setHover] = useState(null);
+  const rows = settlements || [];
+  const chron = [...rows].reverse(); // 左旧右新
+  const total = rows.reduce((n, r) => n + (Number(r.credits_awarded) || 0), 0);
+  const avgMult = rows.length ? rows.reduce((n, r) => n + (Number(r.multiplier) || 1), 0) / rows.length : null;
+  const last = rows[0];
+  const max = Math.max(1, ...chron.map(r => Number(r.credits_awarded) || 0));
+  const lastWhen = last ? settlementWhen(last.period_end, t) : null;
+
+  // 累计收益（原交易页头部数据带）作为收益页的首行
+  const tiles = [
+    {
+      k: 'credits', label: t('contribute.earnedCredits'), tone: 'text-green-600 dark:text-green-400',
+      value: summary ? `+${(summary.contrib_credits ?? 0).toLocaleString(undefined, { maximumFractionDigits: 1 })}` : '—',
+      sub: summary ? t('contribute.approxCny', { amount: fmtCreditCny(summary.contrib_cny) }) : '',
+    },
+    {
+      k: 'tokens', label: t('contribute.totalTokens'),
+      value: summary ? fmtContribTokens(summary.contrib_tokens) : '—',
+      sub: summary?.period_tokens > 0 ? t('contribute.periodTokens', { n: fmtContribTokens(summary.period_tokens) }) : t('contribute.totalTokensHint'),
+    },
+    {
+      k: 'saved', label: t('contribute.savedMoney'), tone: 'text-emerald-600 dark:text-emerald-400',
+      value: summary ? fmtCreditCny(summary.saved_cny) : '—',
+      sub: summary?.p2p_tokens > 0 ? t('contribute.p2pTokensUsed', { n: fmtContribTokens(summary.p2p_tokens) }) : t('contribute.savedHint'),
+    },
+    {
+      k: 'rate', label: t('contribute.rate'), unit: 'req/min',
+      value: stats ? `${stats.contribute_req_per_min ?? 0}` : '—',
+      sub: stats ? t('contribute.liveSub', { active: stats.active_requests ?? 0, nodes: stats.active_workers ?? 0 }) : '',
+    },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+        {tiles.map(m => (
+          <div key={m.k} className={`${LIB_LIST_CLS} px-4 py-3`}>
+            <div className="text-[11px] text-zinc-500 dark:text-zinc-400">{m.label}</div>
+            <div className={`mt-1 text-lg font-semibold tabular-nums tracking-tight ${m.tone || 'text-zinc-900 dark:text-zinc-50'}`}>
+              {m.value}{m.unit && <span className="ml-1 text-[11px] font-normal text-zinc-400">{m.unit}</span>}
+            </div>
+            <div className="text-[11px] truncate mt-0.5 text-zinc-400">{m.sub || ' '}</div>
+          </div>
+        ))}
       </div>
 
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={save}
-          disabled={saving}
-          className="px-5 py-1.5 text-sm rounded-lg bg-green-700 hover:bg-green-600 dark:bg-green-800 dark:hover:bg-green-700 disabled:opacity-50 text-white font-medium transition-colors duration-200 cursor-pointer disabled:cursor-not-allowed"
-        >
-          {saving ? t('contribute.savingAndStarting') : t('contribute.saveAndStart')}
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            if (!running) return;
-            // 停止会下线算力，二次确认避免误触
-            if (typeof window !== 'undefined' && !window.confirm(t('contribute.stopConfirm'))) return;
-            onStop?.();
-          }}
-          disabled={!running}
-          className="px-5 py-1.5 text-sm rounded-lg bg-red-700 hover:bg-red-600 disabled:opacity-40 text-white font-medium transition-colors duration-200 cursor-pointer disabled:cursor-not-allowed"
-        >
-          {t('contribute.stop')}
-        </button>
+      {/* 每次结算积分：单序列柱图（无需图例），悬停看明细 */}
+      <section className="rounded-2xl border border-zinc-200/70 dark:border-white/[0.07] bg-white/55 dark:bg-zinc-900/40 px-4 pt-3.5 pb-3">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-5">
+          <h3 className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-100">{t('contribute.earnChartTitle')}</h3>
+          {rows.length > 0 && (
+            <span className="text-[11px] text-zinc-500 dark:text-zinc-400 flex flex-wrap items-baseline gap-x-2">
+              <span>{t('contribute.earnRecent', { n: rows.length })} <b className="font-semibold tabular-nums text-green-600 dark:text-green-400">+{total.toFixed(1)}</b></span>
+              <span className="text-zinc-300 dark:text-zinc-600">·</span>
+              <span>{t('contribute.earnLast')} <b className="font-semibold tabular-nums text-zinc-700 dark:text-zinc-200">+{(Number(last.credits_awarded) || 0).toFixed(1)}</b>{lastWhen ? ` · ${lastWhen.day} ${lastWhen.time}` : ''}</span>
+              <span className="text-zinc-300 dark:text-zinc-600">·</span>
+              <span>{t('contribute.earnQuality')} <b className="font-semibold tabular-nums text-zinc-700 dark:text-zinc-200">{avgMult.toFixed(2)}×</b> <span className="text-yellow-600 dark:text-yellow-400">{multiplierToStars(avgMult)}</span></span>
+            </span>
+          )}
+          <span className="ml-auto text-[11px] text-zinc-400">{t('contribute.earnChartHint')}</span>
+        </div>
+        {chron.length === 0 ? (
+          <div className="h-32 flex items-center justify-center text-xs text-zinc-400">{t('contribute.noSettlements')}</div>
+        ) : (
+          <div className="relative">
+            <div className="absolute inset-x-0 top-0 border-t border-dashed border-zinc-200/80 dark:border-white/[0.06]" aria-hidden />
+            <div className="absolute left-0 -top-2 text-[10px] text-zinc-400 tabular-nums bg-white/0">{max.toFixed(0)}</div>
+            <div className="h-32 flex items-end gap-[2px] border-b border-zinc-200 dark:border-zinc-700" role="img" aria-label={t('contribute.earnChartTitle')}>
+              {chron.map((r, i) => {
+                const v = Number(r.credits_awarded) || 0;
+                const on = hover === i;
+                return (
+                  <div key={r.id ?? r.period_end} className="relative flex-1 h-full flex items-end justify-center"
+                    onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
+                    <div className={`w-full max-w-[28px] rounded-t-[4px] transition-colors ${on ? 'bg-green-600 dark:bg-green-400' : 'bg-green-500/80 dark:bg-green-500/70'}`}
+                      style={{ height: `${Math.max(2, (v / max) * 100)}%` }} />
+                    {on && (
+                      <div className="absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 z-10 whitespace-nowrap rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-lg px-2.5 py-1.5 text-[11px] pointer-events-none">
+                        <div className="text-zinc-500">{formatSettlementTime(r.period_end)}</div>
+                        <div className="font-semibold text-zinc-900 dark:text-zinc-50 tabular-nums">+{v.toFixed(1)} {t('contribute.creditsUnit')}</div>
+                        <div className="text-zinc-500 tabular-nums">{fmtContribTokens(r.output_tokens ?? 0)} tok · {(Number(r.multiplier) || 1).toFixed(2)}×</div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex justify-between mt-1 text-[10px] text-zinc-400 tabular-nums">
+              <span>{formatSettlementTime(chron[0].period_end).slice(5)}</span>
+              <span>{formatSettlementTime(chron[chron.length - 1].period_end).slice(5)}</span>
+            </div>
+          </div>
+        )}
+      </section>
+
+      <section>
+        <LibrarySectionHead title={t('contribute.settlements')} count={rows.length || null} />
+        {rows.length === 0 ? (
+          <div className={`${LIB_LIST_CLS} px-6 py-10 text-center`}>
+            <div className="text-2xl" aria-hidden>🪙</div>
+            <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">{t('contribute.noSettlementsHint')}</p>
+          </div>
+        ) : (
+          <ul className={LIB_LIST_CLS}>
+            {rows.map(st => {
+              const resources = normalizeSettlementResources(st.resources);
+              const mult = Number(st.multiplier) || 1;
+              const w = settlementWhen(st.period_end, t);
+              const qualityLabel = t('contribute.qualityMult', { n: mult.toFixed(2) });
+              return (
+                <li key={st.id ?? st.period_end}
+                  className="grid grid-cols-[4.5rem_minmax(0,1fr)_auto] items-center gap-3 px-4 py-2.5 border-b last:border-b-0 border-zinc-100/90 dark:border-white/[0.05] hover:bg-zinc-50/70 dark:hover:bg-white/[0.02]">
+                  <div className="leading-tight">
+                    <div className="text-xs font-medium text-zinc-700 dark:text-zinc-200">{w.day}</div>
+                    <div className="text-[11px] text-zinc-400 tabular-nums">{w.time}</div>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 text-[11px] text-zinc-500 dark:text-zinc-400">
+                      <span className="tabular-nums text-zinc-700 dark:text-zinc-300">{fmtContribTokens(st.output_tokens ?? 0)} tok</span>
+                      <span className="text-yellow-600 dark:text-yellow-400" title={qualityLabel} aria-label={qualityLabel}>{multiplierToStars(mult)}</span>
+                      <span className="tabular-nums">{mult.toFixed(2)}×</span>
+                    </div>
+                    {resources.length > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {resources.map(r => {
+                          const isAgent = String(r).startsWith('agent:');
+                          return (
+                            <span key={r} className={`text-[10px] px-1.5 py-px rounded ${isAgent
+                              ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300'
+                              : 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-300 font-mono'}`}>
+                              {isAgent ? '✦ ' : ''}{formatSettlementResource(r)}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-right leading-tight">
+                    <div className="text-[13px] font-semibold tabular-nums text-green-600 dark:text-green-400">+{(Number(st.credits_awarded) || 0).toFixed(1)}</div>
+                    <div className="text-[11px] tabular-nums text-zinc-400">≈{fmtCreditCny(creditsToCny(st.credits_awarded))}</div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
+      {/* 运行日志：排障用，默认收起 */}
+      <details className="group">
+        <summary className="cursor-pointer select-none text-[11px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 list-none">
+          <span className="inline-block transition-transform group-open:rotate-90 mr-1">›</span>
+          {t('contribute.agentLog')}
+          {logs.length > 0 && <span className="ml-1.5 text-zinc-400 tabular-nums">{logs.length}</span>}
+        </summary>
+        <div ref={logRef} className="mt-2 bg-zinc-950 border border-zinc-800 rounded-xl p-3 h-44 overflow-y-auto font-mono text-[11px] text-zinc-300 space-y-0.5">
+          {logs.length === 0 ? <span className="text-zinc-500">{t('contribute.logEmpty')}</span> : logs.map((line, i) => <div key={i}>{line}</div>)}
+        </div>
+      </details>
+    </div>
+  );
+}
+
+/** 上架表单分节标题：序号 + 标题 + 说明 */
+function SupplySectionHead({ n, title, hint }) {
+  return (
+    <div className="flex items-start gap-2.5">
+      <span className="mt-px w-5 h-5 rounded-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-[10px] font-semibold flex items-center justify-center shrink-0">{n}</span>
+      <div className="min-w-0">
+        <h3 className="text-[13px] font-semibold text-zinc-900 dark:text-zinc-50">{title}</h3>
+        {hint && <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">{hint}</p>}
       </div>
     </div>
   );
@@ -743,12 +988,12 @@ function communityAgentTitle(a) {
 }
 
 /** 社区智能体卡片左侧图标：按名称着色 + 首字，辅以简易智能体符号 */
-function CommunityAgentIcon({ name, selected }) {
+function CommunityAgentIcon({ name, selected, small = false }) {
   const label = String(name || '?').trim() || '?';
   const initial = label[0].toUpperCase();
   return (
     <div
-      className={`relative w-11 h-11 rounded-2xl shrink-0 flex items-center justify-center text-white font-semibold text-base shadow-sm ring-1 ring-black/5 dark:ring-white/10 ${avatarColor(label)} ${
+      className={`relative ${small ? 'w-9 h-9 rounded-xl text-sm' : 'w-11 h-11 rounded-2xl text-base'} shrink-0 flex items-center justify-center text-white font-semibold shadow-sm ring-1 ring-black/5 dark:ring-white/10 ${avatarColor(label)} ${
         selected ? 'ring-2 ring-amber-400 dark:ring-amber-500' : ''
       }`}
       aria-hidden
@@ -765,7 +1010,7 @@ function CommunityAgentIcon({ name, selected }) {
 }
 
 /** 社区智能体：浏览在线名片 → 雇佣/取消雇佣（供游乐场与 MCP；此处不发起任务） */
-function CommunityAgentsCard({ refreshKey = 0 }) {
+function CommunityAgentsCard({ refreshKey = 0, circles = [], scope = 'all', onScopeChange, focusAgent = null }) {
   const { t } = useLang();
   const location = useLocation();
   const [agents, setAgents] = useState([]);
@@ -776,6 +1021,11 @@ function CommunityAgentsCard({ refreshKey = 0 }) {
   const [err, setErr] = useState('');
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(''); // '' | 'hire' | 'unhire'
+  const [query, setQuery] = useState('');
+  const [onlyHired, setOnlyHired] = useState(false);
+  const [sortBy, setSortBy] = useState('popular');
+  // 行内「雇佣」：先选中再在下一帧执行（hireSelected 读取 selected）
+  const [pendingHire, setPendingHire] = useState(null);
   // KeepAlive 下用 pathname 判断是否在交易页（再次进入需立刻刷新）
   const pageActive = location.pathname === '/contribute';
   const refreshRef = useRef(null);
@@ -885,6 +1135,28 @@ function CommunityAgentsCard({ refreshKey = 0 }) {
   }
 
   const selectedHired = selected && hiredIds.has(selected.id);
+
+  // 从圈子详情 / 社区网络跳来：定位并展开该智能体
+  useEffect(() => {
+    if (focusAgent?.query) setQuery(focusAgent.query);
+  }, [focusAgent]);
+
+  useEffect(() => {
+    if (!focusAgent?.id || !agents.length) return;
+    const a = agents.find(x => x.id === focusAgent.id);
+    if (!a) return;
+    // 目标不在当前范围内时回到「全部」，避免选中了却看不到
+    if (!inScope(a)) onScopeChange?.('all');
+    selectAgent(a, { toggle: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅随跳转目标 / 列表就绪触发
+  }, [focusAgent, agents]);
+
+  useEffect(() => {
+    if (!pendingHire || !selected || selected.id !== pendingHire.id) return;
+    setPendingHire(null);
+    hireSelected();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅在选中目标就绪时触发一次
+  }, [pendingHire, selected]);
   const hireBannerRef = useRef(null);
 
   // 雇佣结果横幅：数秒后自动收起
@@ -895,216 +1167,371 @@ function CommunityAgentsCard({ refreshKey = 0 }) {
     return () => clearTimeout(id);
   }, [hireMsg]);
 
+  function selectAgent(a, { toggle = true } = {}) {
+    const { name: title, owner } = parseCommunityAgent(a);
+    const same = selected && selected.id === a.id && selected.worker_id === a.worker_id;
+    setSelected(same && toggle ? null : {
+      id: a.id,
+      worker_id: a.worker_id,
+      display_name: title,
+      runtime: a.runtime,
+      description: a.description,
+      owner_nickname: owner || a.owner_nickname,
+    });
+  }
+
+  const circleName = (cid) => circles.find(c => c.id === cid)?.name || '';
+  const inScope = (a) => {
+    if (scope === 'all') return true;
+    const isCircle = (a.visibility || 'public') !== 'public';
+    if (scope === 'public') return !isCircle;
+    // 旧服务端未返回 circle_ids 时，圈内项一律归入任意圈子
+    if (!Array.isArray(a.circle_ids)) return isCircle;
+    return a.circle_ids.includes(scope);
+  };
+  const q = query.trim().toLowerCase();
+  const scoped = agents.filter(inScope);
+  const filtered = scoped.filter((a) => {
+    if (onlyHired && !hiredIds.has(a.id)) return false;
+    if (!q) return true;
+    const { name, owner } = parseCommunityAgent(a);
+    return [name, owner, a.runtime, a.description].some(v => String(v || '').toLowerCase().includes(q));
+  });
+  const shown = sortBy === 'name'
+    ? [...filtered].sort((x, y) => parseCommunityAgent(x).name.localeCompare(parseCommunityAgent(y).name))
+    : [...filtered].sort((x, y) => (Number(y.hire_count) || 0) - (Number(x.hire_count) || 0));
+  const selectedFull = selected
+    ? (selected.owner_nickname ? `${selected.owner_nickname}/${selected.display_name || selected.id}` : (selected.display_name || selected.id))
+    : '';
+  const selectedRow = selected ? agents.find(a => a.id === selected.id && a.worker_id === selected.worker_id) : null;
+  const hiredCount = agents.filter(a => hiredIds.has(a.id)).length;
+  const idleCount = agents.filter(a => !(Number(a.active_requests) > 0)).length;
+
+  const scopeOptions = [
+    { id: 'all', label: t('contribute.scope.all') },
+    { id: 'public', label: t('contribute.scope.public') },
+    ...circles.map(c => ({ id: c.id, label: c.name, circle: true })),
+  ];
+  const countIn = (id) => agents.filter(a => {
+    if (id === 'all') return true;
+    const isCircle = (a.visibility || 'public') !== 'public';
+    if (id === 'public') return !isCircle;
+    return Array.isArray(a.circle_ids) ? a.circle_ids.includes(id) : isCircle;
+  }).length;
+
+  const chip = (on) => `inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border transition-colors ${
+    on
+      ? 'border-zinc-900 dark:border-zinc-100 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900'
+      : 'border-zinc-200 dark:border-zinc-700 bg-white/60 dark:bg-zinc-900/30 text-zinc-600 dark:text-zinc-300 hover:bg-white dark:hover:bg-zinc-800'
+  }`;
+
   return (
-    <div className="tb-soft-card rounded-2xl p-5 space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <div>
-          <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">{t('contribute.communityAgents')}</h2>
-          <p className="text-[11px] text-zinc-600 dark:text-zinc-400 mt-0.5 leading-relaxed">{t('contribute.communityAgentsHint')}</p>
+    <div className="space-y-3">
+      {/* 市场头：在线概况 + 搜索 */}
+      <div className="relative overflow-hidden rounded-2xl border border-zinc-200/70 dark:border-white/[0.07] bg-gradient-to-br from-violet-50/80 via-white/70 to-blue-50/60 dark:from-violet-950/30 dark:via-zinc-900/40 dark:to-blue-950/20 px-5 py-4">
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-violet-500 to-blue-500 text-white flex items-center justify-center text-lg shadow-md shadow-violet-500/25 shrink-0" aria-hidden>✦</div>
+          <div className="min-w-0 flex-1">
+            <div className="text-[15px] font-semibold text-zinc-900 dark:text-zinc-50">{t('contribute.marketTitle')}</div>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 flex flex-wrap items-center gap-x-2">
+              <span className="inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-green-500" aria-hidden />{t('contribute.marketOnline', { n: agents.length, idle: idleCount })}</span>
+              <span className="text-zinc-300 dark:text-zinc-600">·</span>
+              <span>{t('contribute.marketHired', { n: hiredCount })}</span>
+              {credits != null && (<><span className="text-zinc-300 dark:text-zinc-600">·</span><span>{t('contribute.agentTaskCost', { n: credits })}</span></>)}
+            </p>
+          </div>
+          <div className="relative w-72 max-w-full">
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" aria-hidden>
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-3.5 h-3.5"><circle cx="9" cy="9" r="5.5" /><path d="M13.5 13.5 17 17" strokeLinecap="round" /></svg>
+            </span>
+            <input
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder={t('contribute.searchAgents')}
+              className="w-full text-xs pl-8 pr-3 py-2 rounded-xl bg-white/90 dark:bg-zinc-900/70 border border-zinc-200/80 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-500/15"
+            />
+          </div>
         </div>
-        <button
-          type="button"
-          onClick={() => refresh()}
-          disabled={loading}
-          className="text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 shrink-0 px-1 py-1 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-colors duration-200"
-        >
-          {t('contribute.refreshAgents')}
-        </button>
       </div>
-      {hireMsg && (
-        <div
-          ref={hireBannerRef}
-          role="status"
-          className="flex items-start gap-2 rounded-xl border border-green-200 dark:border-green-800/60 bg-green-50 dark:bg-green-950/40 px-3 py-2.5"
-        >
-          <p className="flex-1 text-sm text-green-800 dark:text-green-300 font-medium leading-snug">{hireMsg}</p>
-          <button
-            type="button"
-            onClick={() => setHireMsg('')}
-            className="shrink-0 text-xs text-green-700/70 dark:text-green-400/70 hover:text-green-900 dark:hover:text-green-200 cursor-pointer"
-            aria-label={t('contribute.hireFeedbackDismiss')}
-          >
-            ×
+
+      {/* 筛选：范围（圈子即交易范围）· 已雇佣 · 排序 */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {(circles.length > 0 ? scopeOptions : scopeOptions.slice(0, 1)).map(o => (
+          <button key={o.id} type="button" role="radio" aria-checked={scope === o.id && !onlyHired}
+            onClick={() => { setOnlyHired(false); onScopeChange?.(o.id); }}
+            className={chip(scope === o.id && !onlyHired)}>
+            {o.circle && <span className="opacity-60" aria-hidden>◎</span>}
+            {o.label}
+            <span className="tabular-nums opacity-60">{countIn(o.id)}</span>
+          </button>
+        ))}
+        <span className="mx-1 w-px h-4 bg-zinc-200 dark:bg-zinc-700" aria-hidden />
+        <button type="button" aria-pressed={onlyHired} onClick={() => setOnlyHired(v => !v)} className={chip(onlyHired)}>
+          <span aria-hidden>✓</span>{t('contribute.filterHired')}<span className="tabular-nums opacity-60">{hiredCount}</span>
+        </button>
+        <div className="ml-auto flex items-center gap-1">
+          <FilterMenu
+            label={t('contribute.sortLabel')}
+            value={sortBy}
+            onChange={v => setSortBy(v || 'popular')}
+            clearable={false}
+            neutral
+            align="right"
+            options={[
+              { value: 'popular', label: t('contribute.sortPopular') },
+              { value: 'name', label: t('contribute.sortName') },
+            ]}
+          />
+          <button type="button" onClick={() => refresh()} disabled={loading} title={t('contribute.refreshAgents')} aria-label={t('contribute.refreshAgents')}
+            className="w-7 h-7 rounded-lg text-sm text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-white/70 dark:hover:bg-zinc-800 disabled:opacity-40">
+            <span className={`inline-block ${loading ? 'animate-spin' : ''}`} aria-hidden>↻</span>
           </button>
         </div>
-      )}
-      {credits != null && (
-        <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{t('contribute.agentTaskCost', { n: credits })}</p>
-      )}
-      {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5" aria-busy="true" aria-label={t('contribute.agentsLoading')}>
-          {[0, 1, 2, 3].map((i) => (
-            <div
-              key={i}
-              className="flex gap-3 p-3 rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/40 animate-pulse"
-            >
-              <div className="w-11 h-11 rounded-2xl bg-zinc-200 dark:bg-zinc-700 shrink-0" />
-              <div className="flex-1 space-y-2 py-0.5">
-                <div className="h-3.5 w-2/3 rounded bg-zinc-200 dark:bg-zinc-700" />
-                <div className="h-2.5 w-1/3 rounded bg-zinc-200 dark:bg-zinc-700" />
-                <div className="h-2.5 w-full rounded bg-zinc-200 dark:bg-zinc-700" />
-              </div>
-            </div>
-          ))}
+      </div>
+
+      {hireMsg && (
+        <div ref={hireBannerRef} role="status"
+          className="flex items-start gap-2 rounded-xl border border-green-200 dark:border-green-800/60 bg-green-50 dark:bg-green-950/40 px-3 py-2">
+          <span className="text-green-600" aria-hidden>✓</span>
+          <p className="flex-1 text-xs text-green-800 dark:text-green-300 leading-snug">{hireMsg}</p>
+          <button type="button" onClick={() => setHireMsg('')}
+            className="shrink-0 text-xs text-green-700/70 dark:text-green-400/70 hover:text-green-900 dark:hover:text-green-200"
+            aria-label={t('contribute.hireFeedbackDismiss')}>×</button>
         </div>
-      ) : agents.length === 0 ? (
-        <p className="text-xs text-zinc-500 dark:text-zinc-400">{t('contribute.noCommunityAgents')}</p>
-      ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-80 overflow-y-auto pr-0.5">
-          {agents.map((a) => {
-            const key = `${a.worker_id}:${a.id}`;
-            const sel = selected && selected.id === a.id && selected.worker_id === a.worker_id;
-            const hired = hiredIds.has(a.id);
-            const { name: title, owner } = parseCommunityAgent(a);
-            const blurb = String(a.description || '').trim();
-            const fullId = owner ? `${owner}/${title}` : title;
-            return (
-              <button
-                key={key}
-                type="button"
-                onClick={() => setSelected({
-                  id: a.id,
-                  worker_id: a.worker_id,
-                  display_name: title,
-                  runtime: a.runtime,
-                  description: a.description,
-                  owner_nickname: owner || a.owner_nickname,
-                })}
-                className={`flex gap-3 text-left p-3 min-h-[72px] rounded-2xl border transition-all duration-200 cursor-pointer ${
-                  sel
-                    ? 'bg-amber-50 dark:bg-amber-950/40 border-amber-400 dark:border-amber-600 shadow-md shadow-amber-500/10'
-                    : 'tb-soft-tile'
-                }`}
-              >
-                <CommunityAgentIcon name={title} selected={sel} />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-start gap-1.5 min-w-0">
-                    {/* 模型式命名：owner/name，区分多人同名 */}
-                    <TruncTip
-                      as="span"
-                      title={fullId}
-                      className={`text-sm font-mono font-semibold leading-snug min-w-0 ${
-                        sel ? 'text-amber-900 dark:text-amber-100' : 'text-zinc-900 dark:text-zinc-100'
-                      }`}
-                    >
-                      {owner ? (
+      )}
+      {err && <p className="text-xs text-red-600 dark:text-red-400 whitespace-pre-wrap" role="alert">{err}</p>}
+
+      <div className="flex items-start gap-4">
+        <div className="flex-1 min-w-0">
+          {loading ? (
+            <div className={`${LIB_LIST_CLS} divide-y divide-zinc-100/90 dark:divide-white/[0.05]`} aria-busy="true" aria-label={t('contribute.agentsLoading')}>
+              {[0, 1, 2, 3].map((i) => (
+                <div key={i} className="flex items-center gap-3 px-4 py-3 animate-pulse">
+                  <div className="w-9 h-9 rounded-xl bg-zinc-200/80 dark:bg-zinc-700/80" />
+                  <div className="flex-1 space-y-1.5">
+                    <div className="h-3 w-40 rounded bg-zinc-200/80 dark:bg-zinc-700/80" />
+                    <div className="h-2.5 w-72 rounded bg-zinc-200/60 dark:bg-zinc-700/60" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : shown.length === 0 ? (
+            <div className={`${LIB_LIST_CLS} px-6 py-12 text-center`}>
+              <div className="text-2xl" aria-hidden>{q || onlyHired ? '🔍' : '🌙'}</div>
+              <p className="mt-2 text-[13px] font-medium text-zinc-700 dark:text-zinc-200">
+                {q ? t('contribute.noAgentsMatch') : onlyHired ? t('contribute.noHiredYet') : t('contribute.noCommunityAgents')}
+              </p>
+              {(q || onlyHired || scope !== 'all') && (
+                <button type="button" onClick={() => { setQuery(''); setOnlyHired(false); onScopeChange?.('all'); }}
+                  className="mt-3 text-xs text-blue-600 dark:text-blue-400 hover:underline">{t('contribute.clearFilters')}</button>
+              )}
+            </div>
+          ) : (
+            <ul className={LIB_LIST_CLS} role="listbox" aria-label={t('contribute.communityAgents')}>
+              <li className="hidden md:grid grid-cols-[minmax(0,1fr)_8rem_6.5rem_4.5rem_4rem] gap-3 px-4 py-2 text-[11px] text-zinc-400 border-b border-zinc-100/90 dark:border-white/[0.05]">
+                <span>{t('contribute.col.agent')}</span>
+                <span>{t('contribute.col.runtime')}</span>
+                <span>{t('contribute.col.popularity')}</span>
+                <span>{t('contribute.col.status')}</span>
+                <span />
+              </li>
+              {shown.map((a) => {
+                const key = `${a.worker_id}:${a.id}`;
+                const sel = !!selected && selected.id === a.id && selected.worker_id === a.worker_id;
+                const hired = hiredIds.has(a.id);
+                const busyNow = Number(a.active_requests) > 0;
+                const hires = Number(a.hire_count) || 0;
+                const { name: title, owner } = parseCommunityAgent(a);
+                const blurb = String(a.description || '').trim();
+                return (
+                  <li
+                    key={key}
+                    role="option"
+                    aria-selected={sel}
+                    tabIndex={0}
+                    onClick={() => selectAgent(a)}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectAgent(a); } }}
+                    className={`${libRowCls(sel)} grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[minmax(0,1fr)_8rem_6.5rem_4.5rem_4rem]`}
+                  >
+                    <LibraryRowTitle
+                      logo={<CommunityAgentIcon name={title} small />}
+                      name={owner ? (
                         <>
-                          <span className={sel ? 'text-amber-700/80 dark:text-amber-300/80' : 'text-zinc-500 dark:text-zinc-400'}>{owner}</span>
-                          <span className="text-zinc-400 dark:text-zinc-500 mx-0.5">/</span>
-                          <span>{title}</span>
+                          <span className="text-zinc-400 dark:text-zinc-500 font-normal">{owner}</span>
+                          <span className="text-zinc-300 dark:text-zinc-600 mx-0.5">/</span>
+                          {title}
                         </>
                       ) : title}
-                    </TruncTip>
-                    {hired && (
-                      <span className="shrink-0 text-[10px] font-medium px-1.5 py-0.5 rounded-md bg-green-100 dark:bg-green-900/50 text-green-700 dark:text-green-300">
-                        {t('contribute.hiredBadge')}
-                      </span>
-                    )}
-                  </div>
-                  {a.runtime ? (
-                    <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5 truncate">
-                      {t('contribute.agentRuntime', { runtime: a.runtime })}
-                    </p>
-                  ) : null}
-                  {blurb ? (
-                    <TruncTip
-                      ellipsis={false}
-                      title={blurb}
-                      className="text-[11px] mt-1.5 line-clamp-2 leading-relaxed text-zinc-500 dark:text-zinc-400"
-                    >
-                      {blurb}
-                    </TruncTip>
-                  ) : (
-                    <p className="text-[11px] mt-1.5 text-zinc-400 dark:text-zinc-500 italic">
-                      {t('contribute.noAgentDesc')}
-                    </p>
-                  )}
-                </div>
-              </button>
-            );
-          })}
+                      chips={(
+                        <>
+                          {(a.visibility || 'public') !== 'public' && (
+                            <span className="shrink-0 text-[10px] px-1.5 py-px rounded font-medium bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300">
+                              ◎ {(a.circle_ids || []).map(circleName).filter(Boolean)[0] || t('contribute.scope.circleTag')}
+                              {(a.circle_ids || []).length > 1 ? ` +${a.circle_ids.length - 1}` : ''}
+                            </span>
+                          )}
+                          {hired && (
+                            <span className="shrink-0 text-[10px] px-1.5 py-px rounded font-medium bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300">
+                              ✓ {t('contribute.hiredBadge')}
+                            </span>
+                          )}
+                        </>
+                      )}
+                      sub={blurb || t('contribute.noAgentDesc')}
+                      subClass={blurb ? undefined : 'text-zinc-400 dark:text-zinc-500 italic'}
+                    />
+                    <div className="hidden md:flex items-center gap-1.5 min-w-0 text-[11px] text-zinc-600 dark:text-zinc-300">
+                      {a.runtime ? (
+                        <>
+                          <ServiceIcon id={a.runtime} name={a.runtime} boxClass="w-5 h-5" imgClass="w-3 h-3" className="!rounded-md shrink-0" />
+                          <span className="truncate">{runtimeLabel(a.runtime)}</span>
+                        </>
+                      ) : '—'}
+                    </div>
+                    <div className="hidden md:block text-[11px] tabular-nums text-zinc-600 dark:text-zinc-300">
+                      {hires > 0
+                        ? <span>🔥 {t('contribute.hiresN', { n: hires })}</span>
+                        : <span className="text-[10px] px-1.5 py-px rounded bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-300">{t('contribute.newListing')}</span>}
+                    </div>
+                    <div className="hidden md:flex items-center gap-1.5 text-[11px] text-zinc-600 dark:text-zinc-300">
+                      <span className={`w-1.5 h-1.5 rounded-full ${busyNow ? 'bg-amber-500' : 'bg-green-500'}`} aria-hidden />
+                      {busyNow ? t('network.busy') : t('network.idle')}
+                    </div>
+                    <div className="flex justify-end md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                      {!hired && (
+                        <button
+                          type="button"
+                          disabled={!!busy}
+                          onClick={() => { selectAgent(a, { toggle: false }); setPendingHire(a); }}
+                          className="tb-press whitespace-nowrap text-[11px] px-2.5 py-1 rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-45"
+                        >
+                          {t('contribute.hireShort')}
+                        </button>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
         </div>
-      )}
-      {selected && (
-        <div className="space-y-2.5 pt-3 border-t border-zinc-100 dark:border-zinc-700/80">
-          <div className="flex gap-3 items-start">
-            <CommunityAgentIcon name={selected.display_name || selected.id} selected />
-            <div className="min-w-0 flex-1 space-y-1">
-              <TruncTip
-                className="text-sm font-mono font-semibold text-zinc-800 dark:text-zinc-100"
-                title={selected.owner_nickname
-                  ? `${selected.owner_nickname}/${selected.display_name || selected.id}`
-                  : (selected.display_name || selected.id)}
-              >
-                {t('contribute.hireTarget', {
-                  name: selected.owner_nickname
-                    ? `${selected.owner_nickname}/${selected.display_name || selected.id}`
-                    : (selected.display_name || selected.id),
-                })}
-              </TruncTip>
-              {selected.runtime ? (
-                <p className="text-[10px] text-zinc-400 dark:text-zinc-500">
-                  {t('contribute.agentRuntime', { runtime: selected.runtime })}
-                </p>
-              ) : null}
-              {/* 选中后完整展示简介，便于判断用途 */}
-              <p className="text-xs text-zinc-600 dark:text-zinc-300 leading-relaxed whitespace-pre-wrap">
-                {String(selected.description || '').trim() || t('contribute.noAgentDesc')}
-              </p>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {!selectedHired ? (
-              <button
-                type="button"
-                onClick={hireSelected}
-                disabled={!!busy}
-                className="px-4 py-1.5 text-sm rounded-lg bg-blue-700 hover:bg-blue-600 disabled:opacity-50 text-white font-medium transition-colors duration-200 cursor-pointer disabled:cursor-not-allowed"
-              >
-                {busy === 'hire' ? t('contribute.hiring') : t('contribute.hireBtn')}
-              </button>
-            ) : (
+        {selected && (
+          <LibraryInspector
+            logo={<CommunityAgentIcon name={selected.display_name || selected.id} />}
+            title={selectedFull}
+            chips={(
+              <>
+                {selectedHired && (
+                  <span className="text-[10px] px-1.5 py-px rounded font-medium bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300">✓ {t('contribute.hiredBadge')}</span>
+                )}
+                {selectedRow && (selectedRow.visibility || 'public') !== 'public' && (
+                  <span className="text-[10px] px-1.5 py-px rounded font-medium bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300">
+                    ◎ {(selectedRow.circle_ids || []).map(circleName).filter(Boolean).join('、') || t('contribute.scope.circleTag')}
+                  </span>
+                )}
+              </>
+            )}
+            desc={String(selected.description || '').trim() || t('contribute.noAgentDesc')}
+            stats={[
+              [t('contribute.col.runtime'), selected.runtime ? runtimeLabel(selected.runtime) : '—'],
+              [t('contribute.col.cost'), credits != null ? t('contribute.creditsN', { n: credits }) : '—'],
+              [t('contribute.col.popularity'), selectedRow && Number(selectedRow.hire_count) > 0 ? t('contribute.hiresN', { n: selectedRow.hire_count }) : t('contribute.newListing')],
+            ]}
+            onClose={() => setSelected(null)}
+            closeLabel={t('circles.inviteClose')}
+            footer={(
               <>
                 <button
                   type="button"
                   onClick={hireSelected}
                   disabled={!!busy}
-                  className="px-4 py-1.5 text-sm rounded-lg bg-blue-700 hover:bg-blue-600 disabled:opacity-50 text-white font-medium transition-colors duration-200 cursor-pointer disabled:cursor-not-allowed"
+                  className="tb-press flex-1 text-xs font-medium px-3.5 py-2 rounded-lg bg-blue-600 text-white shadow-sm shadow-blue-600/25 hover:bg-blue-500 disabled:opacity-50"
                 >
-                  {busy === 'hire' ? t('contribute.hiring') : t('contribute.hiredAgain')}
+                  {busy === 'hire' ? t('contribute.hiring') : (selectedHired ? t('contribute.hiredAgain') : t('contribute.hireBtn'))}
                 </button>
-                <button
-                  type="button"
-                  onClick={unhireSelected}
-                  disabled={!!busy}
-                  className="px-4 py-1.5 text-sm rounded-lg border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 disabled:opacity-50 font-medium transition-colors duration-200 cursor-pointer disabled:cursor-not-allowed"
-                >
-                  {busy === 'unhire' ? t('contribute.unhiring') : t('contribute.unhireBtn')}
-                </button>
+                {selectedHired && (
+                  <button
+                    type="button"
+                    onClick={unhireSelected}
+                    disabled={!!busy}
+                    className="text-xs px-3.5 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50"
+                  >
+                    {busy === 'unhire' ? t('contribute.unhiring') : t('contribute.unhireBtn')}
+                  </button>
+                )}
               </>
             )}
-          </div>
-          <p className="text-[11px] text-zinc-500 dark:text-zinc-400 leading-relaxed">{t('contribute.hireHint')}</p>
-        </div>
-      )}
-      {err && <p className="text-sm text-red-600 dark:text-red-400 whitespace-pre-wrap" role="alert">{err}</p>}
+          >
+            <InspectorSection title={t('contribute.hireHowTitle')}>
+              <ol className="space-y-2.5">
+                {[t('contribute.step1'), t('contribute.step2'), t('contribute.step3')].map((txt, i) => (
+                  <li key={i} className="flex gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-300 text-[10px] font-semibold flex items-center justify-center shrink-0">{i + 1}</span>
+                    <span className="text-[11px] leading-relaxed text-zinc-600 dark:text-zinc-300 pt-0.5">{txt}</span>
+                  </li>
+                ))}
+              </ol>
+            </InspectorSection>
+            <InspectorSection title={t('contribute.safetyTitle')}>
+              <p className="text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400">🔒 {t('contribute.hireHint')}</p>
+            </InspectorSection>
+          </LibraryInspector>
+        )}
+      </div>
     </div>
   );
+}
+
+/** 运行时展示名 */
+function runtimeLabel(rt) {
+  const map = { 'claude-code': 'Claude Code', codex: 'Codex', cursor: 'Cursor', 'kimi-code': 'Kimi Code', workbuddy: 'WorkBuddy', gemini: 'Gemini CLI' };
+  return map[String(rt || '').toLowerCase()] || rt;
 }
 
 export default function Contribute() {
   const { t, lang } = useLang();
   const { user } = useAuth();
-  const navigate = useNavigate();
   const [running,     setRunning]     = useState(false);
   const [stats,       setStats]       = useState(null);
-  const [chartData,   setChartData]   = useState([]);
   const [settlements, setSettlements] = useState([]);
   const [summary,     setSummary]     = useState(null);
   const [logs,        setLogs]        = useState([]);
   const [agentError,  setAgentError]  = useState('');
   const [agentsRefreshKey, setAgentsRefreshKey] = useState(0);
   const logRef = useRef(null);
+  const location = useLocation();
+  const [tab, setTab] = useState(() => {
+    try { return localStorage.getItem('tokenbank.trade.tab') || 'hire'; } catch { return 'hire'; }
+  });
+  // 圈子 = 交易范围：共享给雇佣筛选、上架范围、圈子管理
+  const [myCircles, setMyCircles] = useState(null);
+  const [scope, setScope] = useState('all');
+  const [focusAgent, setFocusAgent] = useState(null);
+  const [circlesView, setCirclesView] = useState('mine');
+  const [circleResult, setCircleResult] = useState(null);
+
+  useEffect(() => {
+    Promise.all([listMyCircles(), listJoinedCircles()])
+      .then(([o, j]) => setMyCircles(uniqueCircles([...(o.data?.circles || []), ...(j.data?.circles || [])])))
+      .catch(() => setMyCircles([]));
+  }, []);
+
+  // 跨页跳转（圈子详情 / 社区网络 / 邀请链接 / 旧 /circles 路由）带来的定位
+  useEffect(() => {
+    if (location.pathname !== '/contribute') return;
+    const st = location.state || {};
+    if (st.tradeTab) changeTab(st.tradeTab);
+    if (st.scope != null) setScope(st.scope);
+    if (st.focusAgent) setFocusAgent({ id: st.focusAgent, at: Date.now() });
+    if (st.agentQuery) setFocusAgent({ query: st.agentQuery, at: Date.now() });
+    if (st.circlesView) setCirclesView(st.circlesView);
+    if (st.circleResult) setCircleResult({ ...st.circleResult, at: Date.now() });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 每次导航触发一次
+  }, [location.key]);
+  function changeTab(id) {
+    setTab(id);
+    try { localStorage.setItem('tokenbank.trade.tab', id); } catch { /* ignore */ }
+  }
 
   /** 触发社区智能体列表刷新（保存/停止后） */
   function bumpAgentsRefresh() {
@@ -1150,9 +1577,6 @@ export default function Contribute() {
     function poll() {
       getStats().then(r => {
         setStats(r.data);
-        const locale = lang === 'en' ? 'en-US' : 'zh-CN';
-        const time = new Date().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        setChartData(prev => [...prev.slice(-29), { time, value: r.data.contribute_req_per_min ?? 0 }]);
       }).catch(() => {});
     }
     poll();
@@ -1177,7 +1601,7 @@ export default function Contribute() {
       getSettlements()
         .then((r) => {
           if (cancelled) return;
-          setSettlements((r.data?.settlements || []).slice(0, 10));
+          setSettlements((r.data?.settlements || []).slice(0, 30));
         })
         .catch((e) => {
           console.warn('[contribute] settlements load failed', e?.message || e);
@@ -1218,173 +1642,102 @@ export default function Contribute() {
     }
   }
 
+
+  const TABS = [
+    { id: 'hire', label: t('contribute.tab.hire') },
+    { id: 'supply', label: t('contribute.tab.supply') },
+    { id: 'circles', label: t('contribute.tab.circles'), count: myCircles?.length || null },
+    { id: 'earnings', label: t('contribute.tab.earnings'), count: settlements.length || null },
+    { id: 'network', label: t('contribute.tab.network'), icon: '🌐' },
+  ];
+
   return (
-    <div className="px-4 py-4 space-y-4">
-      <div>
-        <div>
-          <h1 className="text-[17px] font-bold tracking-tight text-zinc-900 dark:text-zinc-100">{t('contribute.title')}</h1>
-          <p className="text-xs text-zinc-600 dark:text-zinc-400 mt-0.5 leading-relaxed">{t('contribute.subtitle')}</p>
-          <button
-            type="button"
-            onClick={() => navigate('/network')}
-            className="electron-no-drag relative z-50 mt-2 text-xs text-blue-600 hover:text-blue-700 dark:text-blue-400 cursor-pointer transition-colors duration-200"
-          >
-            {t('providers.p2p.globalNetwork')}
-          </button>
+    <div className="flex flex-col h-full min-h-0">
+      <header className="shrink-0 px-5 pt-5">
+        <div className="flex flex-wrap items-start gap-3">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{t('contribute.title')}</h1>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">{t('contribute.subtitle')}</p>
+          </div>
+          <div className="electron-no-drag relative z-50 flex items-center gap-2">
+            {/* 累计积分：点击看收益记录（明细数据都在该页签） */}
+            {summary && (
+              <button type="button" onClick={() => changeTab('earnings')}
+                className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white/60 dark:bg-zinc-900/40 text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100">
+                <span className="font-semibold tabular-nums text-green-600 dark:text-green-400">+{(summary.contrib_credits ?? 0).toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
+                {t('contribute.creditsUnit')}
+              </button>
+            )}
+            {/* 供给状态：一眼可见，点击直达上架配置 */}
+            <button
+              type="button"
+              onClick={() => changeTab('supply')}
+              className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border transition-colors ${
+                running
+                  ? 'border-green-200 dark:border-green-900 bg-green-50/80 dark:bg-green-950/30 text-green-700 dark:text-green-300'
+                  : 'border-zinc-200 dark:border-zinc-700 bg-white/60 dark:bg-zinc-900/40 text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200'
+              }`}
+            >
+              <span className="relative flex w-2 h-2" aria-hidden>
+                {running && <span className="absolute inline-flex w-full h-full rounded-full bg-green-400 opacity-60 animate-ping" />}
+                <span className={`relative inline-flex w-2 h-2 rounded-full ${running ? 'bg-green-500' : 'bg-zinc-300 dark:bg-zinc-600'}`} />
+              </span>
+              {running ? t('contribute.statusSupplying') : t('contribute.statusIdle')}
+            </button>
+          </div>
+        </div>
+
+        <div role="tablist" className="mt-4 flex items-end gap-6 border-b border-zinc-200/80 dark:border-white/[0.08]">
+          {TABS.map(tb => (
+            <button key={tb.id} type="button" role="tab" aria-selected={tab === tb.id} onClick={() => changeTab(tb.id)}
+              className={`-mb-px pb-2.5 text-[13px] border-b-2 transition-colors ${
+                tab === tb.id
+                  ? 'border-zinc-900 dark:border-zinc-100 text-zinc-900 dark:text-zinc-50 font-semibold'
+                  : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+              }`}>
+              {tb.icon && <span className="mr-1" aria-hidden>{tb.icon}</span>}
+              {tb.label}
+              {tb.count > 0 && <span className="ml-1.5 text-[11px] font-normal text-zinc-400 tabular-nums">{tb.count}</span>}
+            </button>
+          ))}
+        </div>
+      </header>
+
+      <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4">
+        {/* 三个页签常驻挂载：切换不丢未保存的上架配置 */}
+        <div className={tab === 'hire' ? '' : 'hidden'}>
+          <CommunityAgentsCard
+            refreshKey={agentsRefreshKey}
+            circles={myCircles || []}
+            scope={scope}
+            onScopeChange={setScope}
+            focusAgent={focusAgent}
+          />
+        </div>
+
+        <div className={tab === 'supply' ? 'space-y-2' : 'hidden'}>
+          <ContributionConfigCard
+            onStart={handleStart}
+            onStop={handleStop}
+            running={running}
+            agentError={agentError}
+            onAgentsRefresh={bumpAgentsRefresh}
+            circles={myCircles}
+            onManageCircles={() => changeTab('circles')}
+          />
+        </div>
+
+        <div className={tab === 'circles' ? '' : 'hidden'}>
+          <Circles view={circlesView} circleResult={circleResult} onChanged={setMyCircles} />
+        </div>
+
+        {/* 社区网络：全网概览，仅在打开时挂载（避免后台轮询） */}
+        {tab === 'network' && <Network embedded />}
+
+        <div className={tab === 'earnings' ? '' : 'hidden'}>
+          <EarningsView settlements={settlements} summary={summary} stats={stats} logs={logs} logRef={logRef} />
         </div>
       </div>
-
-      {/* 累计贡献 / 赚取积分 / P2P 节省 */}
-      {summary && (
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-          <div className="tb-soft-card rounded-2xl p-4">
-            <p className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wide mb-1.5">
-              {t('contribute.totalTokens')}
-            </p>
-            <p className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">
-              {fmtContribTokens(summary.contrib_tokens)}
-            </p>
-            <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1">
-              {summary.period_tokens > 0
-                ? t('contribute.periodTokens', { n: fmtContribTokens(summary.period_tokens) })
-                : t('contribute.totalTokensHint')}
-            </p>
-          </div>
-          <div className="tb-soft-card rounded-2xl p-4">
-            <p className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wide mb-1.5">
-              {t('contribute.earnedCredits')}
-            </p>
-            <p className="text-2xl font-bold text-green-600 dark:text-green-400">
-              +{(summary.contrib_credits ?? 0).toLocaleString(undefined, { maximumFractionDigits: 1 })}
-            </p>
-            <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1">
-              {t('contribute.approxCny', { amount: fmtCreditCny(summary.contrib_cny) })}
-            </p>
-          </div>
-          <div className="tb-soft-card rounded-2xl p-4">
-            <p className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wide mb-1.5">
-              {t('contribute.savedMoney')}
-            </p>
-            <p className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
-              {fmtCreditCny(summary.saved_cny)}
-            </p>
-            <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-1">
-              {summary.p2p_tokens > 0
-                ? t('contribute.p2pTokensUsed', { n: fmtContribTokens(summary.p2p_tokens) })
-                : t('contribute.savedHint')}
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* 我上架：供给侧 */}
-      <section className="space-y-2">
-        <div>
-          <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">{t('contribute.sectionSupply')}</h2>
-          <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">{t('contribute.sectionSupplyHint')}</p>
-        </div>
-        <ContributionConfigCard
-          onStart={handleStart}
-          onStop={handleStop}
-          running={running}
-          stats={stats}
-          agentError={agentError}
-          onAgentsRefresh={bumpAgentsRefresh}
-        />
-      </section>
-
-      {/* 我雇佣：需求侧 */}
-      <section className="space-y-2">
-        <div>
-          <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">{t('contribute.sectionHire')}</h2>
-          <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">{t('contribute.sectionHireHint')}</p>
-        </div>
-        <CommunityAgentsCard refreshKey={agentsRefreshKey} />
-      </section>
-
-      {stats && (
-        <div className="grid grid-cols-3 gap-3">
-          <div className="tb-soft-card rounded-xl p-3">
-            <p className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wide mb-1.5">{t('contribute.rate')}</p>
-            <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.contribute_req_per_min ?? 0}</p>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">req/min</p>
-          </div>
-          <div className="tb-soft-card rounded-xl p-3">
-            <p className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wide mb-1.5">{t('contribute.activeReqs')}</p>
-            <p className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">{stats.active_requests ?? 0}</p>
-          </div>
-          <div className="tb-soft-card rounded-xl p-3">
-            <p className="text-xs font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wide mb-1.5">{t('contribute.onlineNodes')}</p>
-            <p className="text-2xl font-bold text-zinc-900 dark:text-zinc-100">{stats.active_workers ?? 0}</p>
-          </div>
-        </div>
-      )}
-
-      <div className="tb-soft-card rounded-2xl p-4">
-        <p className="text-xs text-zinc-400 dark:text-zinc-500 mb-3">{t('contribute.chartTitle')}</p>
-        <RateChart data={chartData} />
-      </div>
-
-      <section>
-        <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mb-3">{t('contribute.settlements')}</h2>
-        {settlements.length === 0 ? (
-          <p className="text-zinc-500 dark:text-zinc-400 text-sm">{t('contribute.noSettlements')}</p>
-        ) : (
-          <div className="space-y-1.5">
-            {settlements.map(s => {
-              const resources = normalizeSettlementResources(s.resources);
-              // 模型/智能体并入得分括号内，单行展示以压缩高度
-              const resHint = resources.length
-                ? resources.map((r) => formatSettlementResource(r)).join('、')
-                : '';
-              const mult = s.multiplier ?? 1;
-              const qualityLabel = t('contribute.qualityMult', { n: mult.toFixed(2) });
-              return (
-              <div
-                key={s.id ?? s.period_end}
-                className="tb-soft-tile rounded-xl px-4 py-2.5 text-sm
-                  flex flex-col gap-1.5
-                  sm:grid sm:grid-cols-[8.5rem_4.5rem_minmax(0,1fr)_4.5rem] sm:gap-x-2 sm:items-center sm:gap-y-0"
-              >
-                  <span className="text-zinc-500 dark:text-zinc-400 text-xs tabular-nums">{formatSettlementTime(s.period_end)}</span>
-                  <span className="text-zinc-700 dark:text-zinc-300 tabular-nums text-xs sm:text-sm">
-                    {fmtContribTokens(s.output_tokens ?? 0)} tok
-                  </span>
-                  <span className="text-green-600 dark:text-green-400 font-medium min-w-0 flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
-                    <span>+{(s.credits_awarded ?? 0).toFixed(1)}</span>
-                    {/* 星级 + 文字倍率，避免仅靠符号传达质量 */}
-                    <span
-                      className="text-yellow-600 dark:text-yellow-400 text-xs tracking-tight"
-                      title={qualityLabel}
-                      aria-label={qualityLabel}
-                    >
-                      {multiplierToStars(mult)}
-                      <span className="ml-1 text-zinc-500 dark:text-zinc-400 tabular-nums font-normal">
-                        {mult.toFixed(2)}×
-                      </span>
-                    </span>
-                    {resHint ? (
-                      <span className="text-zinc-500 dark:text-zinc-400 font-normal text-xs basis-full sm:basis-auto">
-                        ({resHint})
-                      </span>
-                    ) : null}
-                  </span>
-                  <span className="text-zinc-500 dark:text-zinc-400 text-xs sm:text-right tabular-nums">
-                    ≈{fmtCreditCny(creditsToCny(s.credits_awarded))}
-                  </span>
-              </div>
-              );
-            })}
-          </div>
-        )}
-      </section>
-
-      <section>
-        <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 mb-2">{t('contribute.agentLog')}</h2>
-        <div ref={logRef} className="bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 h-36 overflow-y-auto font-mono text-xs text-zinc-600 dark:text-zinc-400 space-y-0.5">
-          {logs.length === 0 ? <span className="text-zinc-500 dark:text-zinc-400">{t('contribute.logEmpty')}</span> : logs.map((line, i) => <div key={i}>{line}</div>)}
-        </div>
-      </section>
     </div>
   );
 }

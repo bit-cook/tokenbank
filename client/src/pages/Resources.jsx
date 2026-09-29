@@ -1,16 +1,26 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import ServiceIcon from '../components/ServiceIcon';
+import {
+  FilterMenu, SplitButton, AppIconStack, LIFE_DOT,
+  LIB_LIST_CLS, libRowCls, LibrarySectionHead, LibraryRowTitle,
+  LibraryInspector, InspectorSection, InspectorPreview,
+} from '../components/LibraryControls';
 import PersonalizedRecommend from '../components/PersonalizedRecommend';
+import McpProvidersTab from '../components/McpProvidersTab';
 import SkillInstallDialog from '../components/SkillInstallDialog';
-import ResourceAssetCard, {
+import {
   ASSET_BTN_GHOST,
   ASSET_BTN_MANAGED,
   ASSET_BTN_PRIMARY,
   AssetLogo,
+  AssetMoreMenu,
   buildPreviewText,
   resourceDescription,
+  resourceDisplayName,
+  shortenHomePath,
+  typeVisual,
 } from '../components/ResourceAssetCard';
 import { useLang } from '../store/lang';
 import { getSyncServerBase } from '../config';
@@ -51,6 +61,10 @@ const IDLE_DAYS_KEY = 'tokenbank.resources.idleDays';
 const LAYER_FILTER_KEY = 'tokenbank.resources.layerFilter';
 const LIST_SORT_KEY = 'tokenbank.resources.listSort';
 const DEFAULT_IDLE_DAYS = 60;
+/** 资产库列表列宽：名称 | 投射到 | 使用 | 状态 | 操作 */
+const LIB_GRID = 'grid-cols-[minmax(0,1fr)_7rem_3.5rem_6.5rem_8rem]';
+const LIB_GRID_MD = 'md:grid-cols-[minmax(0,1fr)_7rem_3.5rem_6.5rem_8rem]';
+
 const LIST_SORT_OPTIONS = [
   { id: 'time', labelKey: 'resources.sort.time' },
   { id: 'name', labelKey: 'resources.sort.name' },
@@ -110,12 +124,13 @@ const TYPE_OPTIONS = [
   { id: 'prompt', labelKey: 'resources.type.prompt' },
   { id: 'skill', labelKey: 'resources.type.skill' },
   { id: 'assistant', labelKey: 'resources.type.assistant' },
+  { id: 'mcp', labelKey: 'resources.type.mcp' },
 ];
 
 function readViewTab() {
   try {
     const v = localStorage.getItem(VIEW_TAB_KEY);
-    // 默认「为你推荐」；旧 portrait 并入 recommend
+    // 未选过时先显示「为你推荐」，加载后若本机已有资产再切到「已纳管」；旧 portrait 并入 recommend
     if (v === 'catalog' || v === 'portrait') return 'recommend';
     if (v === 'managed' || v === 'recommend') return v;
     if (v === 'discovered' || v === 'agents') return 'managed';
@@ -133,7 +148,7 @@ function readTypeFilter() {
     // 缺省 / 空 = 全部；记住用户上次选择
     if (v === null || v === undefined) return '';
     if (v === '') return '';
-    if (v === 'prompt' || v === 'skill' || v === 'assistant') return v;
+    if (v === 'prompt' || v === 'skill' || v === 'assistant' || v === 'mcp') return v;
     return '';
   } catch { return ''; }
 }
@@ -305,6 +320,16 @@ function depsFromAssistantContent(content) {
   }
 }
 
+/** 智能体绑定的模型（content.model 或 content.parameters.model，与 resource-assistant 一致） */
+function assistantModelOf(content) {
+  try {
+    const obj = typeof content === 'string' ? JSON.parse(content || '{}') : (content || {});
+    return String(obj.model || obj.parameters?.model || '').trim();
+  } catch {
+    return '';
+  }
+}
+
 /** Skill 权威目录（用户安装位置） */
 function getSkillLocation(resource) {
   if (!resource) return null;
@@ -427,10 +452,36 @@ function deriveManagedAppTargets(apps) {
 /** 资产页：Prompt / Skill / Assistant 纳管与投射 */
 export default function Resources() {
   const navigate = useNavigate();
+  const location = useLocation();
+  // keep-alive：切到其它页时本页仍挂载，全局快捷键只在本页可见时生效
+  const pageActive = location.pathname === '/resources';
   const { t, lang } = useLang();
   const [viewTab, setViewTab] = useState(readViewTab);
   const [typeFilter, setTypeFilter] = useState(readTypeFilter);
   const [query, setQuery] = useState('');
+  const searchInputRef = useRef(null);
+  /** 选中行（右侧详情面板）：资产库 r-/d-，社区 cat:，推荐 reco: */
+  const [selectedKey, setSelectedKey] = useState(null);
+  /** 推荐 Tab 详情面板挂载点（PersonalizedRecommend 通过 portal 渲染进来） */
+  const [inspectorHost, setInspectorHost] = useState(null);
+  /** MCP 类型：「新建」按钮 → 打开 MCP 组件内的自定义表单 */
+  const [mcpCreateSignal, setMcpCreateSignal] = useState(0);
+  /** MCP 已纳管数（由 MCP 组件上报；未加载为 null） */
+  const [mcpCount, setMcpCount] = useState(null);
+  // 未打开 MCP 页签前先取一次数量，平铺页签上直接显示计数（打开后由 MCP 组件接管上报）
+  useEffect(() => {
+    const api = window.electronAPI?.mcp;
+    if (!api?.listServers) return;
+    let alive = true;
+    api.listServers().then((r) => {
+      if (!alive || !Array.isArray(r?.servers)) return;
+      const n = r.servers.filter(s => !s.builtin && String(s.name || '') !== 'tokenbank-relay').length;
+      setMcpCount(c => (c == null ? n : c));
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
+  /** 当前可见行 key（键盘 ↑↓ 导航用，渲染时写入） */
+  const visibleKeysRef = useRef([]);
   const [debouncedQuery, setDebouncedQuery] = useState('');
   const [catalog, setCatalog] = useState([]);
   const [discovered, setDiscovered] = useState([]);
@@ -718,7 +769,8 @@ export default function Resources() {
     }
   }, []);
 
-  const runScan = useCallback(async ({ silent = false, autoTag = !silent } = {}) => {
+  // announce=false：首屏自动扫描不弹「扫描完成」提示（仅手动扫描时告知结果）
+  const runScan = useCallback(async ({ silent = false, autoTag = !silent, announce = true } = {}) => {
     if (!window.electronAPI?.resource) return;
     // 自动打标未结束时禁止再次手动扫描（读 ref，勿依赖 scanning state 以免重建 loadAll）
     if (!silent && (scanningRef.current || autoTaggingRef.current || aiTagInflightRef.current)) return;
@@ -742,7 +794,7 @@ export default function Resources() {
         setScanStats(scanRes.scanStats || null);
         // 默认目录与扫描结果一并刷新
         await refreshDefaultScanRoots(filters, scanRes.scanStats);
-        if (!silent) {
+        if (!silent && announce) {
           scanHint = t('resources.scanDoneHint', {
             total: scanRes.scanStats?.totalOnDisk ?? nextDiscovered.length,
             imported: scanRes.imported || 0,
@@ -796,7 +848,7 @@ export default function Resources() {
 
   const loadAll = useCallback(async ({ silent = false } = {}) => {
     // 先扫描即纳管（入库），再读取 resources；打标不跟首屏走，避免整页空白
-    await runScan({ silent, autoTag: false });
+    await runScan({ silent, autoTag: false, announce: false });
     await loadBase({ silent });
   }, [loadBase, runScan]);
 
@@ -923,13 +975,26 @@ export default function Resources() {
 
   function changeViewTab(tab) {
     setViewTab(tab);
+    setSelectedKey(null);
     saveViewTab(tab);
   }
 
   function changeTypeFilter(type) {
     setTypeFilter(type);
     saveTypeFilter(type);
+    setSelectedKey(null);
   }
+
+  // 其它页跳转带类型（如供给源「MCP 工具已移到资源」）：navigate('/resources', { state: { resourceType } })
+  useEffect(() => {
+    const want = location.state?.resourceType;
+    const selectKey = location.state?.selectKey;
+    if (!want && !selectKey) return;
+    if (want && TYPE_OPTIONS.some(o => o.id === want)) changeTypeFilter(want);
+    // 从供给源「谁在用它」跳来：打开资产库并选中该条
+    if (selectKey) { changeViewTab('managed'); setSelectedKey(selectKey); }
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.state]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function changeAppFilter(agentId) {
     setAppFilter(agentId);
@@ -2083,6 +2148,7 @@ export default function Resources() {
     : resources.length;
   const discoveredCount = scanStats?.totalOnDisk ?? discovered.length;
   const showSkillTabs = !typeFilter || typeFilter === 'skill';
+  const isMcp = typeFilter === 'mcp';
 
   // 当前类型下的已纳管资源（分层/轻推与列表共用，避免串类型）
   const resourcesInType = useMemo(
@@ -2127,11 +2193,64 @@ export default function Resources() {
   }, [lang, t]);
 
   // 「本机」Tab 计数：技能=磁盘总数;提示词/助手=该类型已纳管数;全部=非 skill 已纳管 + 磁盘 skill
-  const localCount = typeFilter === 'skill'
-    ? discoveredCount
-    : typeFilter
-      ? managedCount
-      : resources.filter(r => r.type !== 'skill').length + discoveredCount;
+  const localCount = typeFilter === 'mcp'
+    ? mcpCount
+    : typeFilter === 'skill'
+      ? discoveredCount
+      : typeFilter
+        ? managedCount
+        : resources.filter(r => r.type !== 'skill').length + discoveredCount;
+
+  // 类型分段计数（资产库）：技能以本机扫描为准，扫描为空时回退已纳管 skill
+  const typeCounts = useMemo(() => {
+    const skill = discovered.length > 0 ? discoveredCount : resources.filter(r => r.type === 'skill').length;
+    const prompt = resources.filter(r => r.type === 'prompt').length;
+    const assistant = resources.filter(r => r.type === 'assistant').length;
+    return { all: skill + prompt + assistant, skill, prompt, assistant, mcp: mcpCount || 0 };
+  }, [discovered.length, discoveredCount, resources, mcpCount]);
+
+  // 键盘：/ 聚焦搜索；资产库中 ↑↓ 切换选中行，Esc 关闭详情
+  useEffect(() => {
+    if (!pageActive) return undefined;
+    const onKey = (e) => {
+      const tag = (e.target?.tagName || '').toLowerCase();
+      const typing = tag === 'input' || tag === 'textarea' || tag === 'select' || e.target?.isContentEditable;
+      if (e.key === '/' && !typing && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        return;
+      }
+      if (typing || viewTab !== 'managed' || editorOpen || projectMenu) return;
+      // 下拉 / 菜单弹层打开时，Esc 与方向键交给弹层
+      if (document.querySelector('body > [role="listbox"], body > [role="menu"]')) return;
+      if (e.key === 'Escape' && selectedKey) { setSelectedKey(null); return; }
+      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+      const keys = visibleKeysRef.current;
+      if (!keys.length) return;
+      e.preventDefault();
+      const i = keys.indexOf(selectedKey);
+      const next = e.key === 'ArrowDown'
+        ? keys[Math.min(keys.length - 1, i + 1)]
+        : keys[Math.max(0, i < 0 ? 0 : i - 1)];
+      setSelectedKey(next);
+      requestAnimationFrame(() => {
+        document.querySelector(`[data-lib-key="${CSS.escape(next)}"]`)?.scrollIntoView({ block: 'nearest' });
+      });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [pageActive, viewTab, selectedKey, editorOpen, projectMenu]);
+
+  // 用户没手动选过 Tab 时：本机已有资产就默认落在「已纳管」，避免首屏停在空的推荐页
+  const autoViewTabRef = useRef(false);
+  useEffect(() => {
+    if (autoViewTabRef.current || loading) return;
+    let saved = null;
+    try { saved = localStorage.getItem(VIEW_TAB_KEY); } catch { /* ignore */ }
+    // 扫描结果可能晚于首屏加载到达：计数仍为 0 时不锁定，等后续计数更新再判断
+    if (saved || localCount > 0) autoViewTabRef.current = true;
+    if (!saved && localCount > 0) setViewTab('managed');
+  }, [loading, localCount]);
 
   // 应用筛选：prompt / skill / 智能体均按已纳管应用
   const installedFilterAgents = agents;
@@ -2348,77 +2467,6 @@ export default function Resources() {
     || typeFilter === 'prompt'
     || typeFilter === 'assistant';
 
-  /** 已纳管列表上方的主公筛选：图标 + 名称（Skill / Prompt / 智能体） */
-  function renderAppFilter() {
-    if (!showAppFilterBar || appFilterOptions.length <= 1) return null;
-    return (
-      <div className="flex flex-wrap gap-2">
-          {appFilterOptions.map(opt => {
-            const active = effectiveAppFilter === opt.id;
-            return (
-              <button
-                key={opt.id || 'all'}
-                type="button"
-                onClick={() => changeAppFilter(opt.id)}
-                className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full transition-colors ${
-                  active
-                    ? 'tb-soft-bubble !rounded-full text-zinc-900 dark:text-zinc-100'
-                    : 'tb-soft-tile !rounded-full'
-                }`}
-              >
-                {opt.id ? (
-                  <ServiceIcon
-                    id={opt.id}
-                    name={opt.label}
-                    boxClass="w-5 h-5"
-                    imgClass="w-3 h-3"
-                    className="!rounded-md"
-                  />
-                ) : (
-                  <ServiceIcon
-                    icon="◫"
-                    name={opt.label}
-                    boxClass="w-5 h-5"
-                    imgClass="w-3 h-3"
-                    className="!rounded-md"
-                  />
-                )}
-                <span className={`text-xs font-medium ${active ? 'text-sky-800 dark:text-sky-200' : 'text-zinc-700 dark:text-zinc-300'}`}>
-                  {opt.label}
-                </span>
-              </button>
-            );
-          })}
-      </div>
-    );
-  }
-
-  /** 本机列表排序：时间 / 字母 / 用量 */
-  function renderListSort() {
-    return (
-      <div
-        className="tb-glass-chip inline-flex rounded-lg p-0.5 gap-0.5"
-        role="group"
-        aria-label={t('resources.sort.label')}
-      >
-        {LIST_SORT_OPTIONS.map((opt) => (
-          <button
-            key={opt.id}
-            type="button"
-            onClick={() => changeListSort(opt.id)}
-            className={`tb-press text-xs px-2.5 py-1 rounded-md transition-colors ${
-              listSort === opt.id
-                ? 'bg-white/80 dark:bg-white/10 text-zinc-900 dark:text-zinc-100 font-semibold'
-                : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-100'
-            }`}
-          >
-            {t(opt.labelKey)}
-          </button>
-        ))}
-      </div>
-    );
-  }
-
   /** 用途筛选条：零散 tag 已聚合成 SkillHub 一级用途 */
   function purposeLabel(slug) {
     if (slug === PURPOSE_OTHER) return t('resources.tagFilterOther');
@@ -2434,47 +2482,6 @@ export default function Resources() {
     return active
       ? `tb-press tb-soft-bubble ${pad} text-zinc-900 dark:text-zinc-100 font-medium`
       : `tb-press tb-soft-tile ${pad} ${round} text-zinc-600 dark:text-zinc-400`;
-  }
-
-  function renderTagFilter() {
-    if (availableTags.length === 0 && purposeOther <= 0) return null;
-    return (
-      <div className="flex flex-wrap items-center gap-1.5" title={t('resources.tagFilterHint')}>
-        <button
-          type="button"
-          onClick={() => setTagFilter('')}
-          className={purposeChipClass(!tagFilter)}
-        >
-          {t('resources.tagFilterAll')}
-          <span className="ml-1 tabular-nums opacity-60">{purposeTotal}</span>
-        </button>
-        {availableTags.map(slug => {
-          const active = tagFilter === slug;
-          const n = purposeCounts[slug] || 0;
-          return (
-            <button
-              key={slug}
-              type="button"
-              onClick={() => setTagFilter(active ? '' : slug)}
-              className={purposeChipClass(active)}
-            >
-              {purposeLabel(slug)}
-              <span className="ml-1 tabular-nums opacity-60">{n}</span>
-            </button>
-          );
-        })}
-        {purposeOther > 0 && (
-          <button
-            type="button"
-            onClick={() => setTagFilter(tagFilter === PURPOSE_OTHER ? '' : PURPOSE_OTHER)}
-            className={purposeChipClass(tagFilter === PURPOSE_OTHER)}
-          >
-            {purposeLabel(PURPOSE_OTHER)}
-            <span className="ml-1 tabular-nums opacity-60">{purposeOther}</span>
-          </button>
-        )}
-      </div>
-    );
   }
 
   /** 用量徽标：行自身优先，Skill 扫描行回退已纳管资源 */
@@ -2512,136 +2519,16 @@ export default function Resources() {
     );
   }
 
-  function renderDiscoveredRow(item) {
-    // 同名 Skill 可能共用 scanKey（frontmatter name 相同），用 name+hash 保证 key 唯一
-    const rowKey = `${item.name}::${item.hash}`;
-    const expanded = expandedId === rowKey;
-    const toggle = () => setExpandedId(expanded ? null : rowKey);
-    const purposes = purposesOf(item, resourcesById);
-    // 列表项不再带全文，预览回退到已纳管资源正文
-    const previewSrc = (item.resourceId && resourcesById.get(item.resourceId)) || item;
-    return (
-      <ResourceAssetCard
-        key={rowKey}
-        type="skill"
-        item={item}
-        typeLabel={t('resources.type.skill')}
-        description={resourceDescription(item)}
-        expanded={expanded}
-        onTogglePreview={toggle}
-        previewLabel={t('resources.preview')}
-        collapseLabel={t('resources.collapse')}
-        emptyPreviewLabel={t('resources.emptyDetail')}
-        previewText={buildPreviewText('skill', previewSrc)}
-        layout="row"
-        badges={(
-          <>
-            {renderUseCountBadge(item)}
-            {renderAssistantBoundBadge('skill', item.name)}
-            {item.version && (
-              <span
-                className="text-[10px] px-1.5 py-0.5 rounded-md bg-sky-50 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300 font-mono"
-                title={t('resources.skillVersion')}
-              >
-                {/^v/i.test(item.version) ? item.version : `v${item.version}`}
-              </span>
-            )}
-            {item.contentChanged && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">
-                {t('resources.contentChanged')}
-              </span>
-            )}
-          </>
-        )}
-        meta={(
-          <>
-            {item.authorityPath && (
-              <p className="text-[11px] text-zinc-400 mt-2 font-mono truncate">
-                <button
-                  type="button"
-                  className="hover:text-blue-600 dark:hover:text-blue-400 hover:underline text-left truncate max-w-full"
-                  title={item.authorityPath}
-                  onClick={() => handleOpenPath(item.authorityPath)}
-                >
-                  {item.authorityPath}
-                </button>
-              </p>
-            )}
-            {/* 用途：扫描后自动打标，此处仅展示并可点选筛选 */}
-            {purposes.length > 0 && (
-              <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
-                {purposes.map(slug => (
-                  <button
-                    key={slug}
-                    type="button"
-                    title={t('resources.tagFilterHint')}
-                    onClick={() => setTagFilter(tagFilter === slug ? '' : slug)}
-                    className={purposeChipClass(tagFilter === slug, 'sm')}
-                  >
-                    {purposeLabel(slug)}
-                  </button>
-                ))}
-              </div>
-            )}
-            {item.resourceId && renderProjections({
-              id: item.resourceId,
-              type: 'skill',
-              projections: item.projections,
-              authorityPath: item.authorityPath,
-            })}
-          </>
-        )}
-        actions={item.resourceId ? (
-          <>
-            <button
-              type="button"
-              disabled={!!busy && busy !== `rec-${item.resourceId}` && busy !== item.resourceId}
-              onClick={() => handleRecommendToCommunity(item)}
-              className={ASSET_BTN_GHOST}
-              title={isPushedToCommunity(item, catalog) || isPushedToCommunity(resourcesById.get(item.resourceId), catalog)
-                ? t('resources.pushedCommunityHint')
-                : t('resources.recommendHint')}
-            >
-              {busy === `rec-${item.resourceId}`
-                ? t('resources.busy')
-                : (isPushedToCommunity(item, catalog) || isPushedToCommunity(resourcesById.get(item.resourceId), catalog)
-                  ? t('resources.pushedCommunity')
-                  : t('resources.recommendCommunity'))}
-            </button>
-            <button
-              type="button"
-              disabled={!!busy && busy !== item.resourceId}
-              onClick={(e) => openProjectMenu(e, item.resourceId)}
-              className={ASSET_BTN_PRIMARY}
-            >
-              {busy === item.resourceId ? t('resources.busy') : t('resources.project')}
-            </button>
-            <button
-              type="button"
-              disabled={!!busy && busy !== item.resourceId}
-              onClick={() => handleUninstallSkill(item)}
-              className="text-xs px-3 py-1.5 rounded-lg border border-red-200/90 text-red-600 hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-950/30 disabled:opacity-45 transition active:scale-[0.98]"
-              title={hasProjectedLinks(item.projections, item.authorityPath || getSkillLocation(item))
-                ? t('resources.uninstallForceConfirm', { name: item.display_name || item.name })
-                : undefined}
-            >
-              {busy === item.resourceId ? t('resources.busy') : t('resources.uninstall')}
-            </button>
-          </>
-        ) : null}
-      />
-    );
-  }
-
-  function renderProjections(resource) {
+  function renderProjections(resource, { inline = false } = {}) {
     // 只展示真实 Agent 应用的投射；.agents / custom 等公共目录不显示为应用标签
     const projs = (resource.projections || []).filter(p => isAgentAppId(p.agentId));
     const authorityPath = resource.authorityPath || getSkillLocation(resource);
     if (!projs.length) {
       return <span className="text-[10px] text-zinc-400">{t('resources.notProjected')}</span>;
     }
+    const Wrap = inline ? React.Fragment : 'div';
     return (
-      <div className="flex flex-wrap gap-1.5 mt-1">
+      <Wrap {...(inline ? {} : { className: 'flex flex-wrap gap-1.5 mt-1' })}>
         {projs.map(p => {
           // 权威源唯一不可取消；其它软链/副本/多余实体均可 ×
           const canUnproject = canUnprojectProjection(p, authorityPath);
@@ -2693,218 +2580,7 @@ export default function Resources() {
             </span>
           );
         })}
-      </div>
-    );
-  }
-
-  function renderResourceRow(resource, { catalogMode } = {}) {
-    const id = resource.id || resource.catalogId;
-    const expanded = expandedId === id;
-    const toggle = () => setExpandedId(expanded ? null : id);
-    const loc = resource.type === 'skill' ? getSkillLocation(resource) : null;
-    const builtin = isBuiltinResource(resource);
-    return (
-      <ResourceAssetCard
-        key={id}
-        type={resource.type}
-        item={resource}
-        typeLabel={typeBadge(resource.type, t)}
-        categoryLabel={resource.type === 'prompt'
-          ? t(promptKindOf(resource) === 'image' ? 'resources.promptKind.image' : 'resources.promptKind.text')
-          : undefined}
-        description={resourceDescription(resource)}
-        previewText={buildPreviewText(resource.type, resource)}
-        expanded={expanded}
-        onTogglePreview={toggle}
-        previewLabel={t('resources.preview')}
-        collapseLabel={t('resources.collapse')}
-        emptyPreviewLabel={t('resources.emptyDetail')}
-        layout={catalogMode ? 'stack' : 'row'}
-        className={catalogMode && expanded ? 'sm:col-span-2' : ''}
-        badges={(
-          <>
-            {/* 内置：目录/本机统一「内置」徽标，目录卡不再伪装成社区分享人 */}
-            {builtin && (
-              <span
-                className="text-[10px] px-1.5 py-0.5 rounded-md font-medium bg-sky-100 dark:bg-sky-900/40 text-sky-700 dark:text-sky-300 whitespace-nowrap"
-                title={t('resources.builtinHint')}
-              >
-                {t('resources.source.builtin')}
-              </span>
-            )}
-            {catalogMode && !builtin && (
-              <span
-                className="text-[10px] px-1.5 py-0.5 rounded-md bg-zinc-100/90 dark:bg-zinc-800/80 text-zinc-500 dark:text-zinc-400 whitespace-nowrap"
-                title={t('resources.sharedByHint')}
-              >
-                {t('resources.sharedBy', { handle: catalogSharerHandle(resource) })}
-              </span>
-            )}
-            {!catalogMode && !builtin && (
-              <span className="text-[10px] text-zinc-400 tracking-wide">{sourceLabel(resource.source, t)}</span>
-            )}
-            {/* 用量次数：与排序一致，有命中才标 */}
-            {!catalogMode && renderUseCountBadge(resource)}
-            {/* 被智能体声明为 skill / prompt 依赖 */}
-            {!catalogMode && renderAssistantBoundBadge(resource.type, resource.name)}
-            {/* Hit-or-Exit 状态徽标（内置智能体不评估、不标） */}
-            {!catalogMode && (() => {
-              const life = classifyLifecycle(resource);
-              if (life.layer === 'exempt') return null;
-              if (life.layer === 'active') {
-                return (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 whitespace-nowrap">
-                    {t('resources.layer.active')}
-                  </span>
-                );
-              }
-              if (life.layer === 'pending') {
-                return (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-amber-100 dark:bg-amber-900/40 text-amber-800 dark:text-amber-200 whitespace-nowrap">
-                    {t('resources.layer.pending')}
-                  </span>
-                );
-              }
-              if (life.layer === 'dormant') {
-                return (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-orange-100 dark:bg-orange-900/40 text-orange-800 dark:text-orange-200 whitespace-nowrap">
-                    {t('resources.layer.dormant')}
-                  </span>
-                );
-              }
-              if (life.layer === 'cold') {
-                return (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-300 whitespace-nowrap">
-                    {t('resources.layer.cold')}
-                  </span>
-                );
-              }
-              if (life.layer === 'shelf') {
-                return (
-                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-zinc-100 dark:bg-zinc-800 text-zinc-400 whitespace-nowrap">
-                    {t('resources.layer.shelf')}
-                  </span>
-                );
-              }
-              return null;
-            })()}
-            {/* 智能体声明的 prompt 目录与本机均无 → 依赖缺失（skill 可执行时自装，不标） */}
-            {resource.type === 'assistant' && resource.depsBroken && Array.isArray(resource.missingDeps) && (
-              <span
-                className="text-[10px] px-1.5 py-0.5 rounded-md bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300 whitespace-nowrap"
-                title={t('resources.depsBrokenHint', {
-                  list: resource.missingDeps.map(d => `${d.type}:${d.name}`).join(', '),
-                })}
-              >
-                {t('resources.depsBroken')}
-              </span>
-            )}
-          </>
-        )}
-        meta={(
-          <>
-            {!catalogMode && resource.type === 'skill' && (
-              <p className="text-[11px] text-zinc-400 mt-2 font-mono truncate">
-                <span className="text-zinc-500">{t('resources.skillLocation')}：</span>
-                {loc ? (
-                  <button
-                    type="button"
-                    className="hover:text-blue-600 dark:hover:text-blue-400 hover:underline truncate align-baseline max-w-full"
-                    title={loc}
-                    onClick={() => handleOpenPath(loc)}
-                  >
-                    {loc}
-                  </button>
-                ) : (
-                  t('resources.skillLocationPending')
-                )}
-              </p>
-            )}
-            {purposesOf(resource).length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-2.5">
-                {purposesOf(resource).map(slug => (
-                  <button
-                    key={slug}
-                    type="button"
-                    title={t('resources.tagFilterHint')}
-                    onClick={() => setTagFilter(tagFilter === slug ? '' : slug)}
-                    className={purposeChipClass(tagFilter === slug, 'sm')}
-                  >
-                    {purposeLabel(slug)}
-                  </button>
-                ))}
-              </div>
-            )}
-            {!catalogMode && renderProjections(resource)}
-          </>
-        )}
-        actions={catalogMode ? (
-          <button
-            type="button"
-            disabled={(!!busy && busy !== resource.catalogId) || resource.installed || builtin}
-            onClick={() => handleInstall(resource.catalogId)}
-            className={(resource.installed || builtin) ? ASSET_BTN_MANAGED : ASSET_BTN_PRIMARY}
-          >
-            {busy === resource.catalogId
-              ? t('resources.busy')
-              : (resource.installed || builtin)
-                ? t('resources.managed')
-                : t('resources.addManage')}
-          </button>
-        ) : (
-          <>
-            {(resource.type === 'skill' || resource.type === 'prompt' || resource.type === 'assistant')
-              && resource.source !== 'builtin'
-              && !resource.metadata?.builtin
-              && !isBuiltinResource(resource) && (
-              <button
-                type="button"
-                className={ASSET_BTN_GHOST}
-                disabled={!!busy && busy !== `rec-${resource.id}`}
-                onClick={() => handleRecommendToCommunity(resource)}
-                title={isPushedToCommunity(resource, catalog)
-                  ? t('resources.pushedCommunityHint')
-                  : t('resources.recommendHint')}
-              >
-                {busy === `rec-${resource.id}`
-                  ? t('resources.busy')
-                  : (isPushedToCommunity(resource, catalog)
-                    ? t('resources.pushedCommunity')
-                    : t('resources.recommendCommunity'))}
-              </button>
-            )}
-            <button
-              type="button"
-              className={ASSET_BTN_GHOST}
-              onClick={() => openEditEditor(resource)}
-              disabled={busy === 'editor' || busy === 'cleanup'}
-            >
-              {t('resources.edit')}
-            </button>
-            <button
-              type="button"
-              disabled={!!busy && busy !== resource.id}
-              onClick={(e) => openProjectMenu(e, resource.id)}
-              className={ASSET_BTN_PRIMARY}
-            >
-              {busy === resource.id ? t('resources.busy') : t('resources.project')}
-            </button>
-            {resource.source !== 'builtin' && !resource.metadata?.builtin && (
-              <button
-                type="button"
-                disabled={!!busy && busy !== resource.id}
-                onClick={() => handleDelete(resource)}
-                className="text-xs px-3 py-1.5 rounded-lg border border-red-200/90 text-red-600 hover:bg-red-50 dark:border-red-900 dark:hover:bg-red-950/30 disabled:opacity-45 transition active:scale-[0.98]"
-                title={resource.type === 'assistant' && hasProjectedLinks(resource.projections, resource.authorityPath || getSkillLocation(resource))
-                  ? t('resources.deleteNeedUnproject')
-                  : undefined}
-              >
-                {t('resources.delete')}
-              </button>
-            )}
-          </>
-        )}
-      />
+      </Wrap>
     );
   }
 
@@ -2999,7 +2675,6 @@ export default function Resources() {
       if (showAppFilterBar && effectiveAppFilter && (discovered.length > 0 || resources.length > 0)) {
         return (
           <div className="space-y-3">
-            {renderAppFilter()}
             <div className="text-center py-10 space-y-2">
               <p className="text-xs text-zinc-400">{t('resources.emptyDiscoveredFiltered')}</p>
               <button type="button" onClick={() => changeAppFilter('')} className="text-xs text-blue-600 hover:underline">
@@ -3012,7 +2687,6 @@ export default function Resources() {
       if (tagFilter && (discovered.length > 0 || resources.length > 0)) {
         return (
           <div className="space-y-3">
-            {showAppFilterBar && renderAppFilter()}
             <div className="text-center py-10 space-y-2">
               <p className="text-xs text-zinc-400">{t('resources.emptyTagFiltered')}</p>
               <button type="button" onClick={() => setTagFilter('')} className="text-xs text-blue-600 hover:underline">
@@ -3026,7 +2700,6 @@ export default function Resources() {
       if (layerFilter && resourcesInType.length > 0) {
         return (
           <div className="space-y-3">
-            {showAppFilterBar && renderAppFilter()}
             <div className="text-center py-10 space-y-2">
               <p className="text-xs text-zinc-400">{t('resources.emptyLayerFiltered')}</p>
               <button type="button" onClick={() => changeLayerFilter('')} className="text-xs text-blue-600 hover:underline">
@@ -3038,7 +2711,6 @@ export default function Resources() {
       }
       return (
         <div className="space-y-3">
-          {showAppFilterBar && renderAppFilter()}
           <div className="text-center py-10 space-y-2">
             <p className="text-xs text-zinc-400">{t('resources.emptyManaged')}</p>
             <button type="button" onClick={() => changeViewTab('recommend')} className="text-xs text-blue-600 hover:underline">
@@ -3049,47 +2721,379 @@ export default function Resources() {
       );
     }
 
+    const rows = [
+      ...managedRows.map((item) => ({ key: `r-${item.id}`, kind: 'resource', item })),
+      ...skillRows.map((item) => ({
+        key: useDiscoveredSkills ? `d-${item.path || item.resourceId || item.name}` : `r-${item.id}`,
+        kind: useDiscoveredSkills ? 'discovered' : 'resource',
+        item,
+      })),
+    ]
+      .sort((a, b) => cmp(a.item, b.item))
+      .map(toLibraryItem);
+    visibleKeysRef.current = rows.map(r => r.key);
+    const selected = rows.find(r => r.key === selectedKey) || null;
+
     return (
-      <div className="space-y-3">
-        {showAppFilterBar && renderAppFilter()}
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          {showSkills && scanStats ? (
-            <p className="text-[11px] text-zinc-400">
-              {t('resources.syncSummary', { n: scanStats.totalOnDisk })}
-              {effectiveAppFilter && (
-                <span className="ml-2 opacity-80">
-                  {t('resources.discoveredFilteredCount', { n: skillRows.length })}
-                </span>
-              )}
-            </p>
-          ) : <span />}
-          {renderListSort()}
+      <div className="flex gap-4 items-start">
+        <div className="flex-1 min-w-0 space-y-2">
+          <div className={LIB_LIST_CLS}>
+            <div className={`hidden md:grid ${LIB_GRID} gap-3 px-4 py-2 text-[11px] text-zinc-400 border-b border-zinc-100 dark:border-white/[0.05]`}>
+              <span>{t('resources.col.name')}</span>
+              <span>{t('resources.col.apps')}</span>
+              <span className="text-right">{t('resources.col.uses')}</span>
+              <span>{t('resources.col.status')}</span>
+              <span />
+            </div>
+            <ul role="listbox" aria-label={t('resources.tab.library')}>
+              {rows.map(li => renderLibraryRow(li, li.key === selectedKey))}
+            </ul>
+          </div>
+          <p className="flex flex-wrap items-center gap-x-3 text-[11px] text-zinc-400 px-1">
+            <span>{t('resources.listCount', { n: rows.length })}</span>
+            {showSkills && scanStats && <span>{t('resources.syncSummary', { n: scanStats.totalOnDisk })}</span>}
+            <span className="hidden md:inline ml-auto">{t('resources.kbdHint')}</span>
+          </p>
         </div>
-        <div className="space-y-3">
-          {[
-            ...managedRows.map((item) => ({
-              key: `r-${item.id}`,
-              kind: 'resource',
-              item,
-            })),
-            ...skillRows.map((item) => ({
-              key: useDiscoveredSkills
-                ? `d-${item.path || item.resourceId || item.name}`
-                : `r-${item.id}`,
-              kind: useDiscoveredSkills ? 'discovered' : 'resource',
-              item,
-            })),
-          ]
-            .sort((a, b) => cmp(a.item, b.item))
-            .map((row) => (
-              <React.Fragment key={row.key}>
-                {row.kind === 'discovered'
-                  ? renderDiscoveredRow(row.item)
-                  : renderResourceRow(row.item)}
-              </React.Fragment>
-            ))}
-        </div>
+        {selected && renderInspector(selected)}
       </div>
+    );
+  }
+
+  /** 资产库行数据：扫描到的 Skill 与已纳管资源统一成一种结构 */
+  function toLibraryItem(row) {
+    const { item, kind } = row;
+    const disc = kind === 'discovered';
+    const linked = disc && item.resourceId ? resourcesById.get(item.resourceId) : null;
+    const type = disc ? 'skill' : item.type;
+    const probe = disc ? (linked || item) : item;
+    const apps = [];
+    for (const p of item.projections || []) {
+      if (!isAgentAppId(p.agentId) || apps.some(a => a.id === p.agentId)) continue;
+      apps.push({ id: p.agentId, label: (p.label && p.label !== p.agentId) ? p.label : (appNameById.get(p.agentId) || p.agentId) });
+    }
+    return {
+      key: row.key,
+      kind,
+      item,
+      linked,
+      type,
+      name: resourceDisplayName(type, item),
+      desc: resourceDescription(item),
+      path: disc ? item.authorityPath : (item.type === 'skill' ? getSkillLocation(item) : null),
+      apps,
+      life: classifyLifecycle(probe),
+      useCount: Math.max(0, Number(item.use_count ?? linked?.use_count ?? 0) || 0),
+      lastUsed: Number(item.last_used_at ?? linked?.last_used_at ?? 0) || 0,
+      purposes: disc ? purposesOf(item, resourcesById) : purposesOf(item),
+      resourceId: disc ? item.resourceId : item.id,
+      builtin: !disc && isBuiltinResource(item),
+    };
+  }
+
+  /** 行 / 详情共用的次要操作（编辑、推荐、打开目录、卸载 / 删除） */
+  function libraryMenuItems(li) {
+    const { item, kind } = li;
+    const disc = kind === 'discovered';
+    const recTarget = disc ? item : item;
+    const pushed = isPushedToCommunity(recTarget, catalog) || (disc && isPushedToCommunity(li.linked, catalog));
+    const recKey = `rec-${li.resourceId}`;
+    const canRec = disc
+      ? !!li.resourceId
+      : (['skill', 'prompt', 'assistant'].includes(item.type) && !li.builtin && item.source !== 'builtin' && !item.metadata?.builtin);
+    return [
+      !disc && {
+        key: 'edit',
+        label: t('resources.edit'),
+        disabled: busy === 'editor' || busy === 'cleanup',
+        onClick: () => openEditEditor(item),
+      },
+      canRec && {
+        key: 'rec',
+        label: busy === recKey ? t('resources.busy') : (pushed ? t('resources.pushedCommunity') : t('resources.recommendCommunity')),
+        title: pushed ? t('resources.pushedCommunityHint') : t('resources.recommendHint'),
+        disabled: !!busy && busy !== recKey && busy !== li.resourceId,
+        onClick: () => handleRecommendToCommunity(item),
+      },
+      li.path && {
+        key: 'open',
+        label: t('resources.openFolder'),
+        onClick: () => handleOpenPath(li.path),
+      },
+      disc && li.resourceId && {
+        key: 'uninstall',
+        label: t('resources.uninstall'),
+        danger: true,
+        disabled: !!busy && busy !== li.resourceId,
+        onClick: () => handleUninstallSkill(item),
+      },
+      !disc && item.source !== 'builtin' && !item.metadata?.builtin && {
+        key: 'delete',
+        label: t('resources.delete'),
+        danger: true,
+        title: item.type === 'assistant' && hasProjectedLinks(item.projections, item.authorityPath || getSkillLocation(item))
+          ? t('resources.deleteNeedUnproject')
+          : undefined,
+        disabled: !!busy && busy !== item.id,
+        onClick: () => handleDelete(item),
+      },
+    ].filter(Boolean);
+  }
+
+  function lifeLabel(life) {
+    return life.layer === 'exempt' ? t('resources.source.builtin') : t(`resources.layer.${life.layer}`);
+  }
+
+  function renderLibraryRow(li, sel) {
+    const visual = typeVisual(li.type);
+    const it = li.item;
+    return (
+      <li
+        key={li.key}
+        data-lib-key={li.key}
+        role="option"
+        aria-selected={sel}
+        onClick={() => setSelectedKey(sel ? null : li.key)}
+        className={`${libRowCls(sel)} grid-cols-[minmax(0,1fr)_auto] ${LIB_GRID_MD}`}
+      >
+        <LibraryRowTitle
+          logo={<AssetLogo type={li.type} icon={it.icon || it.metadata?.icon} name={li.name || it.id} />}
+          name={li.name}
+          sub={li.desc || (li.path ? shortenHomePath(li.path) : t('resources.emptyDetail'))}
+          chips={(
+            <>
+              <span className={`shrink-0 text-[10px] px-1.5 py-px rounded font-medium ${visual.chip}`}>{typeBadge(li.type, t)}</span>
+              {it.contentChanged && (
+                <span className="shrink-0 text-[10px] px-1.5 py-px rounded bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300">{t('resources.contentChanged')}</span>
+              )}
+              {li.type === 'assistant' && it.depsBroken && (
+                <span className="shrink-0 text-[10px] px-1.5 py-px rounded bg-rose-100 dark:bg-rose-900/40 text-rose-700 dark:text-rose-300">{t('resources.depsBroken')}</span>
+              )}
+            </>
+          )}
+        />
+        <div className="hidden md:block min-w-0"><AppIconStack apps={li.apps} emptyLabel="—" /></div>
+        <div className="hidden md:block text-right text-[11px] tabular-nums text-zinc-600 dark:text-zinc-300">{li.useCount || <span className="text-zinc-300 dark:text-zinc-600">—</span>}</div>
+        <div className="hidden md:flex items-center gap-1.5 text-[11px] text-zinc-600 dark:text-zinc-300 min-w-0">
+          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${LIFE_DOT[li.life.layer] || 'bg-zinc-300'}`} aria-hidden />
+          <span className="truncate">{lifeLabel(li.life)}</span>
+        </div>
+        <div
+          className={`flex items-center justify-end gap-1.5 transition-opacity ${sel ? '' : 'md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100'}`}
+          onClick={e => e.stopPropagation()}
+        >
+          {li.resourceId && (
+            <button
+              type="button"
+              disabled={!!busy && busy !== li.resourceId}
+              onClick={(e) => openProjectMenu(e, li.resourceId)}
+              className="tb-press text-[11px] px-2.5 py-1 rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-45"
+            >
+              {busy === li.resourceId ? t('resources.busy') : t('resources.projectShort')}
+            </button>
+          )}
+          <AssetMoreMenu label={t('resources.moreActions')} items={libraryMenuItems(li)} />
+        </div>
+      </li>
+    );
+  }
+
+  function fmtAgo(ts) {
+    if (!ts) return '—';
+    const ms = ts < 1e12 ? ts * 1000 : ts;
+    const d = Math.floor((Date.now() - ms) / 86400000);
+    if (d <= 0) return t('resources.ago.today');
+    if (d < 30) return t('resources.ago.days', { n: d });
+    return new Date(ms).toLocaleDateString(lang === 'en' ? 'en-US' : 'zh-CN');
+  }
+
+  /** 右侧详情面板（资产库） */
+  function renderInspector(li) {
+    const it = li.item;
+    const visual = typeVisual(li.type);
+    const previewSrc = li.kind === 'discovered' ? (li.linked || it) : it;
+    const menu = libraryMenuItems(li);
+    return (
+      <LibraryInspector
+        logo={<AssetLogo type={li.type} icon={it.icon || it.metadata?.icon} name={li.name || it.id} />}
+        title={li.name}
+        closeLabel={t('resources.collapse')}
+        onClose={() => setSelectedKey(null)}
+        chips={(
+          <>
+            <span className={`text-[10px] px-1.5 py-px rounded font-medium ${visual.chip}`}>{typeBadge(li.type, t)}</span>
+            <span className="inline-flex items-center gap-1 text-[11px] text-zinc-500">
+              <span className={`w-1.5 h-1.5 rounded-full ${LIFE_DOT[li.life.layer] || 'bg-zinc-300'}`} aria-hidden />
+              {lifeLabel(li.life)}
+            </span>
+            {!li.builtin && li.kind !== 'discovered' && (
+              <span className="text-[10px] text-zinc-400">{sourceLabel(it.source, t)}</span>
+            )}
+          </>
+        )}
+        desc={li.desc}
+        stats={[
+          [t('resources.col.uses'), li.useCount || '0'],
+          [t('resources.stat.lastUsed'), fmtAgo(li.lastUsed)],
+          [t('resources.col.apps'), li.apps.length],
+        ]}
+        footer={menu.length > 0 ? (
+          <>
+            {menu.filter(m => !m.danger).map(m => (
+              <button key={m.key} type="button" disabled={m.disabled} title={m.title} onClick={m.onClick} className={ASSET_BTN_GHOST}>{m.label}</button>
+            ))}
+            {menu.filter(m => m.danger).map(m => (
+              <button key={m.key} type="button" disabled={m.disabled} title={m.title} onClick={m.onClick}
+                className="ml-auto text-xs px-3 py-1.5 rounded-xl text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-45">{m.label}</button>
+            ))}
+          </>
+        ) : null}
+      >
+        <InspectorSection title={t('resources.col.apps')}>
+          <div className="space-y-2.5">
+            {li.resourceId ? renderProjections({
+              id: li.resourceId,
+              type: li.type,
+              projections: it.projections,
+              authorityPath: li.kind === 'discovered' ? it.authorityPath : (it.authorityPath || li.path),
+            }) : <span className="text-[11px] text-zinc-400">{t('resources.notProjected')}</span>}
+            {li.resourceId && (
+              <button type="button" disabled={!!busy && busy !== li.resourceId}
+                onClick={(e) => openProjectMenu(e, li.resourceId)}
+                className={`${ASSET_BTN_PRIMARY} w-full`}>
+                {busy === li.resourceId ? t('resources.busy') : t('resources.project')}
+              </button>
+            )}
+          </div>
+        </InspectorSection>
+        {li.type === 'assistant' && (() => {
+          const model = assistantModelOf(it.content);
+          return (
+            <InspectorSection title={t('resources.link.model')}>
+              {model ? (
+                <div className="flex items-center gap-2">
+                  <code className="text-[11px] font-mono text-zinc-700 dark:text-zinc-200 truncate">{model}</code>
+                  <button type="button" onClick={() => navigate('/providers', { state: { focusModel: model } })}
+                    className="ml-auto shrink-0 text-[11px] text-blue-600 dark:text-blue-400 hover:underline">
+                    {t('resources.link.viewSource')} →
+                  </button>
+                </div>
+              ) : (
+                <p className="text-[11px] text-zinc-400">{t('resources.link.modelDefault')}</p>
+              )}
+            </InspectorSection>
+          );
+        })()}
+        {li.purposes.length > 0 && (
+          <InspectorSection title={t('resources.filter.purpose')}>
+            <div className="flex flex-wrap gap-1.5">
+              {li.purposes.map(slug => (
+                <button key={slug} type="button" onClick={() => setTagFilter(tagFilter === slug ? '' : slug)}
+                  className={purposeChipClass(tagFilter === slug, 'sm')}>{purposeLabel(slug)}</button>
+              ))}
+              {renderAssistantBoundBadge(li.type, it.name)}
+            </div>
+          </InspectorSection>
+        )}
+        {li.path && (
+          <InspectorSection title={t('resources.skillLocation')}>
+            <button type="button" onClick={() => handleOpenPath(li.path)} title={li.path}
+              className="text-[11px] font-mono text-zinc-500 hover:text-blue-600 dark:hover:text-blue-400 break-all text-left">
+              {shortenHomePath(li.path)} ↗
+            </button>
+          </InspectorSection>
+        )}
+        <InspectorSection title={t('resources.preview')}>
+          <InspectorPreview text={buildPreviewText(li.type, previewSrc) || t('resources.emptyDetail')} />
+        </InspectorSection>
+      </LibraryInspector>
+    );
+  }
+
+  /** 社区目录行（为你推荐 Tab 下半部分）：与资产库同一列表样式 */
+  function renderCatalogRow(item) {
+    const key = `cat:${item.catalogId}`;
+    const sel = selectedKey === key;
+    const builtin = isBuiltinResource(item);
+    const visual = typeVisual(item.type);
+    const name = resourceDisplayName(item.type, item);
+    return (
+      <li
+        key={key}
+        role="option"
+        aria-selected={sel}
+        onClick={() => setSelectedKey(sel ? null : key)}
+        className={`${libRowCls(sel)} grid-cols-[minmax(0,1fr)_auto]`}
+      >
+        <LibraryRowTitle
+          logo={<AssetLogo type={item.type} icon={item.icon || item.metadata?.icon} name={name || item.catalogId} />}
+          name={name}
+          sub={resourceDescription(item) || t('resources.emptyDetail')}
+          chips={(
+            <>
+              <span className={`shrink-0 text-[10px] px-1.5 py-px rounded font-medium ${visual.chip}`}>{typeBadge(item.type, t)}</span>
+              <span className="shrink-0 text-[10px] text-zinc-400 truncate">
+                {builtin ? t('resources.source.builtin') : t('resources.sharedBy', { handle: catalogSharerHandle(item) })}
+              </span>
+            </>
+          )}
+        />
+        <div onClick={e => e.stopPropagation()}>{renderCatalogAction(item)}</div>
+      </li>
+    );
+  }
+
+  function renderCatalogAction(item, { block = false } = {}) {
+    const builtin = isBuiltinResource(item);
+    const done = item.installed || builtin;
+    return (
+      <button
+        type="button"
+        disabled={(!!busy && busy !== item.catalogId) || done}
+        onClick={() => handleInstall(item.catalogId)}
+        className={`${done ? ASSET_BTN_MANAGED : ASSET_BTN_PRIMARY} ${block ? 'w-full' : '!px-3 !py-1 !text-[11px] !rounded-lg'}`}
+      >
+        {busy === item.catalogId ? t('resources.busy') : done ? t('resources.managed') : t('resources.addManage')}
+      </button>
+    );
+  }
+
+  function renderCatalogInspector(item) {
+    const visual = typeVisual(item.type);
+    const name = resourceDisplayName(item.type, item);
+    const builtin = isBuiltinResource(item);
+    const purposes = purposesOf(item);
+    return (
+      <LibraryInspector
+        logo={<AssetLogo type={item.type} icon={item.icon || item.metadata?.icon} name={name || item.catalogId} />}
+        title={name}
+        closeLabel={t('resources.collapse')}
+        onClose={() => setSelectedKey(null)}
+        chips={(
+          <>
+            <span className={`text-[10px] px-1.5 py-px rounded font-medium ${visual.chip}`}>{typeBadge(item.type, t)}</span>
+            <span className="text-[10px] text-zinc-400">
+              {builtin ? t('resources.source.builtin') : t('resources.sharedBy', { handle: catalogSharerHandle(item) })}
+            </span>
+          </>
+        )}
+        desc={resourceDescription(item)}
+        footer={renderCatalogAction(item, { block: true })}
+      >
+        {purposes.length > 0 && (
+          <InspectorSection title={t('resources.filter.purpose')}>
+            <div className="flex flex-wrap gap-1.5">
+              {purposes.map(slug => (
+                <button key={slug} type="button" onClick={() => setTagFilter(tagFilter === slug ? '' : slug)}
+                  className={purposeChipClass(tagFilter === slug, 'sm')}>{purposeLabel(slug)}</button>
+              ))}
+            </div>
+          </InspectorSection>
+        )}
+        <InspectorSection title={t('resources.preview')}>
+          <InspectorPreview text={buildPreviewText(item.type, item) || t('resources.emptyDetail')} />
+        </InspectorSection>
+      </LibraryInspector>
     );
   }
 
@@ -3107,7 +3111,7 @@ export default function Resources() {
     return createPortal(
       <div
         ref={projectMenuRef}
-        className="fixed z-[9999] w-56 flex flex-col rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 shadow-lg overflow-hidden"
+        className="fixed z-[9999] w-64 flex flex-col rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 shadow-lg overflow-hidden"
         style={{
           left: projectMenu.x,
           top: projectMenu.y,
@@ -3130,15 +3134,19 @@ export default function Resources() {
                 : t('resources.noProjectAgents')}
             </p>
           ) : targetList.map(a => (
-            <label key={a.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700/50 cursor-pointer text-xs">
+            <label key={a.id} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer text-xs ${
+              projectSelected.includes(a.id) ? 'bg-blue-50 dark:bg-blue-950/30' : 'hover:bg-zinc-50 dark:hover:bg-zinc-700/50'
+            }`}>
               <input
                 type="checkbox"
                 checked={projectSelected.includes(a.id)}
                 onChange={() => setProjectSelected(prev =>
                   prev.includes(a.id) ? prev.filter(x => x !== a.id) : [...prev, a.id],
                 )}
+                className="rounded border-zinc-300 dark:border-zinc-600"
               />
-              <span>{a.label}</span>
+              <ServiceIcon id={a.id} name={a.label} boxClass="w-6 h-6" imgClass="w-3.5 h-3.5" />
+              <span className="flex-1 truncate text-zinc-700 dark:text-zinc-200">{a.label}</span>
             </label>
           ))}
         </div>
@@ -3164,95 +3172,56 @@ export default function Resources() {
     );
   }
 
+  // Web / Docker 模式没有本机文件访问能力：整页换成说明卡，不展示点了才报错的按钮
+  if (!window.electronAPI?.resource) {
+    return (
+      <div className="flex flex-col h-full min-h-0 bg-transparent">
+        <header className="shrink-0 px-4 pt-4 pb-2">
+          <h1 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{t('resources.title')}</h1>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">{t('resources.subtitle')}</p>
+        </header>
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3.5 flex">
+          <div className="tb-soft-card rounded-2xl px-6 py-8 max-w-xl w-full m-auto text-center space-y-4">
+            <div className="text-3xl" aria-hidden>🖥️</div>
+            <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">{t('resources.webOnly.title')}</h2>
+            <p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">{t('resources.webOnly.desc')}</p>
+            <ul className="text-xs text-left text-zinc-600 dark:text-zinc-300 space-y-1.5 inline-block">
+              {['p1', 'p2', 'p3'].map(k => <li key={k}>✓ {t(`resources.webOnly.${k}`)}</li>)}
+            </ul>
+            <div>
+              <a href="https://github.com/wink-run/tokenbank/releases" target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center px-4 py-2 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition-colors">
+                {t('resources.webOnly.download')}
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col h-full min-h-0 bg-transparent">
       {/* 与下方内容同色：透明底，不单独铺白 */}
-      <header className="shrink-0 px-4 pt-4 pb-2">
-        <h1 className="text-lg font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{t('resources.title')}</h1>
-        <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">{t('resources.subtitle')}</p>
-      </header>
-
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3.5 space-y-3.5">
-        {/* 类型筛选：与 Playground 分段同系 */}
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="tb-glass-chip inline-flex flex-wrap rounded-2xl p-1 gap-0.5">
-            {TYPE_OPTIONS.map(opt => (
-              <button
-                key={opt.id || 'all'}
-                type="button"
-                onClick={() => {
-                  changeTypeFilter(opt.id);
-                  if (opt.id !== 'prompt') setPromptKindFilter('');
-                }}
-                className={`tb-press text-xs px-3 py-1.5 rounded-xl transition-colors ${
-                  typeFilter === opt.id
-                    ? 'bg-white/80 dark:bg-white/10 text-zinc-900 dark:text-zinc-100 shadow-sm'
-                    : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
-                }`}
-              >
-                {t(opt.labelKey)}
-              </button>
-            ))}
+      <header className="shrink-0 px-5 pt-5">
+        <div className="flex flex-wrap items-start gap-3">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{t('resources.title')}</h1>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">{t('resources.subtitle')}</p>
           </div>
-          {/* 提示词：文本 / 图片 子分类 */}
-          {typeFilter === 'prompt' && (
-            <div className="tb-glass-chip inline-flex rounded-lg p-0.5 gap-0.5">
-              {[
-                { id: '', labelKey: 'resources.promptKind.all' },
-                { id: 'text', labelKey: 'resources.promptKind.text' },
-                { id: 'image', labelKey: 'resources.promptKind.image' },
-              ].map(opt => (
-                <button
-                  key={opt.id || 'kind-all'}
-                  type="button"
-                  onClick={() => setPromptKindFilter(opt.id)}
-                  className={`tb-press text-xs px-2.5 py-1.5 rounded-md transition-colors ${
-                    promptKindFilter === opt.id
-                      ? 'bg-white/80 dark:bg-white/10 text-zinc-900 dark:text-zinc-100 font-semibold'
-                      : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-100'
-                  }`}
-                >
-                  {t(opt.labelKey)}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-        {/* 标签筛选：目录 + 已纳管聚合 */}
-        {renderTagFilter()}
-
-        {/* 子 Tab + 搜索 + 操作 */}
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="tb-glass-chip inline-flex rounded-lg p-0.5">
-              {[
-                { id: 'managed', label: t('resources.tab.managed'), count: localCount },
-                { id: 'recommend', label: t('resources.tab.recommend') },
-              ].map(tab => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => changeViewTab(tab.id)}
-                  className={`tb-press text-xs px-3 py-1.5 rounded-md transition-colors ${
-                    viewTab === tab.id
-                      ? 'bg-white/80 dark:bg-white/10 font-semibold text-zinc-900 dark:text-zinc-100'
-                      : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
-                  }`}
-                >
-                  {tab.label}
-                  {tab.count != null && <span className="ml-1 opacity-60">({tab.count})</span>}
-                </button>
-              ))}
-            </div>
-            <div className="relative flex-1 min-w-[160px] max-w-xs">
+          <div className="flex items-center gap-2">
+            <div className="relative w-64 max-w-[45vw]">
+              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" aria-hidden>
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-3.5 h-3.5"><circle cx="9" cy="9" r="5.5" /><path d="M13.5 13.5 17 17" strokeLinecap="round" /></svg>
+              </span>
               <input
+                ref={searchInputRef}
                 type="text"
                 value={query}
                 onChange={e => setQuery(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Escape') { setQuery(''); e.currentTarget.blur(); } }}
                 placeholder={t('resources.searchPlaceholder')}
-                className={`tb-soft-field w-full text-xs px-3 py-1.5 rounded-lg text-zinc-900 dark:text-zinc-100 ${
-                  query || searching ? 'pr-8' : ''
-                }`}
+                className="tb-soft-field w-full text-xs pl-8 pr-8 py-1.5 rounded-lg text-zinc-900 dark:text-zinc-100"
               />
               {searching ? (
                 <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-zinc-400 pointer-events-none">
@@ -3267,214 +3236,297 @@ export default function Resources() {
                 >
                   <span className="text-sm leading-none" aria-hidden>×</span>
                 </button>
-              ) : null}
-            </div>
-            <button
-              type="button"
-              disabled={busy === 'editor' || busy === 'cleanup'}
-              onClick={handlePrimaryAction}
-              className="tb-press text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50"
-            >
-              {typeFilter === 'skill' ? t('resources.skillInstall') : t('resources.create')}
-            </button>
-            <button
-              type="button"
-              disabled={busy === 'import' || busy === 'cleanup' || busy === 'editor'}
-              onClick={handleImportFile}
-              className="tb-press tb-soft-tile text-xs px-3 py-1.5 !rounded-lg text-zinc-700 dark:text-zinc-200 disabled:opacity-50"
-            >
-              {busy === 'import' ? t('resources.busy') : t('resources.import')}
-            </button>
-            {showSkillTabs && (
-              <button
-                type="button"
-                onClick={toggleScanPanel}
-                className={`tb-press text-xs px-3 py-1.5 rounded-lg border transition-colors ${
-                  scanExpanded
-                    ? 'border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300'
-                    : 'border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800'
-                }`}
-              >
-                {t('resources.scan')}
-                <span className="ml-1 opacity-60">{scanExpanded ? '▴' : '▾'}</span>
-              </button>
-            )}
-            {viewTab === 'managed' && (
-              <button
-                type="button"
-                disabled={busy === 'cleanup' || idleLoading}
-                onClick={openSkillCleanup}
-                className="tb-press text-xs px-3 py-1.5 rounded-lg border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-300 hover:bg-amber-50 dark:hover:bg-amber-900/20 disabled:opacity-50"
-              >
-                {idleLoading ? t('resources.cleanupScanning') : t('resources.cleanup')}
-              </button>
-            )}
-          </div>
-
-          {/* Hit-or-Exit：分段筛选 + 紧凑轻推芯片 */}
-          {viewTab === 'managed' && (
-            <div className="space-y-2">
-              <div
-                className="inline-flex flex-wrap gap-0.5 p-0.5 rounded-xl border border-zinc-200/70 dark:border-zinc-700/70 bg-zinc-100/70 dark:bg-zinc-900/60"
-                role="tablist"
-                aria-label={t('resources.layer.filterAll')}
-              >
-                {[
-                  { id: '', label: t('resources.layer.filterAll'), count: null },
-                  { id: 'active', label: t('resources.layer.active'), count: layerCounts.active },
-                  { id: 'pending', label: t('resources.layer.pending'), count: layerCounts.pending },
-                  { id: 'dormant', label: t('resources.layer.dormant'), count: layerCounts.dormant },
-                  { id: 'cold', label: t('resources.layer.cold'), count: layerCounts.cold },
-                  { id: 'shelf', label: t('resources.layer.shelf'), count: layerCounts.shelf },
-                ]
-                  .filter((opt) => opt.id === '' || (opt.count != null && opt.count > 0) || layerFilter === opt.id)
-                  .map((opt) => (
-                    <button
-                      key={opt.id || 'layer-all'}
-                      type="button"
-                      role="tab"
-                      aria-selected={layerFilter === opt.id}
-                      onClick={() => changeLayerFilter(opt.id)}
-                      className={`tb-press text-[11px] px-2.5 py-1 rounded-lg transition-colors tabular-nums ${
-                        layerFilter === opt.id
-                          ? 'bg-white/80 dark:bg-white/10 text-zinc-900 dark:text-zinc-100 shadow-sm'
-                          : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
-                      }`}
-                    >
-                      {opt.label}
-                      {opt.count != null && opt.count > 0 && (
-                        <span className="ml-1 opacity-55">{opt.count}</span>
-                      )}
-                    </button>
-                  ))}
-              </div>
-
-              {lifecycleNudges.length > 0 && (
-                <div className="rounded-lg border border-amber-200/80 dark:border-amber-800/60 bg-amber-50/70 dark:bg-amber-950/30 px-3 py-2 space-y-1.5">
-                  <p className="text-[11px] text-amber-800 dark:text-amber-200">
-                    {t('resources.layer.nudgeBanner', { n: lifecycleNudges.length })}
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {lifecycleNudges.map(({ r, life }) => (
-                      <button
-                        key={r.id}
-                        type="button"
-                        disabled={busy === `cold-${r.id}`}
-                        onClick={() => {
-                          if (life.nudge === 'invoke') copyInvokeFor(r);
-                          else handleUnprojectAll(r);
-                        }}
-                        className="tb-press text-[10px] px-2 py-0.5 rounded-md bg-white/80 dark:bg-zinc-900/60 border border-amber-200 dark:border-amber-800 text-amber-900 dark:text-amber-100 disabled:opacity-50"
-                        title={r.display_name || r.name}
-                      >
-                        {r.display_name || r.name}
-                        {' · '}
-                        {life.nudge === 'invoke'
-                          ? t('resources.layer.nudgeInvoke')
-                          : life.nudge === 'unproject'
-                            ? t('resources.layer.nudgeUnproject')
-                            : t('resources.layer.nudgeCold')}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+              ) : (
+                <kbd className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] px-1.5 rounded border border-zinc-200 dark:border-zinc-700 text-zinc-400 font-sans pointer-events-none">/</kbd>
               )}
             </div>
-          )}
+            {isMcp ? (
+              <SplitButton
+                label={t('resources.mcp.add')}
+                onClick={() => setMcpCreateSignal(n => n + 1)}
+                menuLabel={t('resources.moreActions')}
+                items={[
+                  { key: 'catalog', label: t('resources.mcp.browseCatalog'), hint: t('resources.mcp.browseCatalogHint'), onClick: () => changeViewTab('recommend') },
+                ]}
+              />
+            ) : (
+            <SplitButton
+              label={typeFilter === 'skill' ? t('resources.skillInstall') : t('resources.create')}
+              onClick={handlePrimaryAction}
+              disabled={busy === 'editor' || busy === 'cleanup'}
+              menuLabel={t('resources.moreActions')}
+              items={[
+                typeFilter !== 'skill' && { key: 'install', label: t('resources.skillInstall'), hint: t('resources.menu.installHint'), onClick: () => setSkillInstallOpen(true) },
+                typeFilter === 'skill' && { key: 'create', label: t('resources.create'), hint: t('resources.menu.createHint'), onClick: openCreateEditor },
+                { key: 'import', label: busy === 'import' ? t('resources.busy') : t('resources.import'), hint: t('resources.menu.importHint'), disabled: busy === 'import' || busy === 'cleanup' || busy === 'editor', onClick: handleImportFile },
+                showSkillTabs && { key: 'scan', label: t('resources.scan'), hint: t('resources.menu.scanHint'), onClick: () => setScanExpanded(true) },
+                { key: 'cleanup', label: idleLoading ? t('resources.cleanupScanning') : t('resources.cleanup'), hint: t('resources.cleanupTitle'), disabled: busy === 'cleanup' || idleLoading, onClick: openSkillCleanup },
+              ]}
+            />
+            )}
+          </div>
+        </div>
+        {/* 主导航：资产类型直接作为一级 Tab（带数量），「发现」与之以竖线分隔 */}
+        <div className="mt-4 flex flex-wrap items-end gap-x-6 gap-y-1 border-b border-zinc-200/80 dark:border-white/[0.08]" role="tablist">
+          {TYPE_OPTIONS.map(opt => {
+            const active = viewTab === 'managed' && typeFilter === opt.id;
+            const n = typeCounts[opt.id || 'all'];
+            return (
+              <button
+                key={opt.id || 'all'}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => {
+                  if (viewTab !== 'managed') changeViewTab('managed');
+                  changeTypeFilter(opt.id);
+                  if (opt.id !== 'prompt') setPromptKindFilter('');
+                }}
+                className={`-mb-px pb-2.5 text-[13px] border-b-2 transition-colors ${
+                  active
+                    ? 'border-zinc-900 dark:border-zinc-100 text-zinc-900 dark:text-zinc-50 font-semibold'
+                    : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+                }`}
+              >
+                {t(`resources.tabType.${opt.id || 'all'}`)}
+                {n > 0 && <span className="ml-1.5 text-[11px] font-normal text-zinc-400 tabular-nums">{n}</span>}
+              </button>
+            );
+          })}
+          <span className="self-center mb-2.5 w-px h-4 bg-zinc-200 dark:bg-zinc-700" aria-hidden />
+          <button
+            type="button"
+            role="tab"
+            aria-selected={viewTab === 'recommend'}
+            onClick={() => changeViewTab('recommend')}
+            className={`-mb-px pb-2.5 text-[13px] border-b-2 transition-colors ${
+              viewTab === 'recommend'
+                ? 'border-zinc-900 dark:border-zinc-100 text-zinc-900 dark:text-zinc-50 font-semibold'
+                : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+            }`}
+          >
+            <span className="text-violet-500 mr-1" aria-hidden>✦</span>{t('resources.tab.discover')}
+          </button>
+        </div>
+      </header>
 
-          {/* 点击「扫描」展开：默认目录 ∪ 用户添加目录（并列，列出全部监控路径） */}
-          {showSkillTabs && scanExpanded && (
-            <div className="space-y-2 p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-950/50">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs text-zinc-500 shrink-0">{t('resources.scanScopeLabel')}</span>
-                <span className="text-[11px] text-zinc-400">
-                  {t('resources.scanRootsCount', {
-                    n: defaultScanRoots.length + customScanDirs.length,
-                  })}
-                </span>
-                <button
-                  type="button"
-                  disabled={(!autoTagging && scanning) || busy === 'cleanup' || busy === 'editor'}
-                  onClick={autoTagging ? cancelAutoTagging : runScan}
-                  className="tb-press ml-auto text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 shrink-0"
-                >
-                  {autoTagging
-                    ? t('resources.autoTaggingCancel')
-                    : (scanning ? t('resources.scanning') : t('resources.scanStart'))}
-                </button>
-              </div>
-              <ul className="space-y-1 max-h-48 overflow-y-auto">
-                {defaultScanRoots.map(root => {
-                  const n = skillCountByAgentId.has(root.id)
-                    ? skillCountByAgentId.get(root.id)
-                    : null;
-                  return (
-                  <li
-                    key={root.id || root.path}
-                    className="flex items-center gap-2 text-[11px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg px-2.5 py-1.5"
-                  >
-                    <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 border border-sky-200/70 dark:border-sky-800/60">
-                      {t('resources.scanRootDefault')}
-                    </span>
-                    <span className="shrink-0 text-zinc-500">{root.label}</span>
-                    <span className="flex-1 min-w-0 truncate font-mono text-zinc-600 dark:text-zinc-300" title={root.path}>
-                      {root.path}
-                    </span>
-                    {n != null && root.exists !== false && (
-                      <span className="shrink-0 tabular-nums text-zinc-400">
-                        {t('resources.agentSkillCount', { n })}
-                      </span>
-                    )}
-                    {!root.exists && (
-                      <span className="shrink-0 text-[10px] text-zinc-400">{t('resources.scanRootMissing')}</span>
-                    )}
-                  </li>
-                  );
-                })}
-                {customScanDirs.map(dir => {
-                  const n = countForCustomScanDir(dir);
-                  return (
-                  <li
-                    key={dir}
-                    className="flex items-center gap-2 text-[11px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg px-2.5 py-1.5"
-                  >
-                    <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/70 dark:border-amber-800/60">
-                      {t('resources.scanRootCustom')}
-                    </span>
-                    <span className="flex-1 min-w-0 truncate font-mono text-zinc-600 dark:text-zinc-300" title={dir}>
-                      {dir}
-                    </span>
-                    <span className="shrink-0 tabular-nums text-zinc-400">
-                      {t('resources.agentSkillCount', { n })}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => removeCustomScanDir(dir)}
-                      className="shrink-0 text-zinc-400 hover:text-red-500 px-1"
-                      title={t('resources.scanCustomDirRemove')}
-                    >
-                      ×
-                    </button>
-                  </li>
-                  );
-                })}
-              </ul>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={pickCustomScanDir}
-                  className="tb-press text-xs px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 hover:bg-white dark:hover:bg-zinc-800"
-                >
-                  {t('resources.scanCustomDirAdd')}
-                </button>
-                <p className="text-[11px] text-zinc-400 flex-1 min-w-[12rem]">
-                  {t('resources.scanScopeMergedHint')}
-                </p>
-              </div>
+      <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-3">
+        {/* 筛选栏：类型分段 + 下拉筛选（用途 / 应用 / 状态）+ 排序 */}
+        <div className="flex flex-wrap items-center gap-2">
+          {viewTab === 'recommend' && (
+          <div className="tb-glass-chip inline-flex rounded-lg p-0.5 gap-0.5">
+            {TYPE_OPTIONS.map(opt => (
+              <button
+                key={opt.id || 'all'}
+                type="button"
+                onClick={() => {
+                  changeTypeFilter(opt.id);
+                  if (opt.id !== 'prompt') setPromptKindFilter('');
+                }}
+                className={`tb-press text-xs px-2.5 py-1 rounded-md transition-colors ${
+                  typeFilter === opt.id
+                    ? 'bg-white/90 dark:bg-white/10 text-zinc-900 dark:text-zinc-100 shadow-sm font-medium'
+                    : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
+                }`}
+              >
+                {t(opt.labelKey)}
+              </button>
+            ))}
+          </div>
+          )}
+          {typeFilter === 'prompt' && (
+            <FilterMenu
+              label={t('resources.filter.promptKind')}
+              value={promptKindFilter}
+              allLabel={t('resources.promptKind.all')}
+              onChange={setPromptKindFilter}
+              options={[
+                { value: 'text', label: t('resources.promptKind.text') },
+                { value: 'image', label: t('resources.promptKind.image') },
+              ]}
+            />
+          )}
+          {!isMcp && (availableTags.length > 0 || purposeOther > 0) && (
+            <FilterMenu
+              label={t('resources.filter.purpose')}
+              value={tagFilter}
+              allLabel={t('resources.tagFilterAll')}
+              onChange={setTagFilter}
+              options={[
+                ...availableTags.map(slug => ({ value: slug, label: purposeLabel(slug), count: purposeCounts[slug] || 0 })),
+                ...(purposeOther > 0 ? [{ value: PURPOSE_OTHER, label: purposeLabel(PURPOSE_OTHER), count: purposeOther }] : []),
+              ]}
+            />
+          )}
+          {!isMcp && viewTab === 'managed' && showAppFilterBar && appFilterOptions.length > 1 && (
+            <FilterMenu
+              label={t('resources.filter.app')}
+              value={effectiveAppFilter}
+              allLabel={t('resources.appFilterAll')}
+              onChange={changeAppFilter}
+              options={appFilterOptions.filter(o => o.id).map(o => ({
+                value: o.id,
+                label: o.label,
+                icon: <ServiceIcon id={o.id} name={o.label} boxClass="w-4 h-4" imgClass="w-2.5 h-2.5" className="!rounded" />,
+              }))}
+            />
+          )}
+          {!isMcp && viewTab === 'managed' && (
+            <FilterMenu
+              label={t('resources.filter.status')}
+              value={layerFilter}
+              allLabel={t('resources.layer.filterAll')}
+              onChange={changeLayerFilter}
+              options={['active', 'pending', 'dormant', 'cold', 'shelf']
+                .filter(id => layerCounts[id] > 0 || layerFilter === id)
+                .map(id => ({ value: id, label: t(`resources.layer.${id}`), count: layerCounts[id], dot: LIFE_DOT[id] }))}
+            />
+          )}
+          {!isMcp && viewTab === 'managed' && (
+            <div className="ml-auto">
+              <FilterMenu
+                label={t('resources.sort.label')}
+                value={listSort}
+                neutral
+                clearable={false}
+                align="right"
+                onChange={v => v && changeListSort(v)}
+                options={LIST_SORT_OPTIONS.map(o => ({ value: o.id, label: t(o.labelKey) }))}
+              />
             </div>
           )}
         </div>
 
+        {!isMcp && viewTab === 'managed' && !layerFilter && (
+          <>
+        {lifecycleNudges.length > 0 && (
+          <div className="rounded-xl border border-zinc-200/80 dark:border-zinc-700/70 bg-white/50 dark:bg-zinc-900/40 px-3 py-2 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <p className="text-[11px] text-zinc-600 dark:text-zinc-300 flex items-center gap-1.5 shrink-0">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" aria-hidden />
+              {t('resources.layer.nudgeBanner', { n: lifecycleNudges.length })}
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {lifecycleNudges.map(({ r, life }) => (
+                <span
+                  key={r.id}
+                  className="inline-flex items-center rounded-md border border-zinc-200 dark:border-zinc-700 bg-white/80 dark:bg-zinc-900/60 text-[11px] overflow-hidden"
+                >
+                  <span className="px-2 py-0.5 text-zinc-700 dark:text-zinc-200 max-w-[12rem] truncate" title={r.display_name || r.name}>
+                    {r.display_name || r.name}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={busy === `cold-${r.id}`}
+                    onClick={() => {
+                      if (life.nudge === 'invoke') copyInvokeFor(r);
+                      else handleUnprojectAll(r);
+                    }}
+                    title={life.nudge === 'invoke' ? t('resources.layer.nudgeInvokeHint') : t('resources.layer.nudgeUnprojectHint')}
+                    className="tb-press px-2 py-0.5 border-l border-zinc-200 dark:border-zinc-700 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 disabled:opacity-50"
+                  >
+                    {life.nudge === 'invoke'
+                      ? t('resources.layer.nudgeInvoke')
+                      : t('resources.layer.nudgeUnproject')}
+                  </button>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+          </>
+        )}
+
+        {/* 点击「扫描」展开：默认目录 ∪ 用户添加目录（并列，列出全部监控路径） */}
+        {showSkillTabs && scanExpanded && (
+          <div className="space-y-2 p-3 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-100 dark:bg-zinc-950/50">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-zinc-500 shrink-0">{t('resources.scanScopeLabel')}</span>
+              <span className="text-[11px] text-zinc-400">
+                {t('resources.scanRootsCount', {
+                  n: defaultScanRoots.length + customScanDirs.length,
+                })}
+              </span>
+              <button
+                type="button"
+                disabled={(!autoTagging && scanning) || busy === 'cleanup' || busy === 'editor'}
+                onClick={autoTagging ? cancelAutoTagging : runScan}
+                className="tb-press ml-auto text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50 shrink-0"
+              >
+                {autoTagging
+                  ? t('resources.autoTaggingCancel')
+                  : (scanning ? t('resources.scanning') : t('resources.scanStart'))}
+              </button>
+            </div>
+            <ul className="space-y-1 max-h-48 overflow-y-auto">
+              {defaultScanRoots.map(root => {
+                const n = skillCountByAgentId.has(root.id)
+                  ? skillCountByAgentId.get(root.id)
+                  : null;
+                return (
+                <li
+                  key={root.id || root.path}
+                  className="flex items-center gap-2 text-[11px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg px-2.5 py-1.5"
+                >
+                  <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 border border-sky-200/70 dark:border-sky-800/60">
+                    {t('resources.scanRootDefault')}
+                  </span>
+                  <span className="shrink-0 text-zinc-500">{root.label}</span>
+                  <span className="flex-1 min-w-0 truncate font-mono text-zinc-600 dark:text-zinc-300" title={root.path}>
+                    {root.path}
+                  </span>
+                  {n != null && root.exists !== false && (
+                    <span className="shrink-0 tabular-nums text-zinc-400">
+                      {t('resources.agentSkillCount', { n })}
+                    </span>
+                  )}
+                  {!root.exists && (
+                    <span className="shrink-0 text-[10px] text-zinc-400">{t('resources.scanRootMissing')}</span>
+                  )}
+                </li>
+                );
+              })}
+              {customScanDirs.map(dir => {
+                const n = countForCustomScanDir(dir);
+                return (
+                <li
+                  key={dir}
+                  className="flex items-center gap-2 text-[11px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg px-2.5 py-1.5"
+                >
+                  <span className="shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/70 dark:border-amber-800/60">
+                    {t('resources.scanRootCustom')}
+                  </span>
+                  <span className="flex-1 min-w-0 truncate font-mono text-zinc-600 dark:text-zinc-300" title={dir}>
+                    {dir}
+                  </span>
+                  <span className="shrink-0 tabular-nums text-zinc-400">
+                    {t('resources.agentSkillCount', { n })}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => removeCustomScanDir(dir)}
+                    className="shrink-0 text-zinc-400 hover:text-red-500 px-1"
+                    title={t('resources.scanCustomDirRemove')}
+                  >
+                    ×
+                  </button>
+                </li>
+                );
+              })}
+            </ul>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={pickCustomScanDir}
+                className="tb-press text-xs px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 hover:bg-white dark:hover:bg-zinc-800"
+              >
+                {t('resources.scanCustomDirAdd')}
+              </button>
+              <p className="text-[11px] text-zinc-400 flex-1 min-w-[12rem]">
+                {t('resources.scanScopeMergedHint')}
+              </p>
+            </div>
+          </div>
+        )}
         {(msg || error) && createPortal(
           <div className="electron-no-drag fixed inset-0 z-[10050] flex items-center justify-center p-4 pointer-events-none">
             <div
@@ -3491,7 +3543,9 @@ export default function Resources() {
           document.body,
         )}
 
-        {loading ? (
+        {isMcp ? (
+          <McpProvidersTab viewTab={viewTab} searchQuery={debouncedQuery} createSignal={mcpCreateSignal} onCountChange={setMcpCount} />
+        ) : loading ? (
           <div className="space-y-3 py-2" aria-busy="true">
             {[1, 2, 3].map(i => (
               <div key={i} className="h-20 rounded-xl bg-zinc-100 dark:bg-zinc-800/80 animate-pulse" />
@@ -3500,43 +3554,56 @@ export default function Resources() {
         ) : viewTab === 'managed' ? (
           renderLocalList()
         ) : viewTab === 'recommend' ? (
-          <div className="space-y-6">
-            {/* 画像挖掘 + 基于画像推荐（同一板块） */}
-            <PersonalizedRecommend
-              typeFilter={typeFilter}
-              purposeFilter={tagFilter}
-              searchQuery={debouncedQuery}
-              LogoComp={AssetLogo}
-              onNeedProject={() => changeViewTab('managed')}
-              onNeedAgent={() => navigate('/gateway')}
-              onRefresh={refreshAfterAdopt}
-              onAdopted={handleRecoAdopted}
-              onItemsChange={() => setRecoPurposeRev((n) => n + 1)}
-            />
-            {/* 下半:社区目录 */}
-            <div className="space-y-2 border-t border-zinc-200/80 dark:border-zinc-800 pt-4">
-              <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">{t('resources.catalogSection')}</p>
-              {filteredCatalog.length === 0 ? (
-                <div className="text-center py-6 space-y-2">
-                  <p className="text-xs text-zinc-400">
-                    {tagFilter ? t('resources.emptyTagFiltered') : t('resources.emptyCatalog')}
-                  </p>
-                  {tagFilter && (
-                    <button type="button" onClick={() => setTagFilter('')} className="text-xs text-blue-600 hover:underline">
-                      {t('resources.clearTagFilter')}
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {filteredCatalog.map(item => renderResourceRow(item, { catalogMode: true }))}
-                </div>
-              )}
+          <div className="flex gap-4 items-start">
+            <div className="flex-1 min-w-0 space-y-6">
+              {/* 画像 + 基于画像的推荐（列表 / 详情与资产库一致） */}
+              <PersonalizedRecommend
+                typeFilter={typeFilter}
+                purposeFilter={tagFilter}
+                searchQuery={debouncedQuery}
+                LogoComp={AssetLogo}
+                onNeedProject={() => changeViewTab('managed')}
+                onNeedAgent={() => navigate('/gateway')}
+                onRefresh={refreshAfterAdopt}
+                onAdopted={handleRecoAdopted}
+                onItemsChange={() => setRecoPurposeRev((n) => n + 1)}
+                selectedKey={selectedKey}
+                onSelect={setSelectedKey}
+                inspectorHost={inspectorHost}
+              />
+              {/* 社区精选 */}
+              <section>
+                <LibrarySectionHead title={t('resources.catalogSection')} count={filteredCatalog.length || null} />
+                {filteredCatalog.length === 0 ? (
+                  <div className={`${LIB_LIST_CLS} text-center py-8 space-y-2`}>
+                    <p className="text-xs text-zinc-400">
+                      {tagFilter ? t('resources.emptyTagFiltered') : t('resources.emptyCatalog')}
+                    </p>
+                    {tagFilter && (
+                      <button type="button" onClick={() => setTagFilter('')} className="text-xs text-blue-600 hover:underline">
+                        {t('resources.clearTagFilter')}
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <ul className={LIB_LIST_CLS} role="listbox" aria-label={t('resources.catalogSection')}>
+                    {filteredCatalog.map(item => renderCatalogRow(item))}
+                  </ul>
+                )}
+              </section>
+            </div>
+            {/* 详情面板挂载点：社区条目由本页渲染，推荐条目由 PersonalizedRecommend portal 进来 */}
+            <div ref={setInspectorHost} className="contents">
+              {(() => {
+                if (!selectedKey?.startsWith('cat:')) return null;
+                const item = filteredCatalog.find(c => `cat:${c.catalogId}` === selectedKey);
+                return item ? renderCatalogInspector(item) : null;
+              })()}
             </div>
           </div>
         ) : null}
 
-        <p className="text-[11px] text-zinc-400 pt-2">
+        {!isMcp && <p className="text-[11px] text-zinc-400 pt-2">
           {t(
             typeFilter === 'prompt'
               ? 'resources.footerHint.prompt'
@@ -3544,7 +3611,7 @@ export default function Resources() {
                 ? 'resources.footerHint.assistant'
                 : 'resources.footerHint',
           )}
-        </p>
+        </p>}
       </div>
 
       {renderProjectMenu()}

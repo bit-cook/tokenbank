@@ -1320,7 +1320,7 @@ async def get_settlements(user_id: int, limit: int = 30) -> list[dict]:
 
 
 async def get_contribute_summary(user_id: int) -> dict:
-    """贡献页汇总：累计贡献 token、赚取积分及 P2P 使用节省金额。"""
+    """交易页汇总：累计贡献 token、赚取积分及 P2P 使用节省金额。"""
     from credit_pricing import credits_to_cny, cny_per_million_tokens
 
     async with connect() as db:

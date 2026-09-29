@@ -77,6 +77,8 @@ export function parseV1ModelsResponse(json, provById = {}) {
     out.push({
       id,
       tier,
+      // 供给源 id（owned_by）：游乐场据此识别「仅透传客户端凭证」的源（如 Claude Code 订阅）
+      ...(m.owned_by ? { owner: m.owned_by } : {}),
       ...(mtype && mtype !== 'chat' ? { type: mtype } : {}),
     });
   }

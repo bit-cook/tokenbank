@@ -4,7 +4,7 @@ import { login, register, getProfile, joinCircle, formatApiError, forgotPassword
 import { useAuth } from '../store/index';
 import logo from '../assets/logo.svg';
 import { useLang } from '../store/lang';
-import { SERVER_URL_PLACEHOLDER, normalizeServerBase, syncCloudConfigUrl, bootstrapServerUrl } from '../config';
+import { SERVER_URL_PLACEHOLDER, DEFAULT_TOKEN_SERVER_URL, normalizeServerBase, syncCloudConfigUrl, bootstrapServerUrl } from '../config';
 
 /** 切换服务器时清除旧 token，避免跨服鉴权失败 */
 function persistServerUrl(url) {
@@ -50,6 +50,8 @@ export default function Login() {
   const inviteCircleCode = urlParams.get('c') || '';
   const inviteRefCode    = urlParams.get('ref') || '';
 
+  // 服务端地址属于高级设置：默认官方服务时折叠，只在自建/已改过时展开
+  const [showServerField, setShowServerField] = useState(false);
   const [serverUrl, setServerUrl] = useState(
     () => normalizeServerBase(localStorage.getItem('serverUrl') || '')
   );
@@ -94,7 +96,7 @@ export default function Login() {
     }
     // 有邀请圈子结果时跳转到圈子页并传递提示
     if (circleResult) {
-      navigate('/circles', { replace: true, state: { circleResult } });
+      navigate('/contribute', { replace: true, state: { tradeTab: 'circles', circleResult } });
     } else {
       navigate(returnTo, { replace: true });
     }
@@ -237,6 +239,14 @@ export default function Login() {
           </div>
         )}
 
+        {!(showServerField || (serverUrl && serverUrl !== normalizeServerBase(DEFAULT_TOKEN_SERVER_URL))) ? (
+          <div className="flex justify-center">
+            <button type="button" onClick={() => setShowServerField(true)}
+              className="text-xs text-zinc-400 hover:text-blue-500 transition-colors">
+              {t('config.serverAdvanced')}
+            </button>
+          </div>
+        ) : (
         <div className="space-y-2">
           <label className="block text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1.5 uppercase tracking-wider">{t('config.serverUrl')}</label>
           <input
@@ -251,6 +261,7 @@ export default function Login() {
             className="w-full bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl px-3 py-2.5 text-[13px] text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none focus:border-blue-400 focus:bg-white dark:focus:bg-zinc-700/50 transition-colors"
           />
         </div>
+        )}
 
         {mode === 'login' ? (
           <form onSubmit={handleLogin} className="space-y-3">
@@ -340,6 +351,15 @@ export default function Login() {
           </div>
         )}
 
+        {/* 未登录也能先看看社区网络（公开页） */}
+        {mode !== 'forgot' && (
+          <div className="pt-2 border-t border-zinc-200/70 dark:border-white/[0.06]">
+            <button type="button" onClick={() => navigate('/network')}
+              className="w-full inline-flex items-center justify-center gap-1.5 py-2 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white/60 dark:bg-zinc-900/40 text-zinc-600 dark:text-zinc-300 hover:bg-white dark:hover:bg-zinc-800 transition-colors">
+              <span aria-hidden>🌐</span>{t('guestPreview.browseNetwork')} →
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

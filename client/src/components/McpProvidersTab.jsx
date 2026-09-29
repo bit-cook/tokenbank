@@ -1,10 +1,26 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import ServiceIcon from './ServiceIcon';
-import { resolveBrandIcon } from '../lib/brandIcons';
 import { useLang } from '../store/lang';
+import { ASSET_BTN_GHOST, ASSET_BTN_MANAGED, ASSET_BTN_PRIMARY, AssetMoreMenu } from './ResourceAssetCard';
+import {
+  FilterMenu, AppIconStack, LIB_LIST_CLS, libRowCls, LibrarySectionHead, LibraryRowTitle,
+  LibraryInspector, InspectorSection, InspectorPreview,
+} from './LibraryControls';
 
-const SUPPLY_TAB_KEY = 'tokenbank.providers.supplyTab';
+/** MCP 列表列宽：勾选 | 名称 | 投射到 | 类型 | 状态 | 操作（Tailwind 需字面量） */
+const MCP_GRID = 'grid-cols-[auto_minmax(0,1fr)_auto] md:grid-cols-[auto_minmax(0,1fr)_7rem_3.5rem_4.5rem_9rem]';
+const MCP_HEAD_GRID = 'md:grid-cols-[auto_minmax(0,1fr)_7rem_3.5rem_4.5rem_9rem]';
+
+/** MCP 图标：目录给的 emoji，缺省扳手 */
+function McpLogo({ icon }) {
+  return (
+    <span className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-zinc-100 dark:bg-zinc-800 ring-1 ring-zinc-200/70 dark:ring-zinc-700/70 text-base" aria-hidden>
+      {icon || '🔧'}
+    </span>
+  );
+}
+
 const MCP_VIEW_TAB_KEY = 'tokenbank.providers.mcpViewTab';
 const MCP_AGENT_TAB_KEY = 'tokenbank.providers.mcpAgentTab';
 
@@ -104,8 +120,12 @@ function saveMcpViewTab(tab) {
   try { localStorage.setItem(MCP_VIEW_TAB_KEY, tab); } catch {}
 }
 
-/** Providers 页 MCP 工具 Tab */
-export default function McpProvidersTab() {
+/**
+ * MCP 工具（资源页第四类资产）。
+ * viewTab：由资源页「资产库 / 为你推荐」驱动（managed / catalog）；不传时自带视图切换。
+ * searchQuery：资源页顶部搜索；createSignal 递增时打开「自定义 MCP」。
+ */
+export default function McpProvidersTab({ viewTab: controlledView = null, searchQuery = '', createSignal = 0, onCountChange } = {}) {
   const { t } = useLang();
   const [catalog, setCatalog] = useState([]);
   const [catalogGroups, setCatalogGroups] = useState([]);
@@ -132,20 +152,33 @@ export default function McpProvidersTab() {
   // 菜单模式：project=写盘投射；relay=中转绑定（分按钮入口）
   const [syncMenuMode, setSyncMenuMode] = useState('project');
   const [selectedServerIds, setSelectedServerIds] = useState([]);
+  const effView = controlledView ? (controlledView === 'recommend' ? 'catalog' : 'managed') : mcpViewTab;
+  const effQuery = controlledView ? String(searchQuery || '') : catalogFilter;
   const syncProjectBtnRef = useRef(null);
-  const syncRelayBtnRef = useRef(null);
   const syncMenuRef = useRef(null);
   /** 编辑弹窗内容区：打开时滚回顶部 */
   const editPanelRef = useRef(null);
   /** 内置 MCP 网关状态（URL / token / 已路由列表） */
   const [gatewayInfo, setGatewayInfo] = useState(null);
-  const [gatewayCopyMsg, setGatewayCopyMsg] = useState('');
   /** 网关按应用隔离：当前编辑/复制的目标应用 id */
-  const [gatewayProfileId, setGatewayProfileId] = useState('api');
   /** Gateway API 应用（与 apps:list 同源，避免下拉漏项） */
   const [gatewayApiApps, setGatewayApiApps] = useState([]);
   /** Gateway 应用全量（与「应用」页 apps:list 同源，供顶部筛选对齐已纳管） */
   const [gatewayApps, setGatewayApps] = useState([]);
+  /** 选中行（右侧详情）：m:<serverId> / c:<catalogId> */
+  const [selectedKey, setSelectedKey] = useState(null);
+  /** 内置卡展开：null=自动（有未就绪应用时展开） */
+  const [builtinCardOpen, setBuiltinCardOpen] = useState(null);
+  /** 展开了「启用原生工具」说明的应用 */
+  const [nativeOpenIds, setNativeOpenIds] = useState([]);
+  /** 应用接入详情：是否明文显示中转令牌 */
+  const [showRelayToken, setShowRelayToken] = useState(false);
+
+  useEffect(() => { if (createSignal) setShowCustom(true); }, [createSignal]);
+  // 上报已纳管数量（资源页「资产库」计数）
+  // 计数只含可管理的第三方 MCP（内置与中转条目属基础设施）
+  const listableCount = servers.filter((s) => !s.builtin && !isRelaySelfServer(s)).length;
+  useEffect(() => { onCountChange?.(loading ? null : listableCount); }, [listableCount, loading, onCountChange]);
 
   // 主栏有 backdrop-filter 时 fixed 会相对主栏定位；弹窗挂到 body 并复位滚动
   useEffect(() => {
@@ -326,13 +359,6 @@ export default function McpProvidersTab() {
     return (s.clientTargets || []).some((c) => c.installed);
   }
 
-  /** 内置可随时投射；第三方默认走中转，仅已写盘时显示投射（取消勾选） */
-  function canShowProjectButton(s) {
-    if (!s || s.status !== 'active' || s.id === 'tokenbank-agent-bridge') return false;
-    if (s.builtin) return true;
-    return serverHasDiskProjection(s);
-  }
-
   /** Token Bank 内置 MCP（可进「通用」中转档；不含 Bridge） */
   function isTbBuiltinRelayMcp(s) {
     if (!s) return false;
@@ -341,329 +367,17 @@ export default function McpProvidersTab() {
       || s.id === 'tokenbank-resources';
   }
 
-  /** 网关目标：通用 api + 已纳管桌面/CLI + Gateway「API 应用」 */
-  function gatewayProfileOptions() {
-    const seen = new Set();
-    const opts = [];
-    const push = (id, label, kind) => {
-      if (!id || seen.has(id)) return;
-      seen.add(id);
-      opts.push({
-        id,
-        label: id === 'api' ? t('providers.mcp.gatewayProfileApi') : (label || id),
-        kind: kind || (String(id).startsWith('app-') ? 'api-app' : 'agent'),
-      });
-    };
-    push('api', t('providers.mcp.gatewayProfileApi'), 'generic');
-    // 仅已纳管且可写盘的应用（不含未安装 / OpenClaw 等）
-    for (const a of syncWritableAgents) {
-      push(a.id, a.label || a.id, 'agent');
-    }
-    for (const t of gatewayInfo?.bindTargets || gatewayInfo?.profiles || []) {
-      if (!t?.id || t.id === 'api') continue;
-      // Agent 类已由 syncWritableAgents 覆盖；此处只补 API 应用等
-      if (t.kind === 'agent') continue;
-      push(t.id, t.label, t.kind);
-    }
-    // 与 Gateway 页 apps:list 同源，确保「New app」等可见
-    for (const a of gatewayApiApps) {
-      push(a.id, a.label, 'api-app');
-    }
-    for (const a of gatewayInfo?.apiApps || []) {
-      push(a.id, a.label, 'api-app');
-    }
-    return opts;
-  }
-
   function serverGatewayClients(server) {
     return Array.isArray(server?.gateway_clients) ? server.gateway_clients : [];
   }
 
-  function isGatewayBoundToProfile(server, profileId = gatewayProfileId) {
-    return serverGatewayClients(server).includes(profileId);
-  }
-
-  /** 当前操作的网关应用：优先顶部筛选 Agent，否则用面板所选 */
-  function activeGatewayProfileId() {
-    if (agentTab) return agentTab;
-    return gatewayProfileId || 'api';
-  }
-
-  async function bulkSetGateway(enabled, explicitServerIds) {
-    let ids = [...new Set((explicitServerIds || selectedServerIds).filter(Boolean))];
-    if (!ids.length) {
-      alert(t('providers.mcp.gatewaySelectStdio'));
-      return;
-    }
-    const profileId = activeGatewayProfileId();
-    if (!profileId) {
-      alert(t('providers.mcp.gatewayNeedApp'));
-      return;
-    }
-    // 通用档：只允许绑定 Token Bank 内置 MCP
-    if (enabled && profileId === 'api') {
-      const before = ids.length;
-      ids = ids.filter((id) => isTbBuiltinRelayMcp(servers.find((s) => s.id === id)));
-      if (!ids.length) {
-        alert(t('providers.mcp.gatewayGenericBuiltinOnly'));
-        return;
-      }
-      if (ids.length < before && !explicitServerIds) {
-        // 勾选了非内置时：仅加入内置，并提示
-        alert(t('providers.mcp.gatewayGenericBuiltinOnly'));
-      }
-    }
-    const api = window.electronAPI?.mcp?.setServersGatewayRouted;
-    if (typeof api !== 'function') {
-      alert(t('providers.mcp.gatewayApiMissing'));
-      return;
-    }
-    setBusy('gateway');
-    try {
-      const res = await api({
-        serverIds: ids,
-        enabled,
-        clientIds: [profileId],
-      });
-      if (!res?.success) {
-        alert(res?.error || t('providers.mcp.gatewayToggleFailed'));
-        return;
-      }
-      // 用返回结果立刻刷新本地列表，避免再读到旧数据
-      const patched = new Map();
-      for (const r of res.results || []) {
-        if (r?.server?.id) patched.set(r.server.id, r.server);
-      }
-      if (patched.size) {
-        setServers((prev) => prev.map((s) => patched.get(s.id) || s));
-      }
-      const boundN = [...patched.values()].filter((s) => (
-        Array.isArray(s.gateway_clients) && s.gateway_clients.includes(profileId)
-      )).length;
-      if (enabled && boundN === 0 && !(res.ok > 0)) {
-        alert(t('providers.mcp.gatewayToggleFailed') + (res.error ? `: ${res.error}` : ''));
-        return;
-      }
-      setSelectedServerIds([]);
-      // 先刷新再弹结果
-      await loadAll({ silent: true });
-      if (res.failed > 0) {
-        alert(t('providers.mcp.gatewayPartialFail', { ok: res.ok || 0, fail: res.failed }));
-      } else if (enabled) {
-        const appLabel = gatewayProfileOptions().find((o) => o.id === profileId)?.label || profileId;
-        alert(t('providers.mcp.gatewayBoundOk', { n: res.ok || boundN || ids.length, app: appLabel }));
-      }
-    } catch (e) {
-      alert(e.message || t('providers.mcp.gatewayToggleFailed'));
-    } finally {
-      setBusy('');
-    }
-  }
-
-  async function copyGatewayConfig() {
-    const profileId = activeGatewayProfileId();
-    const profile = (gatewayInfo?.profiles || []).find((p) => p.id === profileId);
-    const cfg = profile?.configJson
-      || (gatewayInfo?.endpoint
-        ? {
-          mcpServers: {
-            'tokenbank-relay': {
-              url: `${String(gatewayInfo.endpoint.url || '').replace(/\/mcp\/?$/, '')}/mcp/${profileId}`,
-              headers: { Authorization: `Bearer ${gatewayInfo.endpoint.token}` },
-            },
-          },
-        }
-        : null);
-    const text = cfg ? JSON.stringify(cfg, null, 2) : '';
-    if (!text || !gatewayInfo?.endpoint?.token) {
-      alert(t('providers.mcp.gatewayNotReady'));
-      return;
-    }
-    try {
-      await navigator.clipboard.writeText(text);
-      setGatewayCopyMsg(t('providers.mcp.gatewayCopied'));
-      setTimeout(() => setGatewayCopyMsg(''), 2000);
-    } catch {
-      alert(t('providers.mcp.gatewayCopyFailed'));
-    }
-  }
-
-  function renderGatewayPanel() {
-    const profileId = activeGatewayProfileId();
-    const profileOpts = gatewayProfileOptions();
-    const profile = (gatewayInfo?.profiles || []).find((p) => p.id === profileId);
-    const url = profile?.url
-      || (gatewayInfo?.endpoint?.url
-        ? `${String(gatewayInfo.endpoint.url).replace(/\/mcp\/?$/, '')}/mcp/${profileId}`
-        : '');
-    const boundServers = servers.filter((s) => isGatewayBoundToProfile(s, profileId));
-    const n = boundServers.length;
-    const isApiProfile = profileOpts.find((o) => o.id === profileId)?.kind === 'api-app'
-      || String(profileId).startsWith('app-');
-
-    const profileSelect = (
-      <select
-        value={agentTab || gatewayProfileId}
-        disabled={!!agentTab}
-        onChange={(e) => setGatewayProfileId(e.target.value)}
-        className="text-[11px] px-2 py-1 rounded-lg border border-zinc-200 dark:border-zinc-600 bg-white/70 dark:bg-zinc-800/70 text-zinc-700 dark:text-zinc-200 disabled:opacity-60 max-w-[11rem]"
-        title={agentTab ? t('providers.mcp.gatewayFollowFilter') : t('providers.mcp.gatewayHint')}
-      >
-        {(() => {
-          const generic = profileOpts.filter((o) => o.kind === 'generic' || o.id === 'api');
-          const agents = profileOpts.filter((o) => o.kind === 'agent');
-          const apiApps = profileOpts.filter((o) => o.kind === 'api-app');
-          const rest = profileOpts.filter((o) => (
-            !generic.includes(o) && !agents.includes(o) && !apiApps.includes(o)
-          ));
-          return (
-            <>
-              {generic.map((o) => (
-                <option key={o.id} value={o.id}>{o.label}</option>
-              ))}
-              {agents.length > 0 && (
-                <optgroup label={t('providers.mcp.gatewayGroupAgents')}>
-                  {agents.map((o) => (
-                    <option key={o.id} value={o.id}>{o.label}</option>
-                  ))}
-                </optgroup>
-              )}
-              <optgroup label={t('providers.mcp.gatewayGroupApiApps')}>
-                {apiApps.length > 0
-                  ? apiApps.map((o) => (
-                    <option key={o.id} value={o.id}>{o.label}</option>
-                  ))
-                  : (
-                    <option value="__no_api_apps__" disabled>
-                      {t('providers.mcp.gatewayNoApiApps')}
-                    </option>
-                  )}
-              </optgroup>
-              {rest.map((o) => (
-                <option key={o.id} value={o.id}>{o.label}</option>
-              ))}
-            </>
-          );
-        })()}
-      </select>
-    );
-
-    return (
-      <div className="tb-soft-card rounded-xl px-3 py-2 space-y-1.5" title={t('providers.mcp.gatewayHint')}>
-        {/* 第 1 行：标题 + 状态 */}
-        <div className="flex items-center gap-2 min-h-[1.25rem]">
-          <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-100 shrink-0">
-            {t('providers.mcp.gatewayTitle')}
-          </span>
-          <span className={`text-[10px] px-1.5 py-0.5 rounded-md shrink-0 ${
-            gatewayInfo?.running
-              ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300'
-              : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500'
-          }`}>
-            {gatewayInfo?.running ? t('providers.mcp.gatewayRunning') : t('providers.mcp.gatewayStopped')}
-          </span>
-          <span className="text-[10px] text-zinc-400 truncate min-w-0">
-            {t('providers.mcp.gatewayHint')}
-          </span>
-        </div>
-
-        {/* 第 2 行：接入应用 + URL + 操作 */}
-        <div className="flex items-center gap-2 min-h-[1.75rem]">
-          <span className="text-[11px] text-zinc-500 shrink-0">{t('providers.mcp.gatewayBindApp')}</span>
-          {profileSelect}
-          {url && (
-            <code className="text-[10px] font-mono text-zinc-500 dark:text-zinc-400 truncate min-w-0 flex-1" title={url}>
-              {url}
-            </code>
-          )}
-          <div className="flex items-center gap-1 shrink-0 ml-auto">
-            {(() => {
-              const isGeneric = profileId === 'api';
-              // 通用档只绑内置；API 应用空档时一键绑全部可中转 MCP（含第三方）
-              const bindIds = isGeneric
-                ? servers.filter((s) => canRouteViaGateway(s) && isTbBuiltinRelayMcp(s)
-                  && !isGatewayBoundToProfile(s, 'api')).map((s) => s.id)
-                : (isApiProfile && n === 0
-                  ? servers.filter((s) => canRouteViaGateway(s)).map((s) => s.id)
-                  : []);
-              if (!bindIds.length) return null;
-              return (
-                <button
-                  type="button"
-                  disabled={!!busy}
-                  onClick={() => bulkSetGateway(true, bindIds)}
-                  className="tb-press text-[11px] px-2 py-1 rounded-lg border border-amber-300/80 text-amber-800 dark:text-amber-200 disabled:opacity-40"
-                >
-                  {isGeneric
-                    ? t('providers.mcp.gatewayBindBuiltin')
-                    : t('providers.mcp.gatewayBindAllStdio')}
-                </button>
-              );
-            })()}
-            <button
-              type="button"
-              disabled={!gatewayInfo?.endpoint?.token || !!busy}
-              onClick={copyGatewayConfig}
-              className="tb-press text-[11px] px-2.5 py-1 rounded-lg bg-violet-600 text-white hover:bg-violet-500 disabled:opacity-40"
-            >
-              {gatewayCopyMsg || t('providers.mcp.gatewayCopyJson')}
-            </button>
-          </div>
-        </div>
-
-        {/* 第 3 行：已绑定芯片 */}
-        <div className="flex items-center gap-1.5 min-h-[1.5rem] overflow-hidden">
-          <span className="text-[10px] text-zinc-400 shrink-0 whitespace-nowrap">
-            {t('providers.mcp.gatewayBoundListTitle')}
-            <span className="tabular-nums ml-1">{n}</span>
-          </span>
-          {n === 0 ? (
-            <span className="text-[10px] text-zinc-400 truncate">{t('providers.mcp.gatewayBoundListEmpty')}</span>
-          ) : (
-            <div className="flex flex-wrap gap-1 min-w-0 flex-1 content-center">
-              {boundServers.map((s) => (
-                <span
-                  key={s.id}
-                  className="tb-tag tb-tag-blue !rounded-full pl-2 pr-0.5 py-0.5 text-[10px] max-w-full"
-                  title={s.display_name || s.name}
-                >
-                  <span className="truncate max-w-[7.5rem]">{s.display_name || s.name}</span>
-                  <button
-                    type="button"
-                    disabled={!!busy}
-                    onClick={() => bulkSetGateway(false, [s.id])}
-                    title={t('providers.mcp.gatewayRemoveOneHint', { name: s.display_name || s.name })}
-                    aria-label={t('providers.mcp.gatewayRemoveOneHint', { name: s.display_name || s.name })}
-                    className="tb-press ml-0.5 w-4 h-4 inline-flex items-center justify-center rounded-full text-current/55 hover:text-red-500 hover:bg-black/5 dark:hover:bg-white/10 disabled:opacity-40"
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
   /** 可勾选同步的 MCP（已启用、非 Bridge） */
   const syncSelectableServers = servers.filter(
-    s => s.status === 'active' && s.id !== 'tokenbank-agent-bridge',
+    s => s.status === 'active' && s.id !== 'tokenbank-agent-bridge' && !s.builtin && !isRelaySelfServer(s),
   );
   const selectedSyncableIds = selectedServerIds.filter(id =>
     syncSelectableServers.some(s => s.id === id),
   );
-  // 批量投射：内置，或第三方已有写盘（便于批量取消）；批量中转：内置 + 第三方
-  const selectedProjectableIds = selectedSyncableIds.filter((id) => {
-    const s = servers.find((x) => x.id === id);
-    return canShowProjectButton(s);
-  });
-  const selectedRelayableIds = selectedSyncableIds.filter((id) => {
-    const s = servers.find((x) => x.id === id);
-    if (!s || s.id === 'tokenbank-agent-bridge') return false;
-    return s.builtin ? isTbBuiltinRelayMcp(s) : canRouteViaGateway(s);
-  });
   const allSyncSelectableChecked = syncSelectableServers.length > 0
     && syncSelectableServers.every(s => selectedServerIds.includes(s.id));
 
@@ -692,7 +406,7 @@ export default function McpProvidersTab() {
     const onDoc = (e) => {
       const t = e.target;
       if (syncMenuRef.current?.contains(t)) return;
-      if (syncProjectBtnRef.current?.contains(t) || syncRelayBtnRef.current?.contains(t)) return;
+      if (syncProjectBtnRef.current?.contains(t)) return;
       if (t.closest?.('[data-row-install-btn]')) return;
       closeSyncMenu();
     };
@@ -715,11 +429,11 @@ export default function McpProvidersTab() {
       return;
     }
     setInstallMenuServerId(serverId);
-    setSyncMenuMode(mode === 'relay' ? 'relay' : 'project');
+    setSyncMenuMode(mode);
     setSyncSelectedIds(selectedAgentIds);
     if (anchorEl) {
       const r = anchorEl.getBoundingClientRect();
-      const menuW = 256;
+      const menuW = 320;
       const spaceBelow = window.innerHeight - r.bottom - 8;
       const spaceAbove = r.top - 8;
       // 下方空间不足时向上展开，避免被视口裁切
@@ -734,54 +448,6 @@ export default function McpProvidersTab() {
       });
     }
     setSyncMenuOpen(true);
-  }
-
-  function openSyncMenu(mode, anchorEl) {
-    // 批量：投射仅可写盘纳管应用；中转默认勾选当前档 API（若有）+ 全部纳管桌面
-    const profileId = activeGatewayProfileId();
-    const apiDefault = gatewayApiApps.some((a) => a.id === profileId) ? [profileId] : [];
-    const projectableIds = syncWritableAgents.filter((t) => t.projectable).map((t) => t.id);
-    const selected = mode === 'relay'
-      ? [...apiDefault, ...syncWritableAgents.map((t) => t.id)]
-      : projectableIds;
-    openInstallMenu({
-      serverId: null,
-      anchorEl,
-      selectedAgentIds: selected,
-      mode,
-    });
-  }
-
-  function openRowInstallMenu(server, e, mode = 'project') {
-    if (server.status !== 'active') return;
-    let defaults;
-    if (mode === 'relay') {
-      const fromGateway = getGatewayBoundRelayIds(server);
-      defaults = fromGateway.length
-        ? fromGateway
-        : [...gatewayApiApps.map((a) => a.id), ...syncWritableAgents.map((t) => t.id)];
-    } else {
-      const installed = getInstalledAgentIds(server);
-      const projectableIds = syncWritableAgents.filter((t) => t.projectable).map((t) => t.id);
-      defaults = installed.length ? installed : projectableIds;
-    }
-    openInstallMenu({
-      serverId: server.id,
-      anchorEl: e.currentTarget,
-      selectedAgentIds: defaults,
-      mode,
-    });
-  }
-
-  function toggleSyncSelected(id) {
-    const isApi = gatewayApiApps.some((a) => a.id === id);
-    const agent = syncWritableAgents.find((t) => t.id === id);
-    if (!isApi && !agent) return;
-    // 投射菜单：不可写盘的纳管应用不可勾选
-    if (syncMenuMode === 'project' && agent && !agent.projectable) return;
-    setSyncSelectedIds(prev => (
-      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
-    ));
   }
 
   /** 收集某 MCP 当前已投射到的纳管应用（返回筛选同源 id） */
@@ -801,185 +467,179 @@ export default function McpProvidersTab() {
     return [...ids];
   }
 
-  /** 某 MCP 已中转绑定的目标（API 应用 + 可写桌面/CLI；不含「通用」） */
-  function getGatewayBoundRelayIds(server) {
-    if (!server) return [];
-    const clients = serverGatewayClients(server);
-    const ids = [];
-    for (const a of gatewayApiApps) {
-      if (clients.includes(a.id)) ids.push(a.id);
-    }
-    for (const a of syncWritableAgents) {
-      if (clients.includes(a.id)) ids.push(a.id);
-    }
-    return ids;
-  }
-
   function relayTargetLabel(id) {
     return gatewayApiApps.find((a) => a.id === id)?.label
       || syncStatus?.targets?.find((t) => t.id === id)?.label
       || id;
   }
 
-  async function handleSyncClients(clientIds) {
-    const ids = Array.isArray(clientIds)
-      ? clientIds
-      : clientIds
-        ? [clientIds]
-        : syncWritableAgents.map(t => t.id);
-    const singleId = installMenuServerId;
-    const syncDoProject = syncMenuMode === 'project';
-    const syncDoRelay = syncMenuMode === 'relay';
-    const serverIds = singleId
-      ? [singleId]
-      : (syncDoRelay ? selectedRelayableIds : selectedProjectableIds);
-    if (!serverIds.length) {
-      alert(singleId ? t('providers.mcp.cannotInstall') : t('providers.mcp.selectMcpFirst'));
+  /** 可接入的应用：可写配置的桌面 / CLI + 网关 API 应用 */
+  function addTargets() {
+    return [
+      ...syncWritableAgents.map((a) => ({ id: a.id, label: a.label, kind: 'agent', agent: a })),
+      ...gatewayApiApps.map((a) => ({ id: a.id, label: a.label, kind: 'api-app' })),
+    ];
+  }
+
+  /** 某 MCP 在某应用上的现有接入方式：project（已写入应用配置）| relay（经网关）| null */
+  function connectionOf(server, appId) {
+    if (getInstalledAgentIds(server).includes(appId)) return 'project';
+    if (serverGatewayClients(server).includes(appId)) return 'relay';
+    return null;
+  }
+
+  /**
+   * 投射的实现方式：第三方 MCP 经 TokenBank 网关中转（应用只需配置一次中转地址，增减 MCP 不再改应用配置，
+   * 密钥只存在 TokenBank）；内置 MCP 属默认基础设施，直接写入应用配置。已写入配置的第三方老条目保留，可撤销。
+   */
+  function autoTransport(server, target) {
+    // 内置 MCP 默认直接写入应用配置（由 TokenBank 按应用生成正确条目）；API 应用只能经中转
+    if (server.builtin && target.kind !== 'api-app' && target.agent?.projectable) return 'project';
+    if (canRelay(server)) return 'relay';
+    return null;
+  }
+
+  /** 网关中转根地址（…/mcp）与某应用的专属中转地址（…/mcp/<appId>） */
+  function relayBase() {
+    return gatewayInfo?.endpoint?.url ? String(gatewayInfo.endpoint.url).replace(/\/mcp\/?$/, '') : '';
+  }
+  function relayUrlFor(appId) {
+    const profile = (gatewayInfo?.profiles || []).find((p) => p.id === appId);
+    if (profile?.url) return profile.url;
+    const base = relayBase();
+    return base ? `${base}/mcp/${appId}` : '';
+  }
+
+  /** 中转地址行：等宽显示 + 复制接入配置（含鉴权头） */
+  function renderRelayUrl(appId, { compact = false, copy = true } = {}) {
+    const url = relayUrlFor(appId);
+    if (!url) return <span className="text-[10px] text-zinc-400">{t('providers.mcp.gatewayNotReady')}</span>;
+    return (
+      <div className={`flex items-center gap-1.5 min-w-0 ${compact ? '' : 'mt-0.5'}`}>
+        <code className={`flex-1 min-w-0 text-[10px] font-mono text-zinc-500 dark:text-zinc-400 select-all ${compact ? 'break-all' : 'truncate'}`} title={url}>{url}</code>
+        {copy && (
+          <button type="button" onClick={() => copyRelayConfigFor(appId)}
+            title={t('resources.mcp.relayOnce')}
+            className="shrink-0 text-[10px] text-blue-600 dark:text-blue-400 hover:underline">
+            {t('resources.mcp.copyRelay')}
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  /** 复制某应用的一次性中转接入配置（tokenbank-relay → /mcp/<appId>） */
+  async function copyRelayConfigFor(appId) {
+    const profile = (gatewayInfo?.profiles || []).find((p) => p.id === appId);
+    const cfg = profile?.configJson
+      || (gatewayInfo?.endpoint?.token
+        ? {
+          mcpServers: {
+            'tokenbank-relay': {
+              url: `${String(gatewayInfo.endpoint.url || '').replace(/\/mcp\/?$/, '')}/mcp/${appId}`,
+              headers: { Authorization: `Bearer ${gatewayInfo.endpoint.token}` },
+            },
+          },
+        }
+        : null);
+    if (!cfg) {
+      alert(t('providers.mcp.gatewayNotReady'));
       return;
     }
-
-    const apiIds = ids.filter((id) => gatewayApiApps.some((a) => a.id === id));
-    // 投射：筛选用 id → 写盘 syncClientId（跳过暂不支持写盘的项）
-    const agentIds = syncDoProject
-      ? [...new Set(
-        ids
-          .map((id) => syncWritableAgents.find((a) => a.id === id))
-          .filter((a) => a?.projectable && a.syncClientId)
-          .map((a) => a.syncClientId),
-      )]
-      : ids.filter((id) => syncWritableAgents.some((a) => a.id === id));
-    // 中转入口：桌面+API；投射入口：不写中转（API 不应出现在投射列表）
-    const relayIds = syncDoRelay
-      ? [...new Set([...apiIds, ...agentIds])]
-      : [];
-
-    const singleServer = singleId ? servers.find(s => s.id === singleId) : null;
-    const singleName = singleServer?.display_name || singleServer?.name || null;
-    const isWorkbuddyId = (id) => String(id || '').toLowerCase().includes('workbuddy');
-
-    closeSyncMenu();
-    setBusy(singleId || 'sync');
-    setSyncMsg('');
     try {
-      const parts = [];
-      let projectedToWorkbuddy = false;
+      await navigator.clipboard.writeText(JSON.stringify(cfg, null, 2));
+      setSyncMsg(t('resources.mcp.relayCopied', { app: addTargets().find((tg) => tg.id === appId)?.label || relayTargetLabel(appId) }));
+    } catch {
+      alert(t('providers.mcp.gatewayCopyFailed'));
+    }
+  }
 
-      // 中转绑定（仅「中转」入口）
-      if (syncDoRelay && singleId) {
-        const previouslyAll = getGatewayBoundRelayIds(singleServer);
-        const toAdd = relayIds.filter((id) => !previouslyAll.includes(id));
-        const toRemove = previouslyAll.filter((id) => !relayIds.includes(id));
-        for (const appId of toAdd) {
-          const r = await window.electronAPI.mcp.setServerGatewayRouted({
-            serverId: singleId,
-            enabled: true,
-            clientIds: [appId],
-          });
+  /** 打开「添加到应用」：单条 = 勾选现有接入；批量 = 不预勾选 */
+  function openAddMenu(server, anchorEl) {
+    const preset = server
+      ? addTargets().filter((tg) => connectionOf(server, tg.id)).map((tg) => tg.id)
+      : [];
+    openInstallMenu({ serverId: server ? server.id : null, anchorEl, selectedAgentIds: preset, mode: 'add' });
+  }
+
+  /**
+   * 应用勾选结果：新勾选按 autoTransport 接入；单条模式下取消勾选 = 撤掉现有接入（写盘或中转）。
+   * 批量模式只做添加。
+   */
+  async function applyAddToApps(selectedIds) {
+    const single = installMenuServerId;
+    const serverIds = single ? [single] : selectedSyncableIds;
+    if (!serverIds.length) {
+      alert(t('providers.mcp.selectMcpFirst'));
+      return;
+    }
+    const targets = addTargets();
+    closeSyncMenu();
+    setBusy(single || 'sync');
+    setSyncMsg('');
+    const parts = [];
+    let relayApps = new Set();
+    let projectedToWorkbuddy = false;
+    try {
+      for (const serverId of serverIds) {
+        const s = servers.find((x) => x.id === serverId);
+        if (!s) continue;
+        const relayAdd = []; const relayRemove = [];
+        const projAdd = []; const projRemove = [];
+        for (const tg of targets) {
+          const cur = connectionOf(s, tg.id);
+          const want = selectedIds.includes(tg.id);
+          if (want && !cur) {
+            const how = autoTransport(s, tg);
+            if (how === 'relay') relayAdd.push(tg.id);
+            else if (how === 'project') projAdd.push(tg);
+          } else if (!want && cur && single && !s.builtin) {
+            // 内置 MCP 默认投射到所有应用，不可取消
+            if (cur === 'relay') relayRemove.push(tg.id);
+            else projRemove.push(tg);
+          }
+        }
+        if (relayAdd.length) {
+          const r = await window.electronAPI.mcp.setServerGatewayRouted({ serverId, enabled: true, clientIds: relayAdd });
+          if (!r?.success) throw new Error(r?.error || t('providers.mcp.gatewayToggleFailed'));
+          relayAdd.forEach((id) => relayApps.add(id));
+        }
+        if (relayRemove.length) {
+          const r = await window.electronAPI.mcp.setServerGatewayRouted({ serverId, enabled: false, clientIds: relayRemove });
           if (!r?.success) throw new Error(r?.error || t('providers.mcp.gatewayToggleFailed'));
         }
-        for (const appId of toRemove) {
-          const r = await window.electronAPI.mcp.setServerGatewayRouted({
-            serverId: singleId,
-            enabled: false,
-            clientIds: [appId],
+        if (projAdd.length || projRemove.length) {
+          const previously = getInstalledAgentIds(s);
+          const removeIds = new Set(projRemove.map((tg) => tg.id));
+          const keepIds = previously.filter((id) => !removeIds.has(id));
+          const selectedSync = [...new Set([
+            ...keepIds.map((id) => syncWritableAgents.find((a) => a.id === id)?.syncClientId || id),
+            ...projAdd.map((tg) => tg.agent.syncClientId),
+          ].filter(Boolean))];
+          const res = await window.electronAPI.mcp.setServerSyncClients({
+            serverId,
+            clientIds: selectedSync,
+            syncClientIds: [...new Set([...previously, ...selectedSync])],
           });
-          if (!r?.success) throw new Error(r?.error || t('providers.mcp.gatewayToggleFailed'));
-        }
-        if (relayIds.length) {
-          parts.push(t('providers.mcp.gatewayBoundTo', {
-            agents: relayIds.map(relayTargetLabel).join('、'),
-          }));
-        }
-        if (toRemove.length) {
-          parts.push(t('providers.mcp.gatewayUnboundFrom', {
-            agents: toRemove.map(relayTargetLabel).join('、'),
-          }));
-        }
-      } else if (syncDoRelay && relayIds.length) {
-        const r = await window.electronAPI.mcp.setServersGatewayRouted({
-          serverIds,
-          enabled: true,
-          clientIds: relayIds,
-        });
-        if (!r?.success) throw new Error(r?.error || t('providers.mcp.gatewayToggleFailed'));
-        parts.push(t('providers.mcp.gatewayBoundBatch', {
-          n: serverIds.length,
-          agents: relayIds.map(relayTargetLabel).join('、'),
-        }));
-      }
-
-      // 桌面/CLI：写盘投射（仅「投射」入口）
-      if (syncDoProject && (singleId || agentIds.length)) {
-        let res;
-        if (singleId) {
-          const previously = getInstalledAgentIds(singleServer);
-          const selected = agentIds;
-          const affected = [...new Set([...previously, ...selected])];
-          res = await window.electronAPI.mcp.setServerSyncClients({
-            serverId: singleId,
-            clientIds: selected,
-            syncClientIds: affected,
-          });
-          const removed = previously.filter(id => !selected.includes(id));
-          for (const clientId of removed) {
-            try {
-              await window.electronAPI.mcp.removeFromAgent({
-                serverId: singleId,
-                clientId,
-              });
-            } catch { /* ignore */ }
+          if (!res?.success) throw new Error(res?.error || t('providers.mcp.installFailed'));
+          for (const tg of projRemove) {
+            try { await window.electronAPI.mcp.removeFromAgent({ serverId, clientId: tg.id }); } catch { /* ignore */ }
           }
-          if (!res?.success) {
-            throw new Error(res?.error || t('providers.mcp.installFailed'));
-          }
-          const addedLabels = selected
-            .map(id => syncStatus?.targets?.find(t => t.id === id)?.label || id)
-            .join('、');
-          const removedLabels = removed
-            .map(id => syncStatus?.targets?.find(t => t.id === id)?.label || id)
-            .join('、');
-          if (selected.length) parts.push(t('providers.mcp.installedTo', { agents: addedLabels }));
-          if (removed.length) parts.push(t('providers.mcp.removedFrom', { agents: removedLabels }));
-          if (selected.some(isWorkbuddyId)) projectedToWorkbuddy = true;
-        } else if (agentIds.length) {
-          res = await window.electronAPI.mcp.syncClients({ clientIds: agentIds, serverIds });
-          if (!res?.success) {
-            throw new Error(res?.error || t('providers.mcp.installFailed'));
-          }
-          const labels = agentIds
-            .map(id => syncStatus?.targets?.find(t => t.id === id)?.label || id)
-            .join('、');
-          parts.push(res.hint || t('providers.mcp.installedBatch', { n: serverIds.length, agents: labels }));
-          if (agentIds.some(isWorkbuddyId)) projectedToWorkbuddy = true;
+          if (projAdd.some((tg) => String(tg.id).toLowerCase().includes('workbuddy'))) projectedToWorkbuddy = true;
         }
+        const labelOf = (id) => targets.find((tg) => tg.id === id)?.label || relayTargetLabel(id);
+        const added = [...relayAdd.map(labelOf), ...projAdd.map((tg) => tg.label)];
+        const removed = [...relayRemove.map(labelOf), ...projRemove.map((tg) => tg.label)];
+        const name = s.display_name || s.name;
+        if (added.length) parts.push(t('resources.mcp.addedTo', { name, apps: added.join('、') }));
+        if (removed.length) parts.push(t('resources.mcp.removedFrom', { name, apps: removed.join('、') }));
       }
-
-      // 批量须至少选目标；单条空勾选可撤
-      if (!singleId && !apiIds.length && !agentIds.length) {
-        alert(t('providers.mcp.selectAgentFirst'));
-        return;
-      }
-
-      // 含 API 应用时提醒：客户端须手工配置中转
-      if (syncDoRelay && apiIds.length) {
-        parts.push(t('providers.mcp.gatewayApiManualConfigHint'));
-      }
-      // WorkBuddy：写盘后还须在客户端「信任」自定义连接器
-      if (projectedToWorkbuddy) {
-        parts.push(t('providers.mcp.workbuddyTrustHint'));
-      }
-      if (!singleId) setSelectedServerIds([]);
-      // 中转成功后同步下拉
-      if (syncDoRelay && relayIds[0]) setGatewayProfileId(relayIds[0]);
-      setSyncMsg('');
-      // 先完成静默刷新，再弹结果（避免先提示后刷新）
+      const needManual = [...relayApps].filter((id) => gatewayApiApps.some((a) => a.id === id) || !relayUsableViaBuiltin(id));
+      if (needManual.length) parts.push(t('resources.mcp.relaySetupHint'));
+      if (projectedToWorkbuddy) parts.push(t('providers.mcp.workbuddyTrustHint'));
+      if (!single) setSelectedServerIds([]);
       await loadAll({ silent: true });
-      if (singleId) {
-        if (!parts.length) parts.push(t('providers.mcp.notInstalledAny'));
-        alert(`${singleName}：${parts.join('；')}`);
-      } else {
-        alert(parts.join('\n') || t('providers.mcp.installedBatch', { n: serverIds.length, agents: '' }));
-      }
+      setSyncMsg(parts.join('\n') || t('providers.mcp.notInstalledAny'));
     } catch (e) {
       setSyncMsg(e.message);
       alert(e.message);
@@ -988,137 +648,90 @@ export default function McpProvidersTab() {
     }
   }
 
-  function renderInstallAgentMenu() {
+  function toggleAddSelected(id) {
+    setSyncSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  /** 「添加到应用」统一菜单：只选应用，接入方式自动决定并在行内标注 */
+  function renderAddMenu() {
     if (!syncMenuOpen || !syncMenuPos) return null;
-    const singleServer = installMenuServerId
-      ? servers.find(s => s.id === installMenuServerId)
-      : null;
-    const isRelay = syncMenuMode === 'relay';
-    // 勾选了 API 应用时展示手工配置提醒（仅中转菜单）
-    const hasApiSelected = isRelay && syncSelectedIds.some((id) => gatewayApiApps.some((a) => a.id === id));
-    const showApiApps = isRelay && gatewayApiApps.length > 0;
+    const single = installMenuServerId ? servers.find((x) => x.id === installMenuServerId) : null;
+    const batchServers = single ? [] : selectedSyncableIds.map((id) => servers.find((x) => x.id === id)).filter(Boolean);
+    const probe = single || batchServers[0] || null;
+    const targets = addTargets();
     return createPortal(
       <div
         ref={syncMenuRef}
-        className="fixed z-[9999] w-64 flex flex-col rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 shadow-lg overflow-hidden"
         style={{
-          ...(syncMenuPos.top != null ? { top: syncMenuPos.top } : {}),
-          ...(syncMenuPos.bottom != null ? { bottom: syncMenuPos.bottom } : {}),
+          position: 'fixed',
           left: syncMenuPos.left,
+          ...(syncMenuPos.top != null ? { top: syncMenuPos.top } : { bottom: syncMenuPos.bottom }),
           maxHeight: syncMenuPos.maxH,
         }}
+        className="electron-no-drag fixed z-[9999] w-80 flex flex-col rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 shadow-lg overflow-hidden"
       >
         <div className="px-3 py-2 border-b border-zinc-100 dark:border-zinc-700 shrink-0">
           <p className="text-xs font-medium text-zinc-700 dark:text-zinc-200">
-            {isRelay ? t('providers.mcp.pickRelayTitle') : t('providers.mcp.pickProjectTitle')}
+            {single
+              ? t('resources.mcp.addTitle', { name: single.display_name || single.name })
+              : t('resources.mcp.addTitleBatch', { n: batchServers.length })}
           </p>
-          <p className="text-[10px] text-zinc-400 mt-0.5">
-            {singleServer
-              ? (isRelay
-                ? t('providers.mcp.relayHintSingle', { name: singleServer.display_name || singleServer.name })
-                : t('providers.mcp.installHintSingle', { name: singleServer.display_name || singleServer.name }))
-              : (isRelay
-                ? t('providers.mcp.relayHintBatch', { n: selectedSyncableIds.length })
-                : t('providers.mcp.installHintBatch', { n: selectedSyncableIds.length }))}
-          </p>
+          <p className="text-[10px] text-zinc-400 mt-0.5">{single?.builtin ? t('resources.mcp.builtinLockedHint') : t('resources.mcp.addHint')}</p>
         </div>
-        <div className="py-1 min-h-0 flex-1 overflow-y-auto">
-          {showApiApps && (
-            <>
-              <p className="px-3 pt-1.5 pb-0.5 text-[10px] text-zinc-400">{t('providers.mcp.gatewayGroupApiApps')}</p>
-              {gatewayApiApps.map((app) => {
-                const checked = syncSelectedIds.includes(app.id);
-                return (
-                  <label
-                    key={app.id}
-                    className={`flex items-center gap-2 px-3 py-2 text-xs cursor-pointer ${
-                      checked ? 'bg-amber-50 dark:bg-amber-900/20' : 'hover:bg-zinc-50 dark:hover:bg-zinc-700/40'
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => toggleSyncSelected(app.id)}
-                      className="rounded border-zinc-300 dark:border-zinc-600"
-                    />
-                    <ServiceIcon id={app.id} name={app.label} boxClass="w-6 h-6" imgClass="w-3.5 h-3.5" />
-                    <span className="text-zinc-700 dark:text-zinc-200 flex-1 truncate" title={app.label}>{app.label}</span>
-                    <span className="text-[9px] text-amber-600 dark:text-amber-400 shrink-0">{t('providers.mcp.gatewayApiAppTag')}</span>
-                  </label>
-                );
-              })}
-              {hasApiSelected && (
-                <p className="px-3 pb-1.5 text-[10px] leading-snug text-amber-700 dark:text-amber-300/90">
-                  {t('providers.mcp.gatewayApiManualConfigHint')}
-                </p>
-              )}
-            </>
-          )}
-          {syncWritableAgents.length > 0 && (
-            <p className="px-3 pt-1.5 pb-0.5 text-[10px] text-zinc-400">{t('providers.mcp.gatewayGroupAgents')}</p>
-          )}
-          {syncWritableAgents.length === 0 && !showApiApps ? (
-            <p className="text-xs text-zinc-400 px-3 py-2">{t('providers.mcp.noAgents')}</p>
-          ) : syncWritableAgents.map(agent => {
-            const checked = syncSelectedIds.includes(agent.id);
-            const blocked = !isRelay && !agent.projectable;
+        <div className="p-2 min-h-0 flex-1 overflow-y-auto space-y-0.5">
+          {targets.length === 0 && <p className="text-xs text-zinc-400 px-2 py-2">{t('providers.mcp.noAgents')}</p>}
+          {targets.map((tg) => {
+            const checked = syncSelectedIds.includes(tg.id);
+            const cur = probe ? connectionOf(probe, tg.id) : null;
+            const how = cur || (probe ? autoTransport(probe, tg) : (tg.kind === 'api-app' ? 'relay' : 'project'));
+            // 内置 MCP 已投射的应用锁定（不可取消）；未投射的仍可补上
+            const locked = !!(probe?.builtin && cur);
+            const blocked = locked || (!cur && !how);
             return (
-              <label
-                key={agent.id}
-                className={`flex items-center gap-2 px-3 py-2 text-xs ${
-                  blocked
-                    ? 'opacity-45 cursor-not-allowed'
-                    : `cursor-pointer ${checked ? 'bg-violet-50 dark:bg-violet-900/20' : 'hover:bg-zinc-50 dark:hover:bg-zinc-700/40'}`
-                }`}
-                title={blocked ? t('providers.mcp.projectUnsupported') : undefined}
-              >
-                <input
-                  type="checkbox"
-                  checked={checked}
-                  disabled={blocked}
-                  onChange={() => toggleSyncSelected(agent.id)}
-                  className="rounded border-zinc-300 dark:border-zinc-600"
-                />
-                <ServiceIcon id={agent.id} name={agent.label} boxClass="w-6 h-6" imgClass="w-3.5 h-3.5" />
-                <span className="text-zinc-700 dark:text-zinc-200 flex-1 truncate" title={agent.label}>{agent.label}</span>
-                {blocked && (
-                  <span className="text-[9px] text-zinc-400 shrink-0">{t('providers.mcp.projectUnsupportedTag')}</span>
+              <div key={tg.id} className={`rounded-lg ${checked || locked ? 'bg-blue-50 dark:bg-blue-950/30' : ''}`}>
+                <label className={`flex items-center gap-2 px-2 py-1.5 text-xs ${locked ? 'cursor-default' : blocked ? 'opacity-45 cursor-not-allowed' : 'cursor-pointer hover:bg-zinc-50/60 dark:hover:bg-zinc-700/40 rounded-lg'}`}>
+                  <input
+                    type="checkbox"
+                    checked={checked || locked}
+                    disabled={blocked}
+                    onChange={() => toggleAddSelected(tg.id)}
+                    className="rounded border-zinc-300 dark:border-zinc-600"
+                  />
+                  <ServiceIcon id={tg.id} name={tg.label} boxClass="w-6 h-6" imgClass="w-3.5 h-3.5" />
+                  <span className="flex-1 truncate text-zinc-700 dark:text-zinc-200" title={tg.label}>{tg.label}</span>
+                  {locked ? (
+                    <span className="shrink-0 text-[10px] text-sky-600 dark:text-sky-300" title={t('resources.mcp.builtinLockedHint')}>
+                      {t('resources.mcp.builtinLocked')}
+                    </span>
+                  ) : cur === 'project' && (
+                    <span className="shrink-0 text-[10px] text-zinc-400" title={t('resources.mcp.legacyConfigHint')}>
+                      {t('resources.mcp.legacyConfig')}
+                    </span>
+                  )}
+                </label>
+                {checked && how === 'relay' && (
+                  tg.kind !== 'api-app' && relayUsableViaBuiltin(tg.id) ? (
+                    <p className="pl-10 pr-2 pb-1.5 -mt-0.5 text-[10px] text-zinc-400">{t('resources.mcp.viaBuiltinNote')}</p>
+                  ) : (
+                    <div className="pl-10 pr-2 pb-1.5 -mt-0.5">{renderRelayUrl(tg.id, { compact: true })}</div>
+                  )
                 )}
-              </label>
+              </div>
             );
           })}
         </div>
-        <div className="flex items-center justify-between gap-2 px-3 py-2 border-t border-zinc-100 dark:border-zinc-700 bg-zinc-50/80 dark:bg-zinc-900/40 shrink-0">
-          {(() => {
-            const allIds = isRelay
-              ? [...gatewayApiApps.map((a) => a.id), ...syncWritableAgents.map((t) => t.id)]
-              : syncWritableAgents.filter((t) => t.projectable).map((t) => t.id);
-            const allSelected = allIds.length > 0 && allIds.every((id) => syncSelectedIds.includes(id));
-            return (
-              <button
-                type="button"
-                onClick={() => setSyncSelectedIds(allSelected ? [] : allIds)}
-                className="text-[10px] text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
-              >
-                {allSelected ? t('providers.mcp.deselectAll') : t('providers.mcp.selectAll')}
-              </button>
-            );
-          })()}
+        <div className="shrink-0 p-2 border-t border-zinc-100 dark:border-zinc-700 flex gap-2">
+          <button type="button" onClick={closeSyncMenu}
+            className="flex-1 text-xs py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-600">
+            {t('providers.mcp.cancel')}
+          </button>
           <button
             type="button"
-            disabled={!!busy || (!installMenuServerId && syncSelectedIds.length === 0)}
-            onClick={() => handleSyncClients(syncSelectedIds)}
-            className={`text-xs px-2.5 py-1 rounded-lg text-white disabled:opacity-40 ${
-              isRelay
-                ? 'bg-sky-600 hover:bg-sky-500'
-                : 'bg-violet-600 hover:bg-violet-500'
-            }`}
+            disabled={!!busy || (!single && syncSelectedIds.length === 0)}
+            onClick={() => applyAddToApps(syncSelectedIds)}
+            className="tb-press flex-1 text-xs py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-40"
           >
-            {busy
-              ? t('providers.mcp.processing')
-              : isRelay
-                ? t('providers.mcp.relayConfirmN', { n: syncSelectedIds.length })
-                : t('providers.mcp.confirmN', { n: syncSelectedIds.length })}
+            {busy ? t('providers.mcp.processing') : t('resources.mcp.addConfirm')}
           </button>
         </div>
       </div>,
@@ -1126,38 +739,20 @@ export default function McpProvidersTab() {
     );
   }
 
+  /** 批量：勾选多条后一次添加到应用 */
   function renderSyncDropdown() {
+    if (!selectedSyncableIds.length) return null;
     return (
-      <>
-        {selectedProjectableIds.length > 0 && (
-        <button
-          ref={syncProjectBtnRef}
-          type="button"
-          onClick={() => openSyncMenu('project', syncProjectBtnRef.current)}
-          disabled={!!busy || !syncWritableAgents.some((t) => t.projectable)}
-          className="text-xs px-3 py-1.5 rounded-lg border border-violet-200 dark:border-violet-800 text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-900/30 whitespace-nowrap disabled:opacity-40 inline-flex items-center gap-1"
-        >
-          {busy === 'sync' && syncMenuMode === 'project' ? t('providers.mcp.installing') : (
-            t('providers.mcp.installToAgentN', { n: selectedProjectableIds.length })
-          )}
-          <span className="text-[10px] opacity-70">▾</span>
-        </button>
-        )}
-        {selectedRelayableIds.length > 0 && (
-        <button
-          ref={syncRelayBtnRef}
-          type="button"
-          onClick={() => openSyncMenu('relay', syncRelayBtnRef.current)}
-          disabled={!!busy || (syncWritableAgents.length === 0 && gatewayApiApps.length === 0)}
-          className="text-xs px-3 py-1.5 rounded-lg border border-sky-200 dark:border-sky-800 text-sky-700 dark:text-sky-300 hover:bg-sky-50 dark:hover:bg-sky-900/30 whitespace-nowrap disabled:opacity-40 inline-flex items-center gap-1"
-        >
-          {busy === 'sync' && syncMenuMode === 'relay' ? t('providers.mcp.relaying') : (
-            t('providers.mcp.installRelayN', { n: selectedRelayableIds.length })
-          )}
-          <span className="text-[10px] opacity-70">▾</span>
-        </button>
-        )}
-      </>
+      <button
+        ref={syncProjectBtnRef}
+        type="button"
+        onClick={() => openAddMenu(null, syncProjectBtnRef.current)}
+        disabled={!!busy || addTargets().length === 0}
+        className="tb-press text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-40 inline-flex items-center gap-1"
+      >
+        {busy === 'sync' ? t('providers.mcp.processing') : t('resources.mcp.projectN', { n: selectedSyncableIds.length })}
+        <span className="text-[10px] opacity-70">▾</span>
+      </button>
     );
   }
 
@@ -1501,8 +1096,8 @@ export default function McpProvidersTab() {
   }
 
   function matchFilter(item) {
-    if (!catalogFilter.trim()) return true;
-    const q = catalogFilter.trim().toLowerCase();
+    if (!effQuery.trim()) return true;
+    const q = effQuery.trim().toLowerCase();
     const tags = item.metadata?.tags || [];
     const hay = [
       item.display_name,
@@ -1515,62 +1110,6 @@ export default function McpProvidersTab() {
       ...(item.metadata?.tools || []),
     ].filter(Boolean).join(' ').toLowerCase();
     return hay.includes(q);
-  }
-
-  function renderCatalogCard(item) {
-    return (
-      <div
-        key={item.catalogId}
-        className="tb-soft-tile rounded-2xl p-4 flex flex-col gap-2"
-      >
-        <div className="flex items-start gap-2">
-          <span className="text-xl">{item.metadata?.icon || '🔧'}</span>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 truncate" title={item.display_name}>
-              {item.display_name}
-            </p>
-            <p className="text-[11px] text-zinc-400 font-mono truncate" title={item.metadata?.package || item.name}>
-              {item.metadata?.package || item.name}
-            </p>
-          </div>
-          {item.installed ? (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 shrink-0">
-              {item.alwaysInstalled ? t('providers.mcp.builtin') : t('providers.mcp.managedTag')}
-            </span>
-          ) : null}
-        </div>
-        <p className="text-xs text-zinc-500 flex-1">{localizeCatalogDesc(item, t)}</p>
-        {item.metadata?.tools?.length > 0 && (
-          <p
-            className="text-[10px] text-zinc-400 font-mono break-words line-clamp-2"
-            title={item.metadata.tools.join(', ')}
-          >
-            {t('providers.mcp.toolsLabel', {
-              tools: item.metadata.tools.join(', '),
-            })}
-          </p>
-        )}
-        {item.metadata?.tags?.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {item.metadata.tags.map(tag => (
-              <span key={tag} className="text-[10px] px-1 py-0.5 rounded bg-zinc-100 dark:bg-zinc-700 text-zinc-500">
-                {localizeCatalogTag(tag, t)}
-              </span>
-            ))}
-          </div>
-        )}
-        {!item.alwaysInstalled && (
-          <button
-            type="button"
-            disabled={!!busy || item.installed}
-            onClick={() => handleInstall(item)}
-            className="mt-1 text-xs px-3 py-1.5 rounded-lg bg-violet-600 text-white disabled:opacity-40 hover:bg-violet-500"
-          >
-            {item.installed ? t('providers.mcp.managedTag') : busy === item.catalogId ? t('providers.mcp.importing') : t('providers.mcp.oneClickImport')}
-          </button>
-        )}
-      </div>
-    );
   }
 
   const filteredGroups = catalogGroups
@@ -1604,8 +1143,14 @@ export default function McpProvidersTab() {
   const activeAgent = filterAppItems.find(a => a.id === agentTab) || null;
 
   // 按应用筛选：Agent → 已投射或已中转；API 应用 → 仅已中转绑定
+  const serverMatchesQuery = (s) => {
+    const q = effQuery.trim().toLowerCase();
+    if (!q) return true;
+    return [s.display_name, s.name, s.metadata?.description, ...(s.metadata?.tools || [])]
+      .filter(Boolean).join(' ').toLowerCase().includes(q);
+  };
   const filteredManagedServers = (() => {
-    if (!agentTab) return servers;
+    if (!agentTab) return servers.filter(serverMatchesQuery);
     const isApiTab = activeAgent?.kind === 'api-app'
       || gatewayApiApps.some((a) => a.id === agentTab)
       || (gatewayInfo?.apiApps || []).some((a) => a.id === agentTab)
@@ -1614,9 +1159,9 @@ export default function McpProvidersTab() {
     const matchIds = expandClientMatchIds(agentTab);
     if (activeAgent?.appId) matchIds.add(activeAgent.appId);
     if (isApiTab) {
-      return servers.filter((s) => (s.gateway_clients || []).some((id) => matchIds.has(id)));
+      return servers.filter((s) => (s.gateway_clients || []).some((id) => matchIds.has(id))).filter(serverMatchesQuery);
     }
-    return servers.filter((s) => {
+    return servers.filter(serverMatchesQuery).filter((s) => {
       const onAgent = (s.clientTargets || []).some((c) => matchIds.has(c.id) && c.installed);
       const onGateway = (s.gateway_clients || []).some((id) => matchIds.has(id));
       const onSync = (s.sync_clients || []).some((id) => matchIds.has(id));
@@ -1661,244 +1206,763 @@ export default function McpProvidersTab() {
     return 'tb_sync';
   }
 
-  /** 本机 MCP 列表上方的应用筛选：对齐 Gateway「已纳管 / 在线」 */
-  function renderAppFilter() {
+  /** 应用筛选：与资产库同款下拉 */
+  function renderAppFilterMenu() {
     if (filterAppItems.length === 0) return null;
-    const options = [
-      { id: '', label: t('resources.appFilterAll'), kind: 'all' },
-      ...filterAppItems,
-    ];
     return (
-      <div className="flex flex-wrap gap-2">
-        {options.map(opt => {
-          const active = agentTab === opt.id;
-          const isApiApp = opt.kind === 'api-app';
-          return (
-            <button
-              key={opt.id || 'all'}
-              type="button"
-              onClick={() => {
-                selectAgentTab(opt.id);
-                if (opt.id) setGatewayProfileId(opt.id);
-              }}
-              title={isApiApp ? t('providers.mcp.gatewayFilterApiApp') : undefined}
-              className={`tb-press inline-flex items-center gap-2 px-3 py-1.5 rounded-full border transition-colors ${
-                active
-                  ? (isApiApp
-                    ? 'border-amber-500 bg-amber-50/90 dark:bg-amber-900/30 shadow-sm'
-                    : 'border-sky-500 bg-sky-50/90 dark:bg-sky-900/30 shadow-sm')
-                  : 'tb-soft-tile !rounded-full'
-              }`}
-            >
-              {opt.id ? (
-                <ServiceIcon id={opt.id} name={opt.label} boxClass="w-5 h-5" imgClass="w-3 h-3" className="!rounded-md" />
-              ) : (
-                <ServiceIcon icon="◫" name={opt.label} boxClass="w-5 h-5" imgClass="w-3 h-3" className="!rounded-md" />
-              )}
-              <span className={`text-xs font-medium ${
-                active
-                  ? (isApiApp ? 'text-amber-800 dark:text-amber-200' : 'text-sky-800 dark:text-sky-200')
-                  : 'text-zinc-700 dark:text-zinc-300'
-              }`}>
-                {opt.label}
-              </span>
-              {isApiApp && (
-                <span className="text-[9px] opacity-70">{t('providers.mcp.gatewayApiAppTag')}</span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+      <FilterMenu
+        label={t('resources.filter.app')}
+        value={agentTab}
+        allLabel={t('resources.appFilterAll')}
+        onChange={selectAgentTab}
+        options={filterAppItems.map(o => ({
+          value: o.id,
+          label: o.kind === 'api-app' ? `${o.label} · ${t('providers.mcp.gatewayApiAppTag')}` : o.label,
+          icon: <ServiceIcon id={o.id} name={o.label} boxClass="w-4 h-4" imgClass="w-2.5 h-2.5" className="!rounded" />,
+        }))}
+      />
     );
   }
 
-  /** 已投射于哪些已纳管 Agent（配置残留但未安装的不展示） */
-  function renderInstalledAgentBadges(server) {
-    const writable = new Set(syncWritableAgents.map((t) => t.id));
-    const installed = (server.clientTargets || []).filter(
-      (c) => c.installed && writable.has(c.id),
-    );
-    if (!installed.length) {
-      return <span className="text-[10px] text-zinc-400">{t('providers.mcp.notInstalledOnAgent')}</span>;
-    }
-    return installed.map(c => (
-      <span
-        key={c.id}
-        title={c.synced
-          ? t('providers.mcp.sourceTitleTb', { label: c.label })
-          : t('providers.mcp.sourceTitleClient', { label: c.label })}
-        className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 ring-1 ring-emerald-200 dark:ring-emerald-700/60 shrink-0"
+  function serverStatusDot(s) {
+    return s.status === 'active' ? 'bg-emerald-500' : 'bg-zinc-300 dark:bg-zinc-600';
+  }
+
+  function serverDesc(s) {
+    return localizeCatalogDesc({
+      catalogId: s.name || s.id,
+      id: s.id,
+      name: s.name,
+      description: s.metadata?.description || s.metadata?.category || s.type,
+    }, t);
+  }
+
+  function serverMenuItems(s) {
+    return [
+      !s.builtin && { key: 'edit', label: t('resources.edit'), disabled: !!busy, onClick: () => openEditServer(s) },
+      !s.builtin && { key: 'uninstall', label: t('providers.mcp.uninstall'), danger: true, disabled: !!busy, onClick: () => handleUninstall(s) },
+    ].filter(Boolean);
+  }
+
+  function canRelay(s) {
+    if (s.id === 'tokenbank-agent-bridge') return false;
+    return s.builtin ? isTbBuiltinRelayMcp(s) : canRouteViaGateway(s);
+  }
+
+  function renderServerActions(s, { block = false } = {}) {
+    const active = s.status === 'active' && s.id !== 'tokenbank-agent-bridge';
+    if (!active || (!s.builtin && !canRelay(s) && !serverHasDiskProjection(s))) return null;
+    return (
+      <button
+        type="button"
+        data-row-install-btn
+        disabled={!!busy || addTargets().length === 0}
+        onClick={(e) => openAddMenu(s, e.currentTarget)}
+        className={`${ASSET_BTN_PRIMARY} ${block ? 'w-full' : '!px-2.5 !py-1 !text-[11px] !rounded-lg'}`}
       >
-        <ServiceIcon
-          id={c.id}
-          name={c.label}
-          boxClass="w-6 h-6 !bg-transparent dark:!bg-transparent rounded-md"
-          imgClass="w-4 h-4"
-        />
-      </span>
-    ));
+        {busy === s.id ? t('providers.mcp.processing') : (block ? t('resources.project') : t('resources.projectShort'))}
+      </button>
+    );
   }
 
-  /** 已中转的 API 应用（排除「通用」档；无品牌图标则直接显示名称） */
-  function renderGatewayClientBadges(server) {
-    const clients = serverGatewayClients(server).filter((cid) => cid !== 'api');
-    if (!clients.length) return null;
-    return clients.map((cid) => {
-      const label = gatewayProfileOptions().find((o) => o.id === cid)?.label || cid;
-      const hay = `${cid} ${label}`;
-      const hasIcon = !!resolveBrandIcon(hay) || /kimi|moonshot/i.test(hay);
-      if (!hasIcon) {
-        return (
-          <span
-            key={cid}
-            title={label}
-            className="text-[10px] text-emerald-700 dark:text-emerald-300 whitespace-nowrap"
-          >
-            {label}
-          </span>
-        );
-      }
-      return (
-        <span
-          key={cid}
-          title={label}
-          className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 ring-1 ring-emerald-200 dark:ring-emerald-700/60 shrink-0"
-        >
-          <ServiceIcon
-            id={cid}
-            name={label}
-            boxClass="w-6 h-6 !bg-transparent dark:!bg-transparent rounded-md"
-            imgClass="w-4 h-4"
-          />
-        </span>
-      );
-    });
+  /** 已接入的应用（写入配置 + 经网关，去重；不含内部「通用」档） */
+  function connectedApps(server) {
+    const out = [];
+    const seen = new Set();
+    for (const tg of addTargets()) {
+      const how = connectionOf(server, tg.id);
+      if (!how || seen.has(tg.id)) continue;
+      seen.add(tg.id);
+      out.push({ id: tg.id, label: tg.label, how });
+    }
+    return out;
   }
 
-  function renderManagedRow(s) {
+  function renderManagedListRow(s) {
+    const key = `m:${s.id}`;
+    const sel = selectedKey === key;
     const canSelect = s.status === 'active' && s.id !== 'tokenbank-agent-bridge';
     const checked = selectedServerIds.includes(s.id);
+    const origin = managedOriginSource(s);
+    const menu = serverMenuItems(s);
     return (
-      <div
+      <li
         key={s.id}
-        className={`tb-soft-tile rounded-2xl p-4 flex flex-wrap items-start justify-between gap-3 ${
-          checked ? '!border-violet-300/70 dark:!border-violet-600/50 ring-1 ring-violet-200/50 dark:ring-violet-800/40' : ''
-        }`}
+        role="option"
+        aria-selected={sel}
+        onClick={() => setSelectedKey(sel ? null : key)}
+        className={`${libRowCls(sel)} ${MCP_GRID}`}
       >
-        <div className="min-w-0 flex-1 flex gap-3">
-          {canSelect ? (
+        <span className="w-4 flex justify-center" onClick={e => e.stopPropagation()}>
+          {canSelect && (
             <input
               type="checkbox"
               checked={checked}
               disabled={!!busy}
               onChange={() => toggleServerSelected(s.id)}
-              className="mt-1 rounded border-zinc-300 dark:border-zinc-600 shrink-0"
+              className="rounded border-zinc-300 dark:border-zinc-600"
               title={t('providers.mcp.checkToInstall')}
             />
-          ) : (
-            <span className="w-4 shrink-0" />
           )}
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <button
-                type="button"
-                disabled={!!s.builtin}
-                onClick={() => openEditServer(s)}
-                title={s.display_name || s.name || (s.builtin ? undefined : t('providers.mcp.clickToEdit'))}
-                className={`text-sm font-medium text-left truncate max-w-full ${
-                  s.builtin
-                    ? 'text-zinc-800 dark:text-zinc-200'
-                    : 'text-zinc-800 dark:text-zinc-200 hover:text-violet-600 dark:hover:text-violet-300 hover:underline underline-offset-2'
-                }`}
-              >
-                {s.display_name || s.name}
-              </button>
-              {s.builtin && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300">{t('providers.mcp.builtin')}</span>
+        </span>
+        <LibraryRowTitle
+          logo={<McpLogo icon={s.metadata?.icon} />}
+          name={s.display_name || s.name}
+          sub={s.id === 'tokenbank-agent-bridge' ? t('providers.mcp.playgroundOnly') : serverDesc(s)}
+          chips={(
+            <>
+              <span className="shrink-0 text-[10px] px-1.5 py-px rounded font-medium bg-teal-50/80 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300">MCP</span>
+              {s.builtin && <span className="shrink-0 text-[10px] text-sky-600 dark:text-sky-300">{t('providers.mcp.builtin')}</span>}
+              {origin && <span className="shrink-0">{renderMcpSourceBadge(origin)}</span>}
+            </>
+          )}
+        />
+        <div className="hidden md:flex items-center gap-1.5 min-w-0">
+          <AppIconStack apps={connectedApps(s)} emptyLabel="—" />
+        </div>
+        <span className="hidden md:block text-[11px] text-zinc-500">{isMcpUrlServer(s) ? t('providers.mcp.typeUrl') : t('providers.mcp.typeCli')}</span>
+        <span className="hidden md:flex items-center gap-1.5 text-[11px] text-zinc-600 dark:text-zinc-300">
+          <span className={`w-1.5 h-1.5 rounded-full ${serverStatusDot(s)}`} aria-hidden />
+          {s.status === 'active' ? t('providers.mcp.enabled') : t('providers.mcp.disabled')}
+        </span>
+        <div
+          className={`flex items-center justify-end gap-1.5 transition-opacity ${sel ? '' : 'md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100'}`}
+          onClick={e => e.stopPropagation()}
+        >
+          {renderServerActions(s)}
+          {menu.length > 0 && <AssetMoreMenu label={t('resources.moreActions')} items={menu} />}
+        </div>
+      </li>
+    );
+  }
+
+  function renderServerInspector(s) {
+    const tools = s.metadata?.tools || [];
+    const apps = connectedApps(s);
+    const menu = serverMenuItems(s);
+    const origin = managedOriginSource(s);
+    return (
+      <LibraryInspector
+        logo={<McpLogo icon={s.metadata?.icon} />}
+        title={s.display_name || s.name}
+        closeLabel={t('resources.collapse')}
+        onClose={() => setSelectedKey(null)}
+        chips={(
+          <>
+            <span className="text-[10px] px-1.5 py-px rounded font-medium bg-teal-50/80 text-teal-700 dark:bg-teal-950/40 dark:text-teal-300">MCP</span>
+            <span className="inline-flex items-center gap-1 text-[11px] text-zinc-500">
+              <span className={`w-1.5 h-1.5 rounded-full ${serverStatusDot(s)}`} aria-hidden />
+              {s.status === 'active' ? t('providers.mcp.enabled') : t('providers.mcp.disabled')}
+            </span>
+            <span className="text-[10px] text-zinc-400">{isMcpUrlServer(s) ? t('providers.mcp.typeUrl') : t('providers.mcp.typeCli')}</span>
+            {s.builtin && <span className="text-[10px] text-sky-600 dark:text-sky-300">{t('providers.mcp.builtin')}</span>}
+            {origin && renderMcpSourceBadge(origin)}
+          </>
+        )}
+        desc={s.id === 'tokenbank-agent-bridge' ? t('providers.mcp.playgroundOnly') : serverDesc(s)}
+        stats={[
+          [t('resources.mcp.toolCount'), tools.length],
+          [t('resources.col.apps'), apps.length],
+        ]}
+        footer={menu.length > 0 ? (
+          <>
+            {menu.filter(m => !m.danger).map(m => (
+              <button key={m.key} type="button" disabled={m.disabled} onClick={m.onClick} className={ASSET_BTN_GHOST}>{m.label}</button>
+            ))}
+            {menu.filter(m => m.danger).map(m => (
+              <button key={m.key} type="button" disabled={m.disabled} onClick={m.onClick}
+                className="ml-auto text-xs px-3 py-1.5 rounded-xl text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-45">{m.label}</button>
+            ))}
+          </>
+        ) : null}
+      >
+        {s.id !== 'tokenbank-agent-bridge' && (
+          <InspectorSection title={t('resources.col.apps')}>
+            <div className="space-y-2">
+              {apps.length === 0 ? (
+                <p className="text-[11px] text-zinc-400">{t('resources.mcp.notAdded')}</p>
+              ) : (
+                <ul className="space-y-1">
+                  {apps.map((a) => (
+                    <li key={a.id} className="text-xs">
+                      <div className="flex items-center gap-2">
+                        <ServiceIcon id={a.id} name={a.label} boxClass="w-5 h-5" imgClass="w-3 h-3" className="!rounded-md" />
+                        <span className="flex-1 truncate text-zinc-700 dark:text-zinc-200">{a.label}</span>
+                        {s.builtin ? (
+                          <span className="text-[10px] text-sky-600 dark:text-sky-300" title={t('resources.mcp.builtinLockedHint')}>
+                            {t('resources.mcp.builtinLocked')}
+                          </span>
+                        ) : a.how === 'project' && (
+                          <span className="text-[10px] text-zinc-400" title={t('resources.mcp.legacyConfigHint')}>
+                            {t('resources.mcp.legacyConfig')}
+                          </span>
+                        )}
+                      </div>
+                      {a.how === 'relay' && (
+                        gatewayApiApps.some((x) => x.id === a.id) || !relayUsableViaBuiltin(a.id)
+                          ? <div className="pl-7">{renderRelayUrl(a.id)}</div>
+                          : <p className="pl-7 text-[10px] text-zinc-400">{t('resources.mcp.viaBuiltinNote')}</p>
+                      )}
+                    </li>
+                  ))}
+                </ul>
               )}
-              {managedOriginSource(s) && renderMcpSourceBadge(managedOriginSource(s))}
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-700 text-zinc-500">
-                {isMcpUrlServer(s) ? t('providers.mcp.typeUrl') : t('providers.mcp.typeCli')}
-              </span>
-              <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                s.status === 'active'
-                  ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
-                  : 'bg-zinc-100 text-zinc-500'
-              }`}>
-                {s.status === 'active' ? t('providers.mcp.enabled') : t('providers.mcp.disabled')}
+              <p className="text-[10px] text-zinc-400 leading-relaxed">
+                {s.builtin ? t('resources.mcp.builtinLockedHint') : t('resources.mcp.accessHint')}
+              </p>
+              {renderServerActions(s, { block: true })}
+            </div>
+          </InspectorSection>
+        )}
+        {tools.length > 0 && (
+          <InspectorSection title={t('resources.mcp.tools', { n: tools.length })}>
+            <div className="flex flex-wrap gap-1">
+              {tools.map(tool => (
+                <span key={tool} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">{tool}</span>
+              ))}
+            </div>
+          </InspectorSection>
+        )}
+        {(s.command || s.url) && (
+          <InspectorSection title={t('resources.mcp.launch')}>
+            <code className="block text-[11px] font-mono text-zinc-500 break-all">
+              {s.url || [s.command, ...(Array.isArray(s.args) ? s.args : [])].join(' ')}
+            </code>
+          </InspectorSection>
+        )}
+      </LibraryInspector>
+    );
+  }
+
+  /** 应用配置里的 TokenBank 中转条目（扫描导入的 url 指向本网关）：属基础设施，不作为普通 MCP 列出 */
+  function isRelaySelfServer(s) {
+    const url = String(s?.url || s?.metadata?.url || '');
+    const base = relayBase();
+    if (base && url.startsWith(`${base}/mcp`)) return true;
+    return String(s?.name || '') === 'tokenbank-relay';
+  }
+
+  /** 内置工具：模型 / 资源为每个应用的必备项；提示词按需下发（有提示词投射时） */
+  const BUILTIN_REQUIRED_IDS = ['tokenbank-models', 'tokenbank-resources'];
+  function builtinRequiredServers() {
+    return servers.filter((s) => BUILTIN_REQUIRED_IDS.includes(s.id) && s.status === 'active');
+  }
+
+  /** 已在配置里接入中转网关的应用（桌面 / CLI） */
+  function relayConnectedIds() {
+    const set = new Set();
+    for (const s of servers) {
+      if (!isRelaySelfServer(s)) continue;
+      for (const id of getInstalledAgentIds(s)) set.add(id);
+    }
+    return set;
+  }
+
+  /**
+   * 接入状态：
+   * - 桌面 / CLI：内置 Resources 写入后即可经 tb_call_mcp 调用中转 MCP（relayVia=builtin），
+   *   配置里另有 tokenbank-relay 条目则为原生接入（relayVia=native）；就绪只看内置工具。
+   * - API 应用：无法写配置、无内置工具，需在应用侧手动配置一次中转地址（状态无法探测）。
+   */
+  function appSetupStatus(tg, relaySet) {
+    if (tg.kind === 'api-app') return { api: true, builtinOk: null, relayVia: null, ready: null };
+    const builtins = builtinRequiredServers();
+    const builtinOk = builtins.length > 0 && builtins.every((b) => getInstalledAgentIds(b).includes(tg.id));
+    const resourcesOk = servers.some((b) => b.id === 'tokenbank-resources' && getInstalledAgentIds(b).includes(tg.id));
+    const relayVia = relaySet.has(tg.id) ? 'native' : (resourcesOk ? 'builtin' : null);
+    return { api: false, builtinOk, relayVia, ready: builtinOk };
+  }
+
+  /** 桌面 / CLI 是否已可经内置工具使用中转 MCP */
+  function relayUsableViaBuiltin(appId) {
+    return servers.some((b) => b.id === 'tokenbank-resources' && getInstalledAgentIds(b).includes(appId));
+  }
+
+  /** 一键为某应用写入内置工具（模型 / 资源） */
+  async function setupBuiltinsFor(tg) {
+    if (!tg.agent?.syncClientId) return;
+    setBusy(`setup-${tg.id}`);
+    setSyncMsg('');
+    try {
+      for (const b of builtinRequiredServers()) {
+        const previously = getInstalledAgentIds(b);
+        if (previously.includes(tg.id)) continue;
+        const keep = previously.map((id) => syncWritableAgents.find((a) => a.id === id)?.syncClientId || id);
+        const selected = [...new Set([...keep, tg.agent.syncClientId])];
+        const res = await window.electronAPI.mcp.setServerSyncClients({
+          serverId: b.id,
+          clientIds: selected,
+          syncClientIds: [...new Set([...previously, ...selected])],
+        });
+        if (!res?.success) throw new Error(res?.error || t('providers.mcp.installFailed'));
+      }
+      await loadAll({ silent: true });
+      setSyncMsg(t('resources.mcp.builtinDone', { app: tg.label }));
+    } catch (e) {
+      setSyncMsg(e.message);
+    } finally {
+      setBusy('');
+    }
+  }
+
+  /** 复制中转接入：Claude Code 给一条命令，其它应用给 JSON */
+  async function copyRelaySetup(tg) {
+    const url = relayUrlFor(tg.id);
+    const token = gatewayInfo?.endpoint?.token;
+    if (tg.id === 'claude-code' && url && token) {
+      try {
+        await navigator.clipboard.writeText(`claude mcp add --transport http tokenbank-relay ${url} --header "Authorization: Bearer ${token}"`);
+        setSyncMsg(t('resources.mcp.relayCmdCopied'));
+      } catch {
+        alert(t('providers.mcp.gatewayCopyFailed'));
+      }
+      return;
+    }
+    await copyRelayConfigFor(tg.id);
+  }
+
+  /** 置顶：TokenBank 内置（默认基础设施）+ 各应用接入引导 */
+  function renderBuiltinCard() {
+    const relaySet = relayConnectedIds();
+    const targets = addTargets();
+    const rows = targets.map((tg) => ({ tg, st: appSetupStatus(tg, relaySet) }));
+    const agentRows = rows.filter((r) => !r.st.api);
+    const readyN = agentRows.filter((r) => r.st.ready).length;
+    const allReady = agentRows.length > 0 && readyN === agentRows.length;
+    const open = builtinCardOpen ?? !allReady;
+    const builtins = servers.filter((s) => s.builtin);
+    const pill = (ok, label) => (ok == null ? (
+      <span className="text-[10px] text-zinc-300 dark:text-zinc-600">—</span>
+    ) : (
+      <span className={`inline-flex items-center gap-1 text-[10px] ${ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
+        <span aria-hidden>{ok ? '✓' : '!'}</span>{label}
+      </span>
+    ));
+    return (
+      <div className={LIB_LIST_CLS}>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3">
+          <span className="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-950/40 flex items-center justify-center" aria-hidden>🏦</span>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-[13px] font-semibold text-zinc-900 dark:text-zinc-50">{t('resources.mcp.builtinTitle')}</h3>
+              <span className="text-[10px] px-1.5 py-px rounded bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300">{t('resources.mcp.builtinDefault')}</span>
+              <span className="inline-flex items-center gap-1 text-[11px] text-zinc-500">
+                <span className={`w-1.5 h-1.5 rounded-full ${gatewayInfo?.running ? 'bg-emerald-500' : 'bg-zinc-300'}`} aria-hidden />
+                {gatewayInfo?.running ? t('providers.mcp.gatewayRunning') : t('providers.mcp.gatewayStopped')}
               </span>
             </div>
-            {s.id !== 'tokenbank-agent-bridge' && (
-              <div className="flex items-center gap-2 mt-2 flex-wrap">
-                <span className="text-[10px] text-zinc-400 shrink-0">{t('providers.mcp.installedOn')}</span>
-                {renderInstalledAgentBadges(s)}
-              </div>
-            )}
-            {s.id === 'tokenbank-agent-bridge' && (
-              <p className="text-[10px] text-zinc-400 mt-2">{t('providers.mcp.playgroundOnly')}</p>
-            )}
-            {serverGatewayClients(s).some((cid) => cid !== 'api') && (
-              <div className="flex flex-wrap items-center gap-2 mt-1.5">
-                <span className="text-[10px] text-zinc-400 shrink-0">
-                  {t('providers.mcp.gatewayBadge')}
-                </span>
-                {renderGatewayClientBadges(s)}
-              </div>
-            )}
-            <p className="text-xs text-zinc-500 mt-1">
-              {localizeCatalogDesc({
-                catalogId: s.name || s.id,
-                id: s.id,
-                name: s.name,
-                description: s.metadata?.description || s.metadata?.category || s.type,
-              }, t)}
-            </p>
-            {s.metadata?.tools?.length > 0 && (
-              <p
-                className="text-[11px] text-zinc-400 mt-1 font-mono break-words line-clamp-2"
-                title={s.metadata.tools.join(', ')}
-              >
-                {s.metadata.tools.join(', ')}
-              </p>
-            )}
+            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">{t('resources.mcp.builtinDesc')}</p>
           </div>
+          <span className={`text-[11px] ${allReady ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
+            {t('resources.mcp.readyCount', { n: readyN, total: agentRows.length })}
+          </span>
+          <button type="button" onClick={() => setBuiltinCardOpen(!open)} className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline">
+            {open ? t('resources.collapse') : t('resources.mcp.setupExpand')}
+          </button>
         </div>
-        {!(s.builtin && s.id === 'tokenbank-agent-bridge') && (
-          <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-            {canSelect && (
-              <>
-                {canShowProjectButton(s) && (
-                <button
-                  type="button"
-                  data-row-install-btn
-                  disabled={!!busy || !syncWritableAgents.some((t) => t.projectable)}
-                  onClick={(e) => openRowInstallMenu(s, e, 'project')}
-                  className="tb-press text-xs px-2.5 py-1 rounded-lg border border-violet-200/80 dark:border-violet-700/60 bg-violet-50/60 dark:bg-violet-900/20 text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-900/30 disabled:opacity-40"
-                >
-                  {busy === s.id && syncMenuMode === 'project' ? t('providers.mcp.installing') : t('providers.mcp.installToAgent')}
+        {open && (
+          <>
+            <div className="flex flex-wrap items-center gap-1.5 px-4 pb-3 -mt-1">
+              <span className="text-[10px] text-zinc-400 mr-1">{t('resources.mcp.builtinTools')}</span>
+              {builtins.map((b) => (
+                <button key={b.id} type="button" onClick={() => setSelectedKey(`m:${b.id}`)}
+                  className={`text-[11px] px-2 py-0.5 rounded-md border transition-colors ${
+                    selectedKey === `m:${b.id}`
+                      ? 'border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300'
+                      : 'border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-white dark:hover:bg-zinc-800'
+                  }`}>
+                  {(b.display_name || b.name).replace(/^Token Bank\s*/i, '')}
                 </button>
-                )}
-                {(s.builtin ? isTbBuiltinRelayMcp(s) : canRouteViaGateway(s)) && (
-                <button
-                  type="button"
-                  data-row-install-btn
-                  disabled={!!busy || (syncWritableAgents.length === 0 && gatewayApiApps.length === 0)}
-                  onClick={(e) => openRowInstallMenu(s, e, 'relay')}
-                  className="tb-press text-xs px-2.5 py-1 rounded-lg border border-sky-200/80 dark:border-sky-700/60 bg-sky-50/60 dark:bg-sky-900/20 text-sky-700 dark:text-sky-300 hover:bg-sky-50 dark:hover:bg-sky-900/30 disabled:opacity-40"
+              ))}
+            </div>
+            <ul className="border-t border-zinc-100 dark:border-white/[0.05]">
+              {rows.length === 0 && <li className="px-4 py-3 text-[11px] text-zinc-400">{t('providers.mcp.noAgents')}</li>}
+              {rows.map(({ tg, st }) => {
+                const nativeOpen = nativeOpenIds.includes(tg.id);
+                return (
+                <li
+                  key={tg.id}
+                  role="option"
+                  aria-selected={selectedKey === `app:${tg.id}`}
+                  onClick={() => setSelectedKey(selectedKey === `app:${tg.id}` ? null : `app:${tg.id}`)}
+                  title={t('resources.mcp.appDetailHint')}
+                  className={`px-4 py-2 border-b last:border-b-0 border-zinc-100/90 dark:border-white/[0.05] cursor-pointer transition-colors ${
+                    selectedKey === `app:${tg.id}` ? 'bg-blue-50/80 dark:bg-blue-950/30' : 'hover:bg-zinc-50/80 dark:hover:bg-white/[0.03]'
+                  }`}
                 >
-                  {busy === s.id && syncMenuMode === 'relay' ? t('providers.mcp.relaying') : t('providers.mcp.installRelay')}
-                </button>
-                )}
-              </>
-            )}
-            {!s.builtin && (
-              <button type="button" disabled={!!busy} onClick={() => handleUninstall(s)}
-                className="tb-press text-xs px-2.5 py-1 rounded-lg text-red-600 border border-red-200/80 dark:border-red-900/50 bg-white/40 dark:bg-transparent hover:bg-red-50 dark:hover:bg-red-900/20">
-                {t('providers.mcp.uninstall')}
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <ServiceIcon id={tg.id} name={tg.label} boxClass="w-6 h-6" imgClass="w-3.5 h-3.5" className="!rounded-md" />
+                    <span className="text-xs text-zinc-800 dark:text-zinc-100 min-w-[6rem]">{tg.label}</span>
+                    {st.api ? (
+                      <span className="text-[10px] text-zinc-500">{t('resources.mcp.apiNeedsSetup')}</span>
+                    ) : (
+                      <>
+                        {pill(st.builtinOk, t('resources.mcp.builtinTools'))}
+                        {st.relayVia
+                          ? pill(true, st.relayVia === 'native' ? t('resources.mcp.relayNative') : t('resources.mcp.relayViaBuiltin'))
+                          : pill(false, t('resources.mcp.gateway'))}
+                      </>
+                    )}
+                    <div className="ml-auto flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                      {st.builtinOk === false && (
+                        <button type="button" disabled={!!busy} onClick={() => setupBuiltinsFor(tg)}
+                          className="tb-press text-[11px] px-2.5 py-1 rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-45">
+                          {busy === `setup-${tg.id}` ? t('providers.mcp.processing') : t('resources.mcp.setupBuiltin')}
+                        </button>
+                      )}
+                      {st.api && (
+                        <button type="button" onClick={() => copyRelaySetup(tg)}
+                          className="text-[11px] px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-white dark:hover:bg-zinc-800">
+                          {t('resources.mcp.copyRelay')}
+                        </button>
+                      )}
+                      {!st.api && st.relayVia !== 'native' && (
+                        <button type="button"
+                          onClick={() => setNativeOpenIds((prev) => (prev.includes(tg.id) ? prev.filter((x) => x !== tg.id) : [...prev, tg.id]))}
+                          title={t('resources.mcp.nativeHint')}
+                          className="text-[11px] text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400">
+                          {t('resources.mcp.enableNative')} {nativeOpen ? '▴' : '▾'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {(st.api || nativeOpen) && (
+                    <div className="pl-9 mt-1 space-y-1" onClick={(e) => e.stopPropagation()}>
+                      <p className="text-[10px] text-zinc-400">
+                        {st.api
+                          ? t('resources.mcp.guideApi')
+                          : `${t('resources.mcp.nativeHint')} ${tg.id === 'claude-code' ? t('resources.mcp.guideClaude') : t('resources.mcp.guideJson')}`}
+                      </p>
+                      {renderRelayUrl(tg.id, { compact: true, copy: false })}
+                      {!st.api && (
+                        <button type="button" onClick={() => copyRelaySetup(tg)}
+                          className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline">
+                          {tg.id === 'claude-code' ? t('resources.mcp.copyCmd') : t('resources.mcp.copyRelay')}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </li>
+                );
+              })}
+            </ul>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  /** 应用接入详情：配置文件、内置工具、中转（地址 / 鉴权 / 可复制配置）、投射的 MCP */
+  function renderAppInspector(tg) {
+    const st = appSetupStatus(tg, relayConnectedIds());
+    const target = (syncStatus?.targets || []).find((x) => x.id === (tg.agent?.syncClientId || tg.id))
+      || (syncStatus?.targets || []).find((x) => x.id === tg.id);
+    const url = relayUrlFor(tg.id);
+    const token = gatewayInfo?.endpoint?.token || '';
+    const shownToken = showRelayToken ? token : (token ? `${token.slice(0, 4)}${'•'.repeat(12)}` : '');
+    const cfg = url ? {
+      mcpServers: { 'tokenbank-relay': { url, headers: { Authorization: `Bearer ${shownToken}` } } },
+    } : null;
+    const cmd = url ? `claude mcp add --transport http tokenbank-relay ${url} --header "Authorization: Bearer ${shownToken}"` : '';
+    const builtins = servers.filter((b) => b.builtin && b.id !== 'tokenbank-agent-bridge');
+    const projected = servers
+      .filter((x) => !x.builtin && !isRelaySelfServer(x))
+      .map((x) => ({ s: x, how: connectionOf(x, tg.id) }))
+      .filter((x) => x.how);
+    const tbKeys = new Set(['tokenbank-relay', ...builtins.flatMap((b) => [b.name, b.id, `tb-${b.name}`, `tb-${b.id}`])]);
+    const otherKeys = (target?.scannedKeys || []).filter((k) => !tbKeys.has(k));
+    const copy = async (text, doneMsg) => {
+      try { await navigator.clipboard.writeText(text); setSyncMsg(doneMsg); } catch { alert(t('providers.mcp.gatewayCopyFailed')); }
+    };
+    const relayLabel = st.api
+      ? t('resources.mcp.apiNeedsSetup')
+      : st.relayVia === 'native' ? t('resources.mcp.relayNative')
+        : st.relayVia === 'builtin' ? t('resources.mcp.relayViaBuiltin') : t('resources.mcp.relayMissing');
+    return (
+      <LibraryInspector
+        logo={<ServiceIcon id={tg.id} name={tg.label} boxClass="w-9 h-9" imgClass="w-5 h-5" className="!rounded-xl" />}
+        title={tg.label}
+        closeLabel={t('resources.collapse')}
+        onClose={() => setSelectedKey(null)}
+        chips={(
+          <span className={`text-[10px] px-1.5 py-px rounded ${
+            st.api ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500'
+              : st.ready ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300'
+                : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300'
+          }`}>
+            {st.api ? t('resources.mcp.apiApp') : st.ready ? t('resources.mcp.appReady') : t('resources.mcp.appNotReady')}
+          </span>
+        )}
+        stats={st.api ? null : [
+          [t('resources.mcp.configMcpCount'), target?.count ?? '—'],
+          [t('resources.mcp.projectedCount'), projected.length],
+          [t('resources.mcp.lastSync'), target?.lastSync ? new Date(target.lastSync).toLocaleString() : '—'],
+        ]}
+      >
+        {!st.api && target?.path && (
+          <InspectorSection title={t('resources.mcp.configFile')}>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 min-w-0 break-all text-[11px] font-mono text-zinc-600 dark:text-zinc-300 select-all">{target.path}</code>
+              <button type="button" onClick={() => copy(target.path, t('resources.mcp.copied'))}
+                className="shrink-0 text-[10px] text-blue-600 dark:text-blue-400 hover:underline">{t('resources.mcp.copy')}</button>
+            </div>
+            {!target.exists && <p className="text-[10px] text-amber-600 mt-1">{t('resources.mcp.configMissing')}</p>}
+          </InspectorSection>
+        )}
+        {!st.api && (
+          <InspectorSection title={t('resources.mcp.builtinTools')}>
+            <ul className="space-y-1">
+              {builtins.map((b) => {
+                const ok = getInstalledAgentIds(b).includes(tg.id);
+                return (
+                  <li key={b.id} className="flex items-center gap-2 text-xs">
+                    <span className={ok ? 'text-emerald-600' : 'text-zinc-300'}>{ok ? '✓' : '○'}</span>
+                    <span className="flex-1 text-zinc-700 dark:text-zinc-200">{b.display_name || b.name}</span>
+                    <code className="text-[10px] font-mono text-zinc-400">{b.name}</code>
+                  </li>
+                );
+              })}
+            </ul>
+            {renderBuiltinMissingNote(st)}
+            {st.builtinOk === false && (
+              <button type="button" disabled={!!busy} onClick={() => setupBuiltinsFor(tg)} className={`${ASSET_BTN_PRIMARY} w-full mt-2`}>
+                {busy === `setup-${tg.id}` ? t('providers.mcp.processing') : t('resources.mcp.setupBuiltin')}
               </button>
             )}
-          </div>
+          </InspectorSection>
         )}
+        <InspectorSection title={t('resources.mcp.gateway')}>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-zinc-500">{t('resources.mcp.relayMode')}</span>
+              <span className="text-zinc-800 dark:text-zinc-100">{relayLabel}</span>
+            </div>
+            <div className="text-xs">
+              <div className="text-zinc-500 mb-0.5">{t('resources.mcp.relayUrl')}</div>
+              {renderRelayUrl(tg.id, { compact: true, copy: false })}
+            </div>
+            {token && (
+              <div className="text-xs">
+                <div className="flex items-center justify-between text-zinc-500 mb-0.5">
+                  <span>{t('resources.mcp.authHeader')}</span>
+                  <button type="button" onClick={() => setShowRelayToken((v) => !v)} className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline">
+                    {showRelayToken ? t('resources.mcp.hideToken') : t('resources.mcp.showToken')}
+                  </button>
+                </div>
+                <code className="block break-all text-[10px] font-mono text-zinc-600 dark:text-zinc-300">Authorization: Bearer {shownToken}</code>
+              </div>
+            )}
+            {cfg && (
+              <div className="text-xs">
+                <div className="flex items-center justify-between text-zinc-500 mb-0.5">
+                  <span>{t('resources.mcp.configJson')}</span>
+                  <button type="button" onClick={() => copyRelayConfigFor(tg.id)} className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline">{t('resources.mcp.copy')}</button>
+                </div>
+                <InspectorPreview text={JSON.stringify(cfg, null, 2)} />
+              </div>
+            )}
+            {tg.id === 'claude-code' && cmd && (
+              <div className="text-xs">
+                <div className="flex items-center justify-between text-zinc-500 mb-0.5">
+                  <span>{t('resources.mcp.cliCommand')}</span>
+                  <button type="button" onClick={() => copyRelaySetup(tg)} className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline">{t('resources.mcp.copy')}</button>
+                </div>
+                <InspectorPreview text={cmd} />
+              </div>
+            )}
+            <p className="text-[10px] text-zinc-400 leading-relaxed">
+              {st.api ? t('resources.mcp.guideApi') : st.relayVia === 'native' ? t('resources.mcp.nativeActive') : `${t('resources.mcp.viaBuiltinNote')}。${t('resources.mcp.nativeHint')}`}
+            </p>
+          </div>
+        </InspectorSection>
+        <InspectorSection title={t('resources.mcp.projectedHere', { n: projected.length })}>
+          {projected.length === 0 ? (
+            <p className="text-[11px] text-zinc-400">{t('resources.mcp.noneProjected')}</p>
+          ) : (
+            <ul className="space-y-1">
+              {projected.map(({ s: x, how }) => (
+                <li key={x.id} className="flex items-center gap-2 text-xs">
+                  <button type="button" onClick={() => setSelectedKey(`m:${x.id}`)} className="flex-1 text-left truncate text-zinc-700 dark:text-zinc-200 hover:text-blue-600">
+                    {x.display_name || x.name}
+                  </button>
+                  <span className="text-[10px] text-zinc-400">{how === 'project' ? t('resources.mcp.legacyConfig') : t('resources.mcp.viaRelayShort')}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </InspectorSection>
+        {otherKeys.length > 0 && (
+          <InspectorSection title={t('resources.mcp.otherInConfig', { n: otherKeys.length })}>
+            <div className="flex flex-wrap gap-1">
+              {otherKeys.map((k) => (
+                <code key={k} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">{k}</code>
+              ))}
+            </div>
+          </InspectorSection>
+        )}
+      </LibraryInspector>
+    );
+  }
+
+  function renderBuiltinMissingNote(st) {
+    if (st.builtinOk !== false) return null;
+    return <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1.5">{t('resources.mcp.builtinMissingNote')}</p>;
+  }
+
+  function renderManagedView() {
+    const selected = selectedKey?.startsWith('m:') ? servers.find(x => `m:${x.id}` === selectedKey) : null;
+    const selectedApp = selectedKey?.startsWith('app:') ? addTargets().find((tg) => `app:${tg.id}` === selectedKey) : null;
+    const listServers = filteredManagedServers.filter((s) => !s.builtin && !isRelaySelfServer(s));
+    return (
+      <>
+        {renderBuiltinCard()}
+        {syncMsg && (
+          <p className="text-xs text-zinc-600 dark:text-zinc-300 whitespace-pre-line rounded-lg bg-blue-50/70 dark:bg-blue-950/30 px-3 py-2">{syncMsg}</p>
+        )}
+        <div className="flex gap-4 items-start">
+          <div className="flex-1 min-w-0 space-y-3">
+            <LibrarySectionHead title={t('resources.mcp.thirdParty')} count={listServers.length} />
+            {listServers.length === 0 ? (
+              <div className={`${LIB_LIST_CLS} p-6 text-center space-y-2`}>
+                <p className="text-xs text-zinc-400">
+                  {agentTab && activeAgent
+                    ? t('providers.mcp.noManagedOnAgent', { agent: activeAgent.label })
+                    : t('providers.mcp.noManaged')}
+                </p>
+                {agentTab ? (
+                  <button type="button" onClick={() => selectAgentTab('')} className="text-xs text-blue-600 hover:underline">
+                    {t('resources.clearAppFilter')}
+                  </button>
+                ) : !controlledView && (
+                  <button type="button" onClick={() => selectMcpViewTab('catalog')} className="text-xs text-blue-600 hover:underline">
+                    {t('providers.mcp.goCatalog')}
+                  </button>
+                )}
+              </div>
+            ) : (
+              <div className={LIB_LIST_CLS}>
+                <div className={`hidden md:grid ${MCP_HEAD_GRID} gap-3 px-4 py-2 text-[11px] text-zinc-400 border-b border-zinc-100 dark:border-white/[0.05]`}>
+                  <span className="w-4 flex justify-center">
+                    {syncSelectableServers.length > 0 && (
+                      <input
+                        type="checkbox"
+                        checked={allSyncSelectableChecked}
+                        onChange={toggleSelectAllServers}
+                        title={t('providers.mcp.selectAll')}
+                        className="rounded border-zinc-300 dark:border-zinc-600"
+                      />
+                    )}
+                  </span>
+                  <span>{t('resources.col.name')}</span>
+                  <span>{t('resources.col.apps')}</span>
+                  <span>{t('resources.mcp.kind')}</span>
+                  <span>{t('resources.col.status')}</span>
+                  <span />
+                </div>
+                <ul role="listbox" aria-label="MCP">
+                  {listServers.map(renderManagedListRow)}
+                </ul>
+              </div>
+            )}
+            <p className="text-[11px] text-zinc-400 px-1">{t('resources.mcp.accessHint')}</p>
+          </div>
+          {selected && renderServerInspector(selected)}
+          {selectedApp && renderAppInspector(selectedApp)}
+        </div>
+      </>
+    );
+  }
+
+  function renderCatalogListRow(item) {
+    const key = `c:${item.catalogId}`;
+    const sel = selectedKey === key;
+    return (
+      <li
+        key={item.catalogId}
+        role="option"
+        aria-selected={sel}
+        onClick={() => setSelectedKey(sel ? null : key)}
+        className={`${libRowCls(sel)} grid-cols-[minmax(0,1fr)_auto]`}
+      >
+        <LibraryRowTitle
+          logo={<McpLogo icon={item.metadata?.icon} />}
+          name={item.display_name}
+          sub={localizeCatalogDesc(item, t)}
+          chips={(item.metadata?.tags || []).slice(0, 2).map(tag => (
+            <span key={tag} className="shrink-0 text-[10px] px-1.5 py-px rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-500">{localizeCatalogTag(tag, t)}</span>
+          ))}
+        />
+        <div onClick={e => e.stopPropagation()}>{renderCatalogAction(item)}</div>
+      </li>
+    );
+  }
+
+  function renderCatalogAction(item, block = false) {
+    if (item.alwaysInstalled) {
+      return <span className="text-[11px] text-sky-600 dark:text-sky-300">{t('providers.mcp.builtin')}</span>;
+    }
+    return (
+      <button
+        type="button"
+        disabled={!!busy || item.installed}
+        onClick={() => handleInstall(item)}
+        className={`${item.installed ? ASSET_BTN_MANAGED : ASSET_BTN_PRIMARY} ${block ? 'w-full' : '!px-3 !py-1 !text-[11px] !rounded-lg'}`}
+      >
+        {item.installed ? t('providers.mcp.managedTag') : busy === item.catalogId ? t('providers.mcp.importing') : t('providers.mcp.oneClickImport')}
+      </button>
+    );
+  }
+
+  function renderCatalogInspector(item) {
+    const tools = item.metadata?.tools || [];
+    return (
+      <LibraryInspector
+        logo={<McpLogo icon={item.metadata?.icon} />}
+        title={item.display_name}
+        closeLabel={t('resources.collapse')}
+        onClose={() => setSelectedKey(null)}
+        chips={(item.metadata?.tags || []).map(tag => (
+          <span key={tag} className="text-[10px] px-1.5 py-px rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-500">{localizeCatalogTag(tag, t)}</span>
+        ))}
+        desc={localizeCatalogDesc(item, t)}
+        stats={tools.length ? [[t('resources.mcp.toolCount'), tools.length]] : null}
+        footer={renderCatalogAction(item, true)}
+      >
+        {tools.length > 0 && (
+          <InspectorSection title={t('resources.mcp.tools', { n: tools.length })}>
+            <div className="flex flex-wrap gap-1">
+              {tools.map(tool => (
+                <span key={tool} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">{tool}</span>
+              ))}
+            </div>
+          </InspectorSection>
+        )}
+        {(item.metadata?.package || item.name) && (
+          <InspectorSection title={t('resources.mcp.package')}>
+            <code className="text-[11px] font-mono text-zinc-500 break-all">{item.metadata?.package || item.name}</code>
+          </InspectorSection>
+        )}
+      </LibraryInspector>
+    );
+  }
+
+  function renderCatalogView() {
+    const selected = selectedKey?.startsWith('c:') ? catalog.find(x => `c:${x.catalogId}` === selectedKey) : null;
+    return (
+      <div className="flex gap-4 items-start">
+        <div className="flex-1 min-w-0 space-y-5">
+          {filteredGroups.length === 0 ? (
+            <div className={`${LIB_LIST_CLS} p-6 text-center text-xs text-zinc-400`}>{t('providers.mcp.noMatch')}</div>
+          ) : filteredGroups.map(group => (
+            <section key={group.id}>
+              <LibrarySectionHead title={localizeGroupLabel(group, t)} count={group.items.length} />
+              <ul className={LIB_LIST_CLS} role="listbox" aria-label={localizeGroupLabel(group, t)}>
+                {group.items.map(renderCatalogListRow)}
+              </ul>
+            </section>
+          ))}
+        </div>
+        {selected && renderCatalogInspector(selected)}
       </div>
     );
   }
@@ -1936,119 +2000,42 @@ export default function McpProvidersTab() {
 
   return (
     <div className="space-y-4">
-      {renderInstallAgentMenu()}
+      {renderAddMenu()}
       {loading ? (
         <p className="text-xs text-zinc-400 py-8 text-center">{t('providers.mcp.loading')}</p>
       ) : error ? (
         <p className="text-xs text-red-500 py-4">{error}</p>
       ) : (
         <>
-          {/* Tab 左对齐，搜索/操作 右对齐 */}
-          <div className="flex items-center justify-between gap-3 w-full">
-            {renderMcpViewTabs()}
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                type="button"
-                onClick={() => loadAll()}
-                disabled={!!busy}
-                className="text-xs px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 whitespace-nowrap disabled:opacity-40"
-              >
+          {/* 工具栏：应用筛选 / 批量操作 / 刷新（嵌入资源页的目录视图无需工具栏） */}
+          {!(controlledView && effView === 'catalog') && (
+          <div className="flex flex-wrap items-center gap-2">
+            {!controlledView && renderMcpViewTabs()}
+            {effView === 'managed' && renderAppFilterMenu()}
+            {effView === 'managed' && renderSyncDropdown()}
+            <div className="ml-auto flex items-center gap-2">
+              {effView === 'catalog' && !controlledView && (
+                <input
+                  type="search"
+                  value={catalogFilter}
+                  onChange={e => setCatalogFilter(e.target.value)}
+                  placeholder={t('providers.mcp.searchPlaceholder')}
+                  className="tb-soft-field w-52 text-xs px-3 py-1.5 rounded-lg"
+                />
+              )}
+              <button type="button" onClick={() => loadAll()} disabled={!!busy} className={`${ASSET_BTN_GHOST} !rounded-lg !px-3 !py-1`}>
                 {t('providers.mcp.refresh')}
               </button>
-              {mcpViewTab === 'catalog' && (
-                <>
-                  <input
-                    type="search"
-                    value={catalogFilter}
-                    onChange={e => setCatalogFilter(e.target.value)}
-                    placeholder={t('providers.mcp.searchPlaceholder')}
-                    className="w-44 sm:w-52 text-xs px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800"
-                  />
-                  <span className="text-[11px] text-zinc-400 whitespace-nowrap hidden sm:inline">
-                    {t('providers.mcp.catalogCount', { n: totalCatalogCount })}
-                  </span>
-                </>
-              )}
-              {mcpViewTab === 'managed' && (
-                <>
-                  {renderSyncDropdown()}
-                  <button
-                    type="button"
-                    onClick={() => setShowCustom(true)}
-                    className="text-xs px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 whitespace-nowrap"
-                  >
-                    {t('providers.mcp.customMcp')}
-                  </button>
-                </>
+              {effView === 'managed' && !controlledView && (
+                <button type="button" onClick={() => setShowCustom(true)} className={`${ASSET_BTN_GHOST} !rounded-lg !px-3 !py-1`}>
+                  {t('providers.mcp.customMcp')}
+                </button>
               )}
             </div>
           </div>
-
-          {mcpViewTab === 'catalog' ? (
-          <section className="space-y-3">
-            {filteredGroups.length === 0 ? (
-              <p className="text-xs text-zinc-400 text-center py-6">{t('providers.mcp.noMatch')}</p>
-            ) : filteredGroups.map(group => (
-              <div key={group.id} className="space-y-2">
-                <h3 className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 flex items-center gap-2">
-                  <span className="w-1 h-3 rounded-full bg-violet-400" />
-                  {localizeGroupLabel(group, t)}
-                  <span className="text-zinc-400 font-normal">({group.items.length})</span>
-                </h3>
-                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {group.items.map(renderCatalogCard)}
-                </div>
-              </div>
-            ))}
-          </section>
-          ) : (
-          <>
-          {renderAppFilter()}
-          {renderGatewayPanel()}
-          {syncMsg && (
-            <p className="text-xs text-violet-600 dark:text-violet-400 -mt-1 whitespace-pre-line">{syncMsg}</p>
           )}
-          <p className="text-[11px] text-zinc-400 -mt-1 flex flex-wrap items-center gap-3">
-            <span>{t('providers.mcp.managedHint')}</span>
-            {syncSelectableServers.length > 0 && (
-              <label className="inline-flex items-center gap-1.5 cursor-pointer text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300">
-                <input
-                  type="checkbox"
-                  checked={allSyncSelectableChecked}
-                  onChange={toggleSelectAllServers}
-                  className="rounded border-zinc-300 dark:border-zinc-600"
-                />
-                {t('providers.mcp.selectAll')}
-              </label>
-            )}
-          </p>
-          {/* 与供给源卡一致：独立 soft-tile，去掉整表分割线 */}
-          <div className="space-y-2.5">
-            {filteredManagedServers.length === 0 ? (
-              <div className="tb-soft-tile rounded-2xl p-5 text-center space-y-2">
-                <p className="text-xs text-zinc-400">
-                  {agentTab
-                    ? (activeAgent ? t('providers.mcp.noManagedOnAgent', { agent: activeAgent.label }) : t('providers.mcp.noManaged'))
-                    : t('providers.mcp.noManaged')}
-                </p>
-                {!agentTab && (
-                  <button type="button" onClick={() => selectMcpViewTab('catalog')}
-                    className="text-xs text-violet-600 dark:text-violet-400 hover:underline">
-                    {t('providers.mcp.goCatalog')}
-                  </button>
-                )}
-                {agentTab && (
-                  <button type="button" onClick={() => selectAgentTab('')}
-                    className="text-xs text-violet-600 dark:text-violet-400 hover:underline">
-                    {t('resources.clearAppFilter')}
-                  </button>
-                )}
-              </div>
-            ) : filteredManagedServers.map(renderManagedRow)}
-          </div>
 
-          </>
-          )}
+          {effView === 'catalog' ? renderCatalogView() : renderManagedView()}
         </>
       )}
 
@@ -2316,10 +2303,3 @@ export default function McpProvidersTab() {
   );
 }
 
-export function readSupplyTab() {
-  try { return localStorage.getItem(SUPPLY_TAB_KEY) || 'model'; } catch { return 'model'; }
-}
-
-export function saveSupplyTab(tab) {
-  try { localStorage.setItem(SUPPLY_TAB_KEY, tab); } catch {}
-}

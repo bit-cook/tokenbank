@@ -158,13 +158,13 @@
               <span data-tab="gateway" data-i18n="hero.tab.gateway" style="font-size:12px;font-weight:500;color:#000;background:#f5f2f0;padding:4px 10px;border-radius:8px;cursor:pointer;">Gateway</span>
               <span data-tab="sessions" data-i18n="hero.tab.sessions" style="font-size:12px;color:#7b7b7b;padding:4px 10px;border-radius:8px;cursor:pointer;">Sessions</span>
               <span data-tab="trace" data-i18n="hero.tab.trace" style="font-size:12px;color:#7b7b7b;padding:4px 10px;border-radius:8px;cursor:pointer;">Trace</span>
-              <span data-tab="provider" data-i18n="hero.tab.provider" style="font-size:12px;color:#7b7b7b;padding:4px 10px;border-radius:8px;cursor:pointer;">Providers</span>
+              <span data-tab="provider" data-i18n="hero.tab.provider" style="font-size:12px;color:#7b7b7b;padding:4px 10px;border-radius:8px;cursor:pointer;">Models</span>
               <span data-tab="assets" data-i18n="hero.tab.assets" style="font-size:12px;color:#7b7b7b;padding:4px 10px;border-radius:8px;cursor:pointer;">Assets</span>
               <span data-tab="portrait" data-i18n="hero.tab.portrait" style="font-size:12px;color:#7b7b7b;padding:4px 10px;border-radius:8px;cursor:pointer;">Portrait</span>
               <span data-tab="playground" data-i18n="hero.tab.playground" style="font-size:12px;color:#7b7b7b;padding:4px 10px;border-radius:8px;cursor:pointer;">Playground</span>
               <span data-tab="dashboard" data-i18n="hero.tab.dashboard" style="font-size:12px;color:#7b7b7b;padding:4px 10px;border-radius:8px;cursor:pointer;">Usage</span>
               <span data-tab="circle" data-i18n="hero.tab.circle" style="font-size:12px;color:#7b7b7b;padding:4px 10px;border-radius:8px;cursor:pointer;">Circles</span>
-              <span data-tab="contribute" data-i18n="hero.tab.contribute" style="font-size:12px;color:#7b7b7b;padding:4px 10px;border-radius:8px;cursor:pointer;">Contribute</span>
+              <span data-tab="contribute" data-i18n="hero.tab.contribute" style="font-size:12px;color:#7b7b7b;padding:4px 10px;border-radius:8px;cursor:pointer;">Trade</span>
               <span data-tab="world" data-i18n="hero.tab.world" style="font-size:12px;color:#7b7b7b;padding:4px 10px;border-radius:8px;cursor:pointer;">Network</span>
               <span data-tab="device" data-i18n="hero.tab.device" style="font-size:12px;color:#7b7b7b;padding:4px 10px;border-radius:8px;cursor:pointer;">Tray</span>
             </div>
@@ -889,7 +889,7 @@
               <span style="font-family:'Space Mono',monospace;font-size:13px;color:#7b7b7b;flex:0 0 auto;width:24px;">03</span>
               <div>
                 <div data-i18n="cr.s3.h" style="font-size:16px;font-weight:600;color:#000;">Invite peers, earn together</div>
-                <div data-i18n="cr.s3.b" style="font-size:14px;color:#7b7b7b;line-height:1.5;margin-top:3px;">Share an invite link — when a friend joins, both earn credits. Post messages and replies to coordinate with circle mates.</div>
+                <div data-i18n="cr.s3.b" style="font-size:14px;color:#7b7b7b;line-height:1.5;margin-top:3px;">Share an invite link — when a friend joins, both earn credits. The owner can pin one announcement on what the circle shares.</div>
               </div>
             </div>
           </div>
@@ -1024,7 +1024,7 @@
             <span data-i18n="faq.q6">What are Circles?</span>
             <span class="tb-faq-mark" style="flex:0 0 auto;width:26px;height:26px;border-radius:8px;background:#f5f2f0;display:flex;align-items:center;justify-content:center;font-size:17px;color:#333;transition:transform .25s ease,background .25s ease;">+</span>
           </summary>
-          <p data-i18n="faq.a6" style="margin:0;padding:0 4px 26px;font-size:15px;line-height:1.6;color:#555;max-width:680px;">Circles are small communities inside Token Bank. Create or join via invite link, share models scoped to your circle, post messages to coordinate, and earn mutual credit rewards when friends join. You can contribute to multiple circles at once from the Contribute settings.</p>
+          <p data-i18n="faq.a6" style="margin:0;padding:0 4px 26px;font-size:15px;line-height:1.6;color:#555;max-width:680px;">Circles decide who you trade with. Create or join one via invite link under Trade → Circles, list your models and agents only to chosen circles, and hire only within them. Friends who join through your invite earn both of you credits.</p>
         </details>
 
         <details class="tb-faq" style="border-bottom:1px solid #ececec;">
@@ -1040,7 +1040,7 @@
             <span data-i18n="faq.q8">What is hiring agents?</span>
             <span class="tb-faq-mark" style="flex:0 0 auto;width:26px;height:26px;border-radius:8px;background:#f5f2f0;display:flex;align-items:center;justify-content:center;font-size:17px;color:#333;transition:transform .25s ease,background .25s ease;">+</span>
           </summary>
-          <p data-i18n="faq.a8" style="margin:0;padding:0 4px 26px;font-size:15px;line-height:1.6;color:#555;max-width:680px;">On Contribute, list projected assistants for others to hire: only the card and bio are public; configs and API keys stay on your machine, and jobs run there. You can also hire online community agents—tasks execute on their device without downloading their source; shareable links let others try them out.</p>
+          <p data-i18n="faq.a8" style="margin:0;padding:0 4px 26px;font-size:15px;line-height:1.6;color:#555;max-width:680px;">On the Trade page, list projected assistants for others to hire: only the card and bio are public; configs and API keys stay on your machine, and jobs run there. You can also hire online community agents—tasks execute on their device without downloading their source; shareable links let others try them out.</p>
         </details>
 
       </div>
@@ -1173,8 +1173,8 @@ class Component extends DCLogic {
     'hero.ctaBaidu': '百度网盘下载',
     'hero.meta': '开源 · 不改使用习惯 · 随时一键还原　·　macOS · Windows · Linux',
     'hero.tab.dashboard': '盘点', 'hero.tab.gateway': '网关', 'hero.tab.sessions': '会话', 'hero.tab.trace': 'Trace',
-    'hero.tab.provider': '供给源', 'hero.tab.assets': '资源', 'hero.tab.portrait': '画像', 'hero.tab.playground': '游乐场',
-    'hero.tab.contribute': '贡献', 'hero.tab.circle': '圈子', 'hero.tab.world': '网络', 'hero.tab.device': '托盘',
+    'hero.tab.provider': '模型', 'hero.tab.assets': '资产', 'hero.tab.portrait': '画像', 'hero.tab.playground': '游乐场',
+    'hero.tab.contribute': '交易', 'hero.tab.circle': '圈子', 'hero.tab.world': '网络', 'hero.tab.device': '托盘',
     'trust.label': '已与你正在用的主流 AI 应用协同',
     'trust.new': '新支持',
     'stat.1': '一个本地端口<br>接管全部 AI 应用',
@@ -1245,7 +1245,7 @@ class Component extends DCLogic {
     'nw.kicker': '共享市场 · 出租模型与智能体 · 闲置赚钱',
     'nw.title': '出租闲置 AI，人人用上稀缺能力。',
     'nw.sub': '把用不上的模型和智能体租出去，把没有的借来用。出租方赚积分，API Key、Skill 与配置始终留在本机；使用方按次付积分，用上稀有模型、雇佣专家智能体——都在同一个网关内完成。',
-    'nw.cta': '打开实时全球网络 →',
+    'nw.cta': '打开实时社区网络 →',
     'nw.p1.h': '个人算力', 'nw.p1.b': '挂在你名下的供应：本地 Ollama、厂商免费额度、应用 / API 订阅，以及按 list 价计费的按量账户。',
     'nw.p1.t1': '免费额度', 'nw.p1.t2': '订阅', 'nw.p1.t3': '按量付费',
     'nw.p2.h': '社区算力', 'nw.p2.b': '成员贡献闲置额度，通过积分网络共享。消耗积分即可调用别人供给的模型，往往比官方更省。',
@@ -1266,7 +1266,7 @@ class Component extends DCLogic {
     'cr.sub': '创建或加入志同道合的 AI 圈子。在圈内共享贡献的模型，邀请好友双方得积分，还可同时向多个圈子贡献算力。',
     'cr.s1.h': '创建或加入', 'cr.s1.b': '自建圈子，或通过邀请码 / 链接加入 — 圈主与成员角色清晰，圈友列表一目了然。',
     'cr.s2.h': '圈内共享模型', 'cr.s2.b': '贡献算力时可指定面向哪些圈子。圈友经同一网关调用共享模型，路由全程透明。',
-    'cr.s3.h': '邀请同好，积分互得', 'cr.s3.b': '分享邀请链接 — 好友加入后双方获得积分奖励。圈内可发帖、回复，与圈友交流协作。',
+    'cr.s3.h': '邀请同好，积分互得', 'cr.s3.b': '分享邀请链接 — 好友加入后双方获得积分奖励；圈主可发布一条公告，告诉圈友这里共享什么。',
     'cr.cta': '浏览圈子 →',
     'cr.card.name': 'AI 同好圈', 'cr.card.meta': '12 位圈友 · 你是圈主',
     'cr.card.invite': '邀请同好', 'cr.card.members': '圈友', 'cr.card.models': '共享模型',
@@ -1296,11 +1296,11 @@ class Component extends DCLogic {
     'faq.q5': '是免费且开源的吗？',
     'faq.a5': '是。Token Bank 采用 Apache-2.0 许可，macOS、Windows、Linux / Docker 均可免费下载使用。社区积分靠贡献获得，而非购买，仅少量云端托管功能收费。',
     'faq.q6': '什么是圈子？',
-    'faq.a6': '圈子是 Token Bank 内的小型社区：通过邀请链接创建或加入，向指定圈子共享模型，发帖与圈友交流协作，好友加入时双方获得积分奖励。在贡献设置中可同时向多个圈子共享算力。',
+    'faq.a6': '圈子决定你和谁交易：在「交易 → 圈子」通过邀请链接创建或加入，上架时可只给指定圈子，雇佣时可只看圈内；好友通过邀请加入时双方获得积分。',
     'faq.q7': 'v0.5 的 Agent 聚合编排是什么？',
     'faq.a7': '在游乐场选定主 Agent 作为聚合入口：它接收任务、可规划步骤，并派发到其他已纳管智能体（含已雇佣的社区智能体）。配合 CLI 多账号与 MCP / Skill / Prompt 资源中枢，Token Bank 成为本地 Agent 控制面，而不只是 Token 代理。',
     'faq.q8': '什么是雇佣智能体？',
-    'faq.a8': '在「贡献」页可上架已投射智能体供他人雇佣：只公开名片与简介，配置与 API Key 留在本机，接单任务在你设备执行。也可雇佣社区在线智能体——任务在对方设备跑，本机不落对方正文；支持分享链接外链试用。',
+    'faq.a8': '在「交易」页可上架已投射智能体供他人雇佣：只公开名片与简介，配置与 API Key 留在本机，接单任务在你设备执行。也可雇佣社区在线智能体——任务在对方设备跑，本机不落对方正文；支持分享链接外链试用。',
   };
 
   renderVals() {
@@ -1374,12 +1374,12 @@ class Component extends DCLogic {
         zh: { h: 'Session Trace', b: '步骤级工具、Skill、推理与 Token 明细。' },
       },
       provider: {
-        en: { h: 'Providers · personal + sharing', b: 'Speed-test personal models; spend credits on community compute.' },
-        zh: { h: '供给源 · 个人 + 社区分享', b: '个人模型测速；社区算力按积分调用。' },
+        en: { h: 'Models · personal + sharing', b: 'Speed-test personal models; spend credits on community compute.' },
+        zh: { h: '模型 · 个人 + 社区分享', b: '个人模型测速；社区算力按积分调用。' },
       },
       assets: {
         en: { h: 'Assets · Agents / Skills / Prompts', b: 'Manage resources and project them onto runtime agents.' },
-        zh: { h: '资源 · Agent / Skill / Prompt', b: '管理资源并投射到运行时智能体。' },
+        zh: { h: '资产 · Agent / Skill / Prompt / MCP', b: '管理资产并投射到运行时智能体。' },
       },
       portrait: {
         en: { h: 'For You · work portrait', b: 'Session-derived profile with agent recommendations and shareable posters.' },
@@ -1398,12 +1398,12 @@ class Component extends DCLogic {
         zh: { h: '圈子', b: '创建或加入圈子，与好友共享模型与积分。' },
       },
       contribute: {
-        en: { h: 'Contribute · models & hire agents', b: 'Share local models and list assistants for hire; keys and agent configs never leave your machine.' },
-        zh: { h: '贡献 · 模型与雇佣智能体', b: '贡献本地模型，并上架智能体供雇佣；密钥与智能体配置永不离开本机。' },
+        en: { h: 'Trade · models & hire agents', b: 'Share local models and list assistants for hire; keys and agent configs never leave your machine.' },
+        zh: { h: '交易 · 模型与雇佣智能体', b: '贡献本地模型，并上架智能体供雇佣；密钥与智能体配置永不离开本机。' },
       },
       world: {
-        en: { h: 'Global network', b: 'Online nodes, available models & agents, and a live geographic map.' },
-        zh: { h: '全球网络', b: '在线节点、可用模型与智能体、地理分布地图。' },
+        en: { h: 'Community network', b: 'Online nodes, available models & agents, and a live geographic map.' },
+        zh: { h: '社区网络', b: '在线节点、可用模型与智能体、地理分布地图。' },
       },
       device: {
         en: { h: 'Tray · always-on glance', b: "Gateway status, TTFT, and today's usage without opening the full app." },

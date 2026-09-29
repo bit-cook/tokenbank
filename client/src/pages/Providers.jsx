@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import ServiceIcon from '../components/ServiceIcon';
+import { LIB_LIST_CLS, libRowCls, LibraryRowTitle, LibraryPanel } from '../components/LibraryControls';
 import { getNetwork, getProfile, listKeys, createKey, deleteKey } from '../api/client';
 import { modelStatsForIds, workersForModel, normalizeNetworkPayload } from '../lib/networkModelStats';
 import { fetchServerCommunityModels } from '../lib/communityModels';
@@ -16,8 +17,7 @@ import { resolveModelsForModelView } from '../lib/personalAvailableModels';
 import { buildPersonalModelTypeMap, inferModelTypeFromName } from '../api/gatewayModels';
 import { encodeRoute } from '../lib/route-binding';
 import { avatarColor } from '../components/UserAvatar';
-import McpProvidersTab, { readSupplyTab, saveSupplyTab } from '../components/McpProvidersTab';
-import UsageMeter from '../components/UsageMeter';
+import UsageMeter, { UsageInline, usageProviderForDirect } from '../components/UsageMeter';
 
 /** 按当前语言覆盖 meta 中的 label / hint / getKey / oauth.label */
 function localizeProviderMeta(metaMap, t) {
@@ -954,16 +954,16 @@ function PersonalFilterBar({ value, onChange, t }) {
     { id: 'payg', label: t('providers.filter.payg') },
   ];
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div className="tb-glass-chip inline-flex flex-wrap rounded-lg p-0.5 gap-0.5">
       {items.map(item => (
         <button
           key={item.id}
           type="button"
           onClick={() => onChange(item.id)}
-          className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-full border transition-colors ${
+          className={`tb-press inline-flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-md transition-colors ${
             value === item.id
-              ? 'bg-blue-600 text-white border-blue-600 font-medium'
-              : 'tb-soft-tile !rounded-full text-zinc-600 dark:text-zinc-400'
+              ? 'bg-white/90 dark:bg-white/10 text-zinc-900 dark:text-zinc-100 shadow-sm font-medium'
+              : 'text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
           }`}
         >
           {item.id !== 'all' && <PersonalTypeIcon tag={item.id} />}
@@ -3532,7 +3532,6 @@ export default function Providers() {
   const [directBilling, setDirectBilling] = useState({});        // 直连源计费（按 agent_id）
   const [accountsData, setAccountsData] = useState(null);        // 完整账户快照（统计视图用）
   const [sourcesView, setSourcesView] = useState('model');       // 个人源视图：model | list（账户）
-  const [supplyTab, setSupplyTab] = useState(() => readSupplyTab()); // 供给源维度：model | mcp
   const [credModalKey, setCredModalKey] = useState(null);        // 添加实例后弹出的凭证配置弹窗（source key）
   // Track the last value written/loaded so we skip the initial load trigger
   const lastSaved = useRef(null);
@@ -4237,6 +4236,11 @@ export default function Providers() {
 
   const [pickerOpen, setPickerOpen] = useState(false);
   const [personalFilter, setPersonalFilter] = useState('all');
+  /** 个人源列表选中行（右侧详情放原配置卡） */
+  const [selectedSourceKey, setSelectedSourceKey] = useState(null);
+  /** 「谁在用它」：场景路由 + 绑定了模型的智能体（打开详情时加载） */
+  const [dependents, setDependents] = useState({ routes: [], assistants: [] });
+  const provLocation = useLocation();
   const [personalLatencyMap, setPersonalLatencyMap] = useState({});
 
   const loadPersonalLatency = useCallback(async () => {
@@ -4550,6 +4554,42 @@ export default function Providers() {
     }
     return null;
   }, [cooldownMaps]);
+
+  // 打开详情时加载「谁在用它」：场景路由（本地配置）+ 绑定模型的智能体（桌面版资源库）
+  useEffect(() => {
+    if (!selectedSourceKey) return undefined;
+    let alive = true;
+    (async () => {
+      let routes = [];
+      let assistants = [];
+      try { routes = (await getLocalConfig().get())?.scene_routes || []; } catch { /* ignore */ }
+      try {
+        const res = await window.electronAPI?.resource?.listResources?.({ type: 'assistant' });
+        assistants = (res?.resources || []).map(a => {
+          let model = '';
+          try {
+            const obj = typeof a.content === 'string' ? JSON.parse(a.content || '{}') : (a.content || {});
+            model = String(obj.model || obj.parameters?.model || '').trim();
+          } catch { /* ignore */ }
+          return { id: a.id, name: a.display_name || a.name, model };
+        });
+      } catch { /* 网页版无资源库 */ }
+      if (alive) setDependents({ routes, assistants });
+    })();
+    return () => { alive = false; };
+  }, [selectedSourceKey]);
+
+  // 从资源页「查看供给源」跳来：切到账户列表并选中提供该模型的来源
+  useEffect(() => {
+    const model = provLocation.state?.focusModel;
+    if (!model) return;
+    const hit = personalSourceRows.map(sourceSummary).find(sm => (sm.modelNames || []).includes(model));
+    // 账户尚未加载完：保留跳转请求，等数据到了再定位
+    if (!hit && !accountsData) return;
+    setSourcesView('list');
+    if (hit) setSelectedSourceKey(hit.key);
+    navigate(provLocation.pathname, { replace: true, state: null });
+  }, [provLocation.state, personalSourceRows, accountsData]); // eslint-disable-line react-hooks/exhaustive-deps
   const handleRetryCooldown = useCallback(async (key) => {
     try { await window.electronAPI?.gateway?.clearCooldown?.(key); } catch { /* ignore */ }
     loadCooldowns();
@@ -4691,26 +4731,193 @@ export default function Providers() {
     );
   }
 
-  function renderSupplyDimensionTabs() {
-    if (!isElectron) return null;
+  /** 个人源列表行摘要：名称 / 图标 / 类型 / 模型数 / 状态（配置细节仍在原卡片里） */
+  function sourceSummary(row) {
+    if (row.type === 'chatgptweb') {
+      const p = row.provider;
+      return {
+        key: `cw:${p.id}`, row, name: p.label || p.id, iconProps: { id: p.id, icon: '🌐' },
+        tag: 'free', enabled: p.enabled !== false, models: (p.models || []).length, cooldown: null, verified: false,
+        gwIds: [p.id], modelNames: modelNameList(p.models),
+      };
+    }
+    if (row.type === 'extra') {
+      const p = liveStateOf(row.provider);
+      const inst = accountInstances.find(i => i.gateway_id === p.id);
+      const m = resolveMetaForGateway(p.id, meta, inst, oauthById) || {};
+      return {
+        key: `x:${p.id}`, row, name: m.label || p.label || p.id,
+        iconProps: { id: p.id, icon: m.icon, baseUrl: p.base_url },
+        tag: getPersonalSourceTag(p, meta, userPayg, userSubscriptions),
+        enabled: p.enabled !== false, models: (p.models || []).length,
+        cooldown: cooldownFor(p.id, inst?.gateway_id, inst?.source_id), verified: p.test_verified === true,
+        gwIds: [p.id], modelNames: modelNameList(p.models),
+        usageProvider: usageProviderOf(p, inst),
+      };
+    }
+    const inst = row.inst;
+    const gw = inst.gateway_id;
+    const prov = gw ? providers.find(p => p.id === gw) : null;
+    // 模型数：直接按账户解析（模型视图会跳过已停用源，这里停用也要显示已登记数）
+    const models = resolveModelsForModelView(inst, providers, userPayg, userSubscriptions, pricingOverrides, directByAgent) || [];
+    const direct = row.type === 'direct' ? row.direct : null;
+    return {
+      key: `i:${inst.id}`, row, name: inst.name || inst.label || gw || inst.id,
+      iconProps: { id: inst.source_id || inst.provider_id || gw, icon: inst.icon, baseUrl: prov?.base_url },
+      tag: inst.tag,
+      enabled: direct ? true : prov?.enabled !== false,
+      models: models.length,
+      cooldown: direct ? cooldownFor(direct.agent_id, direct.source_id, direct.id) : cooldownFor(gw, prov?.id, inst.source_id),
+      verified: prov?.test_verified === true,
+      gwIds: [gw, prov?.id, direct?.agent_id].filter(Boolean), modelNames: modelNameList(models),
+      usageProvider: direct ? usageProviderForDirect(inst) : (prov ? usageProviderOf(prov, inst) : null),
+    };
+  }
+
+  /** 与卡片内 UsageMeter 同口径：API 订阅按 plan_provider_id 抓取 */
+  function usageProviderOf(provider, inst) {
+    const pid = inst?.plan_provider_id || provider.id;
+    return pid && pid !== provider.id ? { ...provider, id: pid } : provider;
+  }
+
+  function modelNameList(list) {
+    return (list || [])
+      .map(m => (typeof m === 'string' ? m : (m?.name || m?.id || '')))
+      .map(n => String(n).trim())
+      .filter(Boolean);
+  }
+
+  /** 依赖本源的场景路由 / 智能体（按供给源 id 钉选或按模型名匹配） */
+  function dependentsOf(sm) {
+    const ids = new Set(sm.gwIds || []);
+    const names = new Set(sm.modelNames || []);
+    const routes = (dependents.routes || []).filter(r => (r.steps || []).some(st => (
+      (st.provider && ids.has(st.provider)) || names.has(st.model || st.label || '')
+    )));
+    const assistants = (dependents.assistants || []).filter(a => a.model && names.has(a.model));
+    return { routes, assistants };
+  }
+
+  function renderDependents(sm) {
+    const { routes, assistants } = dependentsOf(sm);
     return (
-      <div className="inline-flex rounded-lg border border-violet-200 dark:border-violet-800/60 overflow-hidden text-xs shrink-0">
-        <button
-          type="button"
-          onClick={() => { setSupplyTab('model'); saveSupplyTab('model'); }}
-          className={`px-3 py-1.5 ${supplyTab === 'model' ? 'bg-violet-100 dark:bg-violet-900/40 text-violet-800 dark:text-violet-200 font-medium' : 'text-zinc-400 hover:text-zinc-600'}`}
-        >
-          {t('providers.supply.model')}
-        </button>
-        <button
-          type="button"
-          onClick={() => { setSupplyTab('mcp'); saveSupplyTab('mcp'); }}
-          className={`px-3 py-1.5 ${supplyTab === 'mcp' ? 'bg-violet-100 dark:bg-violet-900/40 text-violet-800 dark:text-violet-200 font-medium' : 'text-zinc-400 hover:text-zinc-600'}`}
-        >
-          {t('providers.supply.mcp')}
-        </button>
-      </div>
+      <section className="mb-3 rounded-xl border border-zinc-100 dark:border-white/[0.06] px-3 py-2.5">
+        <h3 className="text-[11px] font-medium text-zinc-400 mb-2">{t('providers.link.usedBy')}</h3>
+        {routes.length === 0 && assistants.length === 0 ? (
+          <p className="text-[11px] text-zinc-400">{t('providers.link.unused')}</p>
+        ) : (
+          <div className="flex flex-wrap gap-1.5">
+            {routes.map(r => (
+              <button key={`r-${r.id || r.model_key}`} type="button"
+                onClick={() => navigate('/gateway', { state: { gatewayTab: 'routes' } })}
+                title={t('providers.link.routeHint')}
+                className="text-[11px] px-2 py-0.5 rounded-md bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 hover:underline">
+                {t('providers.link.route')} · {r.scene_name || r.model_key || r.id}
+              </button>
+            ))}
+            {assistants.map(a => (
+              <button key={`a-${a.id}`} type="button"
+                onClick={() => navigate('/resources', { state: { resourceType: 'assistant', selectKey: `r-${a.id}` } })}
+                className="text-[11px] px-2 py-0.5 rounded-md bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 hover:underline">
+                {t('providers.link.assistant')} · {a.name}
+              </button>
+            ))}
+          </div>
+        )}
+        {!sm.enabled || routes.length + assistants.length === 0 ? null : (
+          <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-2">{t('providers.link.disableWarn')}</p>
+        )}
+      </section>
     );
+  }
+
+  function sourceStatus(sm) {
+    if (sm.cooldown) return { dot: 'bg-amber-400', label: t('providers.list.cooling') };
+    if (!sm.enabled) return { dot: 'bg-zinc-300 dark:bg-zinc-600', label: t('providers.list.disabled') };
+    if (sm.verified) return { dot: 'bg-emerald-500', label: t('providers.list.ready') };
+    return { dot: 'bg-sky-400', label: t('providers.list.enabled') };
+  }
+
+  function renderSourceRow(sm, sel) {
+    const st = sourceStatus(sm);
+    return (
+      <li
+        key={sm.key}
+        role="option"
+        aria-selected={sel}
+        onClick={() => setSelectedSourceKey(sel ? null : sm.key)}
+        className={`${libRowCls(sel)} grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[minmax(0,1fr)_9rem_4rem_6.5rem]`}
+      >
+        <LibraryRowTitle
+          logo={(
+            <ServiceIcon
+              id={sm.iconProps.id}
+              name={sm.name}
+              icon={sm.iconProps.icon}
+              baseUrl={sm.iconProps.baseUrl}
+              boxClass="w-9 h-9 !bg-zinc-100/80 dark:!bg-zinc-800/80 !rounded-xl"
+              imgClass="w-5 h-5"
+            />
+          )}
+          name={sm.name}
+          chips={!sm.cooldown && sm.usageProvider && sm.enabled ? (
+            <span className="ml-1.5 shrink-0 text-[11px] text-zinc-500 dark:text-zinc-400 empty:hidden">
+              <UsageInline provider={sm.usageProvider} />
+            </span>
+          ) : undefined}
+          sub={sm.cooldown ? t('providers.list.coolingHint') : undefined}
+          subClass="text-amber-600 dark:text-amber-400"
+        />
+        <div className="hidden md:flex items-center gap-1.5 min-w-0 text-[11px] text-zinc-600 dark:text-zinc-300">
+          <PersonalTypeIcon tag={sm.tag} />
+          <span className="truncate">{t(`providers.filter.${(PERSONAL_TYPE_BADGE[sm.tag] || PERSONAL_TYPE_BADGE.payg).filterKey}`)}</span>
+        </div>
+        <span className="hidden md:block text-right text-[11px] tabular-nums text-zinc-600 dark:text-zinc-300">{sm.models || '—'}</span>
+        <span className="flex items-center gap-1.5 text-[11px] text-zinc-600 dark:text-zinc-300">
+          <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} aria-hidden />
+          {st.label}
+        </span>
+      </li>
+    );
+  }
+
+  /** 原配置卡（详情面板内展示，保留全部编辑 / 测速 / 计费逻辑） */
+  function renderSourceCard(row) {
+    if (row.type === 'chatgptweb') {
+      return <ChatGptCard key={row.provider.id} provider={row.provider} onRemove={removeChatgptWebInstance} />;
+    }
+    if (row.type === 'direct') {
+      const d = row.direct;
+      return (
+        <DirectSourceCard key={d.agent_id} instance={{ ...d, _allBilling: directBilling }} t={t}
+          allowApiBilling={d.allow_api_billing === true}
+          canConvertToApi={d.can_convert_to_api === true}
+          onConvertToApi={convertDirectToApi}
+          cooldown={cooldownFor(d.agent_id, d.source_id, d.id)}
+          onRetryCooldown={handleRetryCooldown}
+          onSave={async (patch) => { await saveAccountsPatch(patch); }}
+          onRemove={removeDirectSource} />
+      );
+    }
+    if (row.type === 'extra') {
+      const p = row.provider;
+      const live = liveStateOf(p);
+      const extraInst = accountInstances.find(i => i.gateway_id === live.id);
+      const extraMeta = resolveMetaForGateway(live.id, meta, extraInst, oauthById);
+      const useCustomCard = shouldUseCustomProviderCard(live.id, userSubscriptions, extraInst, extraMeta);
+      return !useCustomCard
+        ? <ProviderCard initialExpanded key={live.id} provider={live} meta={extraMeta} onUpdate={updateProvider} onRemove={removePersonalProvider} onTest={testProvider} onPersistEnabled={persistProviderEnabled} onPersistTier={persistProviderTier} gatewayAuthMode={resolveCardAuthMode(live, providerGatewayAuth[live.id], extraInst)} userPayg={userPayg} userSubscriptions={userSubscriptions} onEditPricing={openTemplateEditForProvider} providerPricing={mergedProviderPricing} paygCatalog={paygCatalog} subscriptionCatalog={subscriptionCatalog} accountInst={extraInst} cooldown={cooldownFor(live.id, extraInst?.gateway_id, extraInst?.source_id)} {...accountBillingProps} />
+        : <CustomProviderCard key={live.id} provider={live} onUpdate={updateProvider} onRemove={removePersonalProvider} onTest={testProvider} onPersistEnabled={persistProviderEnabled} onPersistTier={persistProviderTier} userPayg={userPayg} userSubscriptions={userSubscriptions} onEditPricing={openTemplateEditForProvider} providerPricing={mergedProviderPricing} paygCatalog={paygCatalog} accountInst={extraInst} cooldown={cooldownFor(live.id, extraInst?.gateway_id, extraInst?.source_id)} {...accountBillingProps} />;
+    }
+    const inst = row.inst;
+    const gwId = inst.gateway_id;
+    const live = resolveProviderStubForInstance(inst, providers, meta, userPayg, userSubscriptions);
+    const cardMeta = resolveMetaForGateway(gwId, meta, inst, oauthById);
+    const useCustomCard = shouldUseCustomProviderCard(gwId, userSubscriptions, inst, cardMeta);
+    return !useCustomCard
+      ? <ProviderCard initialExpanded key={inst.id} provider={live} meta={cardMeta} onUpdate={updateProvider} onRemove={() => removeAccountInstance(inst)} onTest={testProvider} onPersistEnabled={persistProviderEnabled} onPersistTier={persistProviderTier} gatewayAuthMode={resolveCardAuthMode(live, providerGatewayAuth[gwId], inst)} userPayg={userPayg} userSubscriptions={userSubscriptions} onEditPricing={openTemplateEditForProvider} providerPricing={mergedProviderPricing} paygCatalog={paygCatalog} subscriptionCatalog={subscriptionCatalog} displayName={inst.name} displayIcon={inst.icon} lockTemplate accountInst={inst} cooldown={cooldownFor(gwId, live.id, inst.source_id)} {...accountBillingProps} />
+      : <CustomProviderCard key={inst.id} provider={live} onUpdate={updateProvider} onRemove={() => removeAccountInstance(inst)} onTest={testProvider} onPersistEnabled={persistProviderEnabled} onPersistTier={persistProviderTier} userPayg={userPayg} userSubscriptions={userSubscriptions} onEditPricing={openTemplateEditForProvider} providerPricing={mergedProviderPricing} paygCatalog={paygCatalog} accountInst={inst} cooldown={cooldownFor(gwId, live.id, inst.source_id)} {...accountBillingProps} />;
+    return null;
   }
 
   function renderSourcesViewTabs() {
@@ -4727,26 +4934,14 @@ export default function Providers() {
   return (
     <div className="px-4 py-4 space-y-5">
 
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-[17px] font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">{t('providers.title')}</h1>
-          <p className="text-xs text-zinc-400 dark:text-zinc-500 mt-0.5">
-            {supplyTab === 'mcp' ? t('providers.supply.mcpSubtitle') : t('providers.subtitle')}
-          </p>
-        </div>
-        <div className="shrink-0">
-          {renderSupplyDimensionTabs()}
-        </div>
+      {/* Header：与资源页同构（标题 + 副标题 + 下划线 Tab） */}
+      <div>
+        <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50 tracking-tight">{t('providers.title')}</h1>
+        <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+          {t('providers.subtitle')}
+        </p>
       </div>
 
-      {supplyTab === 'mcp' ? (
-        isElectron ? (
-          <McpProvidersTab />
-        ) : (
-          <p className="text-sm text-zinc-400 py-12 text-center">{t('providers.supply.mcpWebOnly')}</p>
-        )
-      ) : (
       <>
       {/* 个人源：标题独立于 panel；统计 + 已添加卡片 + 添加源 */}
       <section className="space-y-3">
@@ -4784,47 +4979,37 @@ export default function Providers() {
           />
         ) : (
         <>
-        <div className="grid grid-cols-2 gap-3">
-          {personalSourceRows.map(row => {
-            if (row.type === 'chatgptweb') {
-              return <ChatGptCard key={row.provider.id} provider={row.provider} onRemove={removeChatgptWebInstance} />;
-            }
-            if (row.type === 'direct') {
-              const d = row.direct;
-              return (
-                <DirectSourceCard key={d.agent_id} instance={{ ...d, _allBilling: directBilling }} t={t}
-                  allowApiBilling={d.allow_api_billing === true}
-                  canConvertToApi={d.can_convert_to_api === true}
-                  onConvertToApi={convertDirectToApi}
-                  cooldown={cooldownFor(d.agent_id, d.source_id, d.id)}
-                  onRetryCooldown={handleRetryCooldown}
-                  onSave={async (patch) => { await saveAccountsPatch(patch); }}
-                  onRemove={removeDirectSource} />
-              );
-            }
-            if (row.type === 'extra') {
-              const p = row.provider;
-              const live = liveStateOf(p);
-              const extraInst = accountInstances.find(i => i.gateway_id === live.id);
-              const extraMeta = resolveMetaForGateway(live.id, meta, extraInst, oauthById);
-              const useCustomCard = shouldUseCustomProviderCard(live.id, userSubscriptions, extraInst, extraMeta);
-              return !useCustomCard
-                ? <ProviderCard key={live.id} provider={live} meta={extraMeta} onUpdate={updateProvider} onRemove={removePersonalProvider} onTest={testProvider} onPersistEnabled={persistProviderEnabled} onPersistTier={persistProviderTier} gatewayAuthMode={resolveCardAuthMode(live, providerGatewayAuth[live.id], extraInst)} userPayg={userPayg} userSubscriptions={userSubscriptions} onEditPricing={openTemplateEditForProvider} providerPricing={mergedProviderPricing} paygCatalog={paygCatalog} subscriptionCatalog={subscriptionCatalog} accountInst={extraInst} cooldown={cooldownFor(live.id, extraInst?.gateway_id, extraInst?.source_id)} {...accountBillingProps} />
-                : <CustomProviderCard key={live.id} provider={live} onUpdate={updateProvider} onRemove={removePersonalProvider} onTest={testProvider} onPersistEnabled={persistProviderEnabled} onPersistTier={persistProviderTier} userPayg={userPayg} userSubscriptions={userSubscriptions} onEditPricing={openTemplateEditForProvider} providerPricing={mergedProviderPricing} paygCatalog={paygCatalog} accountInst={extraInst} cooldown={cooldownFor(live.id, extraInst?.gateway_id, extraInst?.source_id)} {...accountBillingProps} />;
-            }
-            const inst = row.inst;
-            const gwId = inst.gateway_id;
-            const live = resolveProviderStubForInstance(inst, providers, meta, userPayg, userSubscriptions);
-            const cardMeta = resolveMetaForGateway(gwId, meta, inst, oauthById);
-            const useCustomCard = shouldUseCustomProviderCard(gwId, userSubscriptions, inst, cardMeta);
-            return !useCustomCard
-              ? <ProviderCard key={inst.id} provider={live} meta={cardMeta} onUpdate={updateProvider} onRemove={() => removeAccountInstance(inst)} onTest={testProvider} onPersistEnabled={persistProviderEnabled} onPersistTier={persistProviderTier} gatewayAuthMode={resolveCardAuthMode(live, providerGatewayAuth[gwId], inst)} userPayg={userPayg} userSubscriptions={userSubscriptions} onEditPricing={openTemplateEditForProvider} providerPricing={mergedProviderPricing} paygCatalog={paygCatalog} subscriptionCatalog={subscriptionCatalog} displayName={inst.name} displayIcon={inst.icon} lockTemplate accountInst={inst} cooldown={cooldownFor(gwId, live.id, inst.source_id)} {...accountBillingProps} />
-              : <CustomProviderCard key={inst.id} provider={live} onUpdate={updateProvider} onRemove={() => removeAccountInstance(inst)} onTest={testProvider} onPersistEnabled={persistProviderEnabled} onPersistTier={persistProviderTier} userPayg={userPayg} userSubscriptions={userSubscriptions} onEditPricing={openTemplateEditForProvider} providerPricing={mergedProviderPricing} paygCatalog={paygCatalog} accountInst={inst} cooldown={cooldownFor(gwId, live.id, inst.source_id)} {...accountBillingProps} />;
-          })}
-          {personalSourceRows.length === 0 && (
-            <p className="col-span-2 text-xs text-zinc-400 text-center py-6">{t('providers.filter.empty')}</p>
-          )}
-        </div>
+        {(() => {
+          const summaries = personalSourceRows.map(sourceSummary);
+          const sel = summaries.find(x => x.key === selectedSourceKey);
+          return (
+            <div className="flex gap-4 items-start">
+              <div className="flex-1 min-w-0">
+                {summaries.length === 0 ? (
+                  <div className={`${LIB_LIST_CLS} text-xs text-zinc-400 text-center py-8`}>{t('providers.filter.empty')}</div>
+                ) : (
+                  <div className={LIB_LIST_CLS}>
+                    <div className="hidden md:grid md:grid-cols-[minmax(0,1fr)_9rem_4rem_6.5rem] gap-3 px-4 py-2 text-[11px] text-zinc-400 border-b border-zinc-100 dark:border-white/[0.05]">
+                      <span>{t('providers.list.name')}</span>
+                      <span>{t('providers.list.type')}</span>
+                      <span className="text-right">{t('providers.list.models')}</span>
+                      <span>{t('providers.list.status')}</span>
+                    </div>
+                    <ul role="listbox" aria-label={tierConfig.local.label}>
+                      {summaries.map(sm => renderSourceRow(sm, sm.key === selectedSourceKey))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+              {sel && (
+                <LibraryPanel title={t('providers.list.detail')} closeLabel={t('providers.list.close')} onClose={() => setSelectedSourceKey(null)}>
+                  {renderDependents(sel)}
+                  {renderSourceCard(sel.row)}
+                </LibraryPanel>
+              )}
+            </div>
+          );
+        })()}
         {renderAddSourcePicker()}
         </>
         )}
@@ -4846,7 +5031,6 @@ export default function Providers() {
         </div>
       </section>
       </>
-      )}
 
       {/* 添加实例后：凭证配置弹窗（复用 ProviderCard 的 API key / OAuth 配置，含 Claude 粘 code）*/}
       {credModalKey && (() => {

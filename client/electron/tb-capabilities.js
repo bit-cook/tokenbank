@@ -30,7 +30,7 @@ const CAPABILITY_DOMAINS = [
     mcp: 'tokenbank-agent-bridge',
     title: 'Agent 派发（仅编排/游乐场）',
     tools: ['tb_list_agents', 'tb_dispatch_agent', 'tb_list_community_agents', 'tb_hire_community_agent'],
-    when: '仅 Token Bank 编排：tb_list_agents / tb_list_community_agents 只返回本机已雇佣的 community:*；用 tb_dispatch_agent 派发（对方设备执行）。新雇佣在贡献页操作；日常直连会话请用点将，勿默认派发',
+    when: '仅 Token Bank 编排：tb_list_agents / tb_list_community_agents 只返回本机已雇佣的 community:*；用 tb_dispatch_agent 派发（对方设备执行）。新雇佣在「交易」页操作；日常直连会话请用点将，勿默认派发',
   },
 ];
 
@@ -100,7 +100,7 @@ function formatRelayedMcpSection(servers) {
   ];
   const list = Array.isArray(servers) ? servers : [];
   if (!list.length) {
-    lines.push('当前应用暂无已中转的第三方 MCP。请用户在 Token Bank「MCP」页对该应用勾选「中转」。');
+    lines.push('当前应用暂无已中转的第三方 MCP。请用户在 Token Bank「资产 → MCP 工具」把该 MCP 投射到此应用。');
     return lines.join('\n');
   }
   for (const s of list) {

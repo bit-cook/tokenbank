@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { loadGatewayAvailableModels, resolveLocalGatewayBase, inferModelTypeFromName } from '../api/gatewayModels';
 import { getSyncServerBase } from '../config';
 import { getGateway, getLocalConfig, getConfig, getApps, getOauth } from '../api/adapter';
@@ -2887,7 +2887,7 @@ function AppDetailModal({ app, onClose }) {
   );
 }
 
-function AppManager({ externalRoutes, availableModels = [], onActivity, onAppTotals }) {
+function AppManager({ externalRoutes, availableModels = [], onActivity }) {
   const refresh = typeof onActivity === 'function' ? onActivity : () => {};
   const { t } = useLang();
   const appsApi = getApps();
@@ -2959,21 +2959,6 @@ function AppManager({ externalRoutes, availableModels = [], onActivity, onAppTot
   }, [appsApi]);
 
   useEffect(() => { load(); }, [load]);
-
-  // 汇总各应用「今日」用量，供顶部卡片与表格列对齐（仅非 draft 行，与 visibleApps 一致）
-  useEffect(() => {
-    if (loading || !onAppTotals) return;
-    const totals = apps
-      .filter(a => !a.draft)
-      .reduce(
-        (acc, app) => {
-          const s = appStats[app.id] || {};
-          return { calls: acc.calls + (s.calls || 0), tokens: acc.tokens + (s.tokens || 0) };
-        },
-        { calls: 0, tokens: 0 },
-      );
-    onAppTotals(totals);
-  }, [apps, appStats, loading, onAppTotals]);
 
   // Claude 名（Claude Desktop inferenceModels 的 name 只能用 Anthropic 名）
   useEffect(() => { appsApi.claudeModels?.().then(m => setClaudeModels(Array.isArray(m) ? m : [])).catch(() => {}); }, [appsApi]);
@@ -4938,6 +4923,16 @@ export default function Gateway() {
   const [selectedLog, setSelectedLog] = useState(null);
   const [restarting, setRestarting] = useState(false);
   const [mainTab, setMainTab]   = useState(0);   // 0=应用列表 1=场景路由 2=会话
+  // 其它页跳转到场景路由：navigate('/gateway', { state: { gatewayTab: 'routes' } })
+  const gwLocation = useLocation();
+  const gwNavigate = useNavigate();
+  useEffect(() => {
+    const want = gwLocation.state?.gatewayTab;
+    if (!want) return;
+    if (want === 'routes') setMainTab(1);
+    else if (want === 'apps') setMainTab(0);
+    gwNavigate(gwLocation.pathname, { replace: true, state: null });
+  }, [gwLocation.state]); // eslint-disable-line react-hooks/exhaustive-deps
   const [sessionsMounted, setSessionsMounted] = useState(false); // 首次进入会话 Tab 后保持挂载
 
   // Scene routing
@@ -4947,7 +4942,6 @@ export default function Gateway() {
   const [availableModels, setAvailableModels] = useState([]);
   const [sources, setSources] = useState([]);   // 已启用供给源（路由里"某模型下锁具体源"用）
   // 应用列表汇总（与表格「今日请求/Token」列求和一致）
-  const [appTotals, setAppTotals] = useState(null);
 
   // Keys list
   const [keysScene, setKeysScene] = useState([]);
@@ -5033,9 +5027,10 @@ export default function Gateway() {
 
   const totalCalls   = stats?.total_calls ?? 0;
   const totalTokens  = stats?.total_tokens ?? 0;
-  // 顶部「今日」优先用应用列表求和（与表格一致）；加载前回退全量统计
-  const headerCalls  = appTotals != null ? appTotals.calls : totalCalls;
-  const headerTokens = appTotals != null ? appTotals.tokens : totalTokens;
+  // 顶部四项统一取自同一份「今日」统计（本地 0 点至今），避免与盘点页、网关占比口径不一。
+  // 不再用应用列表求和：未归属到应用的请求（或应用列表为空时）会被漏算成 0。
+  const headerCalls  = totalCalls;
+  const headerTokens = totalTokens;
   const proxyCalls   = (stats?.agent_sources ?? []).find(s => s.source === 'proxy')?.calls ?? 0;
   const gatewayRatio = totalCalls > 0 ? Math.round((proxyCalls / totalCalls) * 100) : null;
   const fmtTokens    = n => n >= 1_000_000 ? (n / 1e6).toFixed(2) + 'M' : n >= 1000 ? (n / 1000).toFixed(1) + 'K' : String(n || 0);
@@ -5178,12 +5173,12 @@ export default function Gateway() {
       {/* Stats */}
       <div className="grid grid-cols-4 gap-2.5">
         {[
-          { label: t('gateway.stat.todayCalls'), value: headerCalls > 0 ? headerCalls.toLocaleString() : '—', color: 'text-zinc-900 dark:text-zinc-100' },
-          { label: t('gateway.stat.todayTokens'), value: fmtTokens(headerTokens), color: 'text-blue-600 dark:text-blue-400' },
-          { label: t('gateway.stat.gatewayRatio'), value: gatewayRatio !== null ? `${gatewayRatio}%` : '—', color: 'text-violet-600 dark:text-violet-400' },
-          { label: t('gateway.stat.avgLatency'), value: avgLatency > 0 ? `${avgLatency}ms` : '—', color: 'text-zinc-500 dark:text-zinc-400' },
-        ].map(({ label, value, color }) => (
-          <div key={label} className="tb-soft-card rounded-xl px-4 py-3.5">
+          { label: t('gateway.stat.todayCalls'), hint: t('gateway.stat.todayCallsHint'), value: stats ? headerCalls.toLocaleString() : '—', color: 'text-zinc-900 dark:text-zinc-100' },
+          { label: t('gateway.stat.todayTokens'), value: stats ? fmtTokens(headerTokens) : '—', color: 'text-blue-600 dark:text-blue-400' },
+          { label: t('gateway.stat.gatewayRatio'), hint: t('gateway.stat.gatewayRatioHint'), value: gatewayRatio !== null ? `${gatewayRatio}%` : '—', color: 'text-violet-600 dark:text-violet-400' },
+          { label: t('gateway.stat.avgLatency'), hint: t('gateway.stat.avgLatencyHint'), value: avgLatency > 0 ? `${avgLatency}ms` : '—', color: 'text-zinc-500 dark:text-zinc-400' },
+        ].map(({ label, hint, value, color }) => (
+          <div key={label} title={hint} className="tb-soft-card rounded-xl px-4 py-3.5">
             <div className="text-xs font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500 mb-1.5">{label}</div>
             <div className={`text-[22px] font-bold leading-none tabular-nums tracking-tight ${color}`}>{value}</div>
           </div>
@@ -5232,7 +5227,7 @@ export default function Gateway() {
 
         {/* Tab0: 应用列表 & 托管 */}
         {mainTab === 0 && (
-          <AppManager externalRoutes={routes} availableModels={availableModels} onActivity={refresh} onAppTotals={setAppTotals} />
+          <AppManager externalRoutes={routes} availableModels={availableModels} onActivity={refresh} />
         )}
 
         {/* Tab1: 场景路由 */}

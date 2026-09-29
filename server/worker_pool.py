@@ -690,6 +690,9 @@ class WorkerPool:
                     "display_name": shared_agent_display_name(raw_dn, owner),
                     "description": card.get("description") or "",
                     "visibility": card.get("visibility") or "public",
+                    # 经由哪些圈子可见：仅与请求者自身圈子的交集，不泄露其它圈子
+                    "circle_ids": sorted(worker_circle_ids(w) & circles)
+                    if (card.get("visibility") or "public") != "public" and not public_only else [],
                     "runtime": card.get("runtime") or "",
                     "worker_id": w.worker_id,
                     "worker_name": w.name[:1] + "***" if w.name else "***",

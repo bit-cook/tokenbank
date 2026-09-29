@@ -4,952 +4,786 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>圈子 · Token Bank</title>
-<meta name="description" content="创建或加入圈子，与圈友共享模型、发帖协作">
+<meta name="description" content="圈子决定你和谁交易：创建或加入圈子，和信任的人共享模型与智能体">
+<link rel="icon" href="/static/logo.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/community.css">
 <script src="/static/vue.global.prod.js"></script>
-<script src="/static/datetime.js"></script>
 <style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --bg:#fff;--bg-muted:#f5f2f0;--bg-subtle:#faf9f5;
-  --text:#000;--text-muted:#7b7b7b;--text-faint:#bcbcbc;
-  --border:#e7e4e1;--accent:#f1ccff;--primary:#000;--primary-fg:#fff;
-  --ok:#16a34a;--danger:#dc2626;--link:#2563eb;
-  --radius:10px;--radius-lg:18px;
-  --font:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;
-  --mono:'Space Mono',ui-monospace,monospace;
-}
-body{font-family:var(--font);background:var(--bg-subtle);color:var(--text);font-size:14px;min-height:100vh;-webkit-font-smoothing:antialiased}
-a{color:inherit;text-decoration:none}
-button,input,textarea{font:inherit}
-.shell{max-width:800px;margin:0 auto;padding:24px 16px 64px}
-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;gap:12px;flex-wrap:wrap}
-.brand{display:flex;align-items:center;gap:10px;font-weight:600}
-.brand-mark{width:28px;height:28px;border-radius:8px;object-fit:contain;display:block;flex-shrink:0}
-.lang-btn,.ghost-btn,.btn,.btn-sm,.btn-danger{background:transparent;border:1px solid var(--border);border-radius:8px;padding:6px 12px;font-size:12px;cursor:pointer;color:var(--text-muted)}
-.lang-btn:hover,.ghost-btn:hover,.btn:hover{color:var(--text)}
-.btn{background:var(--primary);color:var(--primary-fg);border-color:var(--primary);font-weight:500}
-.btn:disabled{opacity:.5;cursor:not-allowed}
-.btn-sm{padding:5px 10px}
-.btn-danger{border-color:#fecaca;color:var(--danger)}
-.h1{font-size:22px;font-weight:700;letter-spacing:-.02em}
-.sub{color:var(--text-muted);font-size:13px;margin-top:4px}
-.toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:16px 0 12px;flex-wrap:wrap}
-.tabs{display:flex;gap:6px}
-.tabs button{padding:7px 12px;border:none;background:transparent;border-radius:8px;color:var(--text-muted);cursor:pointer}
-.tabs button.active{background:var(--bg);color:var(--text);font-weight:600;border:1px solid var(--border)}
-.card{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;margin-bottom:12px}
-.row{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:var(--bg-muted);border:1px solid transparent;border-radius:12px;padding:12px;cursor:pointer;margin-bottom:8px}
-.row:hover{border-color:var(--border);background:#fff}
-.avatar{width:36px;height:36px;border-radius:10px;background:#dbeafe;color:#2563eb;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
-.name{font-weight:600;font-size:13px}
-.desc{font-size:12px;color:var(--text-muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.side{margin-left:auto;text-align:right;font-size:11px;color:var(--text-muted);flex-shrink:0}
-.side b{display:block;color:var(--text);font-size:12px}
-.field{margin-bottom:10px}
-.field label{display:block;font-size:12px;color:var(--text-muted);margin-bottom:4px}
-.field input,.field textarea,.composer input,.composer textarea,.search-row input{
-  width:100%;padding:9px 12px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);outline:none}
-.field input:focus,.field textarea:focus,.composer textarea:focus,.search-row input:focus{border-color:#000}
-.search-row{display:flex;gap:8px;margin-bottom:12px}
-.search-row input{flex:1}
-.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
-.err{color:var(--danger);font-size:13px;margin:8px 0}
-.ok{color:var(--ok);font-size:13px;margin:8px 0}
-.state{text-align:center;padding:28px;color:var(--text-muted)}
-.banner{padding:10px 12px;border-radius:10px;font-size:13px;margin-bottom:12px;display:flex;justify-content:space-between;gap:8px;align-items:center}
-.banner.ok{background:#ecfdf5;color:#047857}
-.banner.warn{background:#fffbeb;color:#b45309}
-.banner.info{background:#eff6ff;color:#1d4ed8}
-.members{display:flex;flex-wrap:wrap;gap:8px}
-.member{width:48px;text-align:center}
-.member .av{width:32px;height:32px;border-radius:50%;margin:0 auto 4px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:12px;font-weight:700}
-.member .nm{font-size:10px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.chip{display:inline-block;padding:3px 8px;border-radius:999px;background:var(--bg-muted);font-size:11px;margin:2px 4px 2px 0}
-/* 共享模型/智能体：可点击行 */
-.supply-list{display:flex;flex-direction:column;gap:8px;margin-top:10px}
-a.supply-row,button.supply-row{
-  display:flex;align-items:center;gap:12px;width:100%;text-align:left;
-  background:var(--bg-muted);border:1px solid transparent;border-radius:12px;padding:12px;cursor:pointer;color:inherit
-}
-a.supply-row:hover,button.supply-row:hover{border-color:var(--border);background:#fff}
-.supply-row.disabled{opacity:.65;cursor:default}
-.supply-ico{
-  width:36px;height:36px;border-radius:10px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;
-  font-weight:700;font-size:13px;color:#fff
-}
-.supply-ico.model{background:#2563eb}
-.supply-ico.agent{background:#059669}
-.supply-main{min-width:0;flex:1}
-.supply-title{font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.supply-desc{font-size:11px;color:var(--text-muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.supply-cta{font-size:11px;color:var(--link);flex-shrink:0;font-weight:500}
-.post{border-top:1px solid var(--border);padding:14px 0}
-.post:first-child{border-top:none}
-.post .meta{font-size:11px;color:var(--text-muted);margin-bottom:6px}
-.post .body{font-size:14px;line-height:1.55;white-space:pre-wrap;word-break:break-word}
-.reply{margin:10px 0 0 16px;padding:10px;background:var(--bg-muted);border-radius:10px}
-.footer{margin-top:28px;text-align:center;color:var(--text-faint);font-size:12px}
-.link{color:var(--link);cursor:pointer}
-.auth-box{max-width:400px;margin:40px auto;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:28px}
-.auth-tabs{display:flex;border-bottom:1px solid var(--border);margin-bottom:16px}
-.auth-tabs button{flex:1;padding:10px;border:none;background:transparent;color:var(--text-muted);cursor:pointer}
-.auth-tabs button.active{color:var(--text);font-weight:600;border-bottom:2px solid #000;margin-bottom:-1px}
-.modal-mask{position:fixed;inset:0;background:rgba(0,0,0,.35);display:flex;align-items:center;justify-content:center;padding:16px;z-index:50}
-.modal{background:var(--bg);border-radius:var(--radius-lg);padding:20px;width:100%;max-width:420px}
-.mono{font-family:var(--mono);font-size:12px;word-break:break-all}
+.srow{grid-template-columns:minmax(0,1fr) 110px 92px}
+@media (max-width:720px){.srow{grid-template-columns:minmax(0,1fr) 84px}}
+.detail-hero{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:20px}
+.detail-hero .top{position:relative;padding:22px;display:flex;flex-wrap:wrap;align-items:flex-start;gap:16px}
+.detail-hero .top::before{content:"";position:absolute;inset:0 0 auto 0;height:72px;background:linear-gradient(90deg,#d1fae5aa,#f5ebff88 60%,transparent);pointer-events:none}
+.detail-hero .top>*{position:relative}
+.detail-hero .av{width:60px;height:60px;border-radius:18px;font-size:24px;box-shadow:0 0 0 4px #fff,0 6px 16px rgba(0,0,0,.08)}
+.detail-hero .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-top:1px solid var(--border)}
+.detail-hero .stats>div{padding:12px 22px;border-left:1px solid var(--border)}
+.detail-hero .stats>div:first-child{border-left:none}
+@media (max-width:720px){.detail-hero .stats{grid-template-columns:repeat(2,minmax(0,1fr))}.detail-hero .stats>div:nth-child(3){border-left:none}}
+.member-chip{display:inline-flex;align-items:center;gap:6px;padding:3px 10px 3px 3px;border-radius:999px;background:var(--bg);border:1px solid var(--border);font-size:12px}
+.req{display:flex;align-items:center;gap:10px;padding:10px 14px;border-top:1px solid #fde68a80}
+.req:first-of-type{border-top:none}
+.signin-card{display:flex;flex-wrap:wrap;align-items:center;gap:14px;background:linear-gradient(135deg,#f5ebff,#ecfdf5);border:1px solid var(--border);border-radius:var(--radius-lg);padding:18px 20px}
 </style>
 </head>
 <body>
-<div id="app" class="shell">
-  <header>
-    <a class="brand" href="/network">
-      <img class="brand-mark" src="/static/logo.svg" alt="Token Bank" width="28" height="28">
-      <span>Token Bank</span>
-    </a>
-    <div style="display:flex;gap:8px;align-items:center">
-      <button class="lang-btn" type="button" @click="toggleLang">{{ lang === 'zh' ? 'EN' : '中文' }}</button>
-      <a class="ghost-btn" href="/network">{{ T.network }}</a>
-      <a class="ghost-btn" href="/app">{{ T.app }}</a>
-      <button v-if="loggedIn" class="ghost-btn" type="button" @click="logout">{{ T.logout }}</button>
-      <button v-else class="ghost-btn" type="button" @click="openAuth()">{{ T.login }}</button>
+<div id="app" v-cloak>
+  <nav class="topnav">
+    <div class="topnav-in">
+      <a class="brand" href="/"><img src="/static/logo.svg" alt=""><span class="bt">Token Bank</span></a>
+      <div class="navlinks">
+        <a href="/network">{{ T.navNetwork }}</a>
+        <a class="on" href="/circles">{{ T.navCircles }}</a>
+      </div>
+      <div class="nav-right">
+        <button class="btn ghost sm" type="button" @click="toggleLang">{{ lang === 'zh' ? 'EN' : '中文' }}</button>
+        <template v-if="loggedIn">
+          <a class="btn sm" href="/app">{{ profile?.nickname || T.account }}</a>
+          <button class="btn ghost sm" type="button" @click="logout">{{ T.logout }}</button>
+        </template>
+        <button v-else class="btn primary sm" type="button" @click="openAuth()">{{ T.login }}</button>
+      </div>
     </div>
-  </header>
+  </nav>
 
-  <!-- 登录弹层：浏览列表无需登录；申请/我的圈子/详情才要求 -->
-  <div v-if="showAuth" class="modal-mask" @click.self="showAuth=false">
-    <div class="modal auth-box" style="margin:0;max-width:400px">
-      <h1 class="h1" style="text-align:center;margin-bottom:4px;font-size:20px">{{ T.login }}</h1>
-      <p class="sub" style="text-align:center;margin-bottom:16px">{{ T.needLogin }}</p>
-      <div class="auth-tabs">
-        <button type="button" :class="{ active: authTab==='login' }" @click="authTab='login'">{{ T.login }}</button>
-        <button type="button" :class="{ active: authTab==='register' }" @click="authTab='register'">{{ T.register }}</button>
+  <main class="page">
+    <!-- ═════════ 列表：我的圈子 + 发现 ═════════ -->
+    <template v-if="view !== 'detail'">
+      <div class="hero">
+        <div>
+          <h1>{{ T.title }}</h1>
+          <p>{{ T.subtitle }}</p>
+        </div>
+        <div class="actions">
+          <button class="btn" type="button" @click="needAuth(() => modal = 'join')">{{ T.joinByCode }}</button>
+          <button class="btn primary" type="button" @click="needAuth(() => modal = 'create')">+ {{ T.create }}</button>
+        </div>
       </div>
-      <div class="field" v-if="authTab==='register'">
-        <label>{{ T.nickname }}</label>
-        <input v-model="form.nickname" autocomplete="nickname">
+
+      <!-- 我的圈子 -->
+      <section class="section">
+        <div class="section-h">
+          <h2>{{ T.mine }}</h2><span class="n" v-if="loggedIn">{{ mine.length }}</span>
+          <span class="r muted" v-if="loggedIn && totalPending">{{ T.pendingTotal.replace('{n}', String(totalPending)) }}</span>
+        </div>
+        <div v-if="!loggedIn" class="signin-card">
+          <div style="flex:1;min-width:220px">
+            <div style="font-weight:650">{{ T.signinTitle }}</div>
+            <div class="small muted" style="margin-top:2px">{{ T.signinDesc }}</div>
+          </div>
+          <button class="btn primary" type="button" @click="openAuth()">{{ T.login }} / {{ T.register }}</button>
+        </div>
+        <div v-else-if="loadingMine" class="grid">
+          <div v-for="i in 3" :key="i" class="card"><div class="skel" style="height:38px;width:60%"></div><div class="skel" style="height:30px"></div></div>
+        </div>
+        <div v-else-if="!mine.length" class="empty">
+          <div class="e">👥</div>{{ T.noMine }}
+          <div><button class="btn primary" type="button" @click="modal = 'create'">+ {{ T.create }}</button></div>
+        </div>
+        <div v-else class="grid">
+          <a v-for="c in mine" :key="c.id" class="card" :href="'/c/' + c.id" @click.prevent="goDetail(c.id)">
+            <div class="card-h">
+              <span class="av" :style="{ background: color(c.name) }">{{ (c.name || '?').slice(0, 1) }}</span>
+              <div style="min-width:0;flex:1">
+                <div class="card-t ell">{{ c.name }}</div>
+                <div class="xs muted">{{ T.membersN.replace('{n}', String(c.member_count || 0)) }}<template v-if="c.max_members"> / {{ c.max_members }}</template></div>
+              </div>
+              <span class="badge" :class="c._owner ? 'blue' : ''">{{ c._owner ? T.owner : T.member }}</span>
+            </div>
+            <div class="card-d">{{ c.description || T.noDesc }}</div>
+            <div class="bar" v-if="c.max_members"><i :class="{ hot: pct(c) >= 90 }" :style="{ width: Math.max(pct(c), 3) + '%' }"></i></div>
+            <div class="card-f">
+              <span v-if="requestCounts[c.id]" class="badge amber">● {{ T.reqN.replace('{n}', String(requestCounts[c.id])) }}</span>
+              <span v-else class="xs muted">{{ c._owner ? T.youOwn : T.youMember }}</span>
+              <span class="xs link" style="margin-left:auto">{{ T.enter }} →</span>
+            </div>
+          </a>
+        </div>
+      </section>
+
+      <!-- 发现公开圈子 -->
+      <section class="section" id="discover">
+        <div class="section-h"><h2>{{ T.discover }}</h2><span class="n">{{ shownBrowse.length }}</span></div>
+        <div class="toolbar">
+          <label class="search">
+            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="9" r="5.5"/><path d="M13.5 13.5 17 17" stroke-linecap="round"/></svg>
+            <input v-model="browseQ" :placeholder="T.searchPh" @keydown.esc="browseQ=''">
+          </label>
+          <span class="right">{{ T.discoverHint }}</span>
+        </div>
+        <div v-if="loadingBrowse" class="grid">
+          <div v-for="i in 3" :key="i" class="card"><div class="skel" style="height:38px;width:60%"></div><div class="skel" style="height:30px"></div></div>
+        </div>
+        <div v-else-if="!shownBrowse.length" class="empty"><div class="e">🔍</div>{{ browseQ ? T.noMatch : T.noBrowse }}</div>
+        <div v-else class="grid">
+          <div v-for="c in shownBrowse" :key="c.id" class="card">
+            <div class="card-h">
+              <span class="av" :style="{ background: color(c.name) }">{{ (c.name || '?').slice(0, 1) }}</span>
+              <div style="min-width:0;flex:1">
+                <div class="card-t ell">{{ c.name }}</div>
+                <div class="xs muted">{{ T.membersN.replace('{n}', String(c.member_count || 0)) }}<template v-if="c.max_members"> / {{ c.max_members }}</template></div>
+              </div>
+            </div>
+            <div class="card-d">{{ c.description || T.noDesc }}</div>
+            <div class="bar" v-if="c.max_members"><i :class="{ hot: pct(c) >= 90 }" :style="{ width: Math.max(pct(c), 3) + '%' }"></i></div>
+            <div class="card-f">
+              <span class="xs muted">{{ c.full ? '' : T.open }}</span>
+              <button v-if="c.join_status === 'member'" class="btn sm" style="margin-left:auto" type="button" @click="goDetail(c.id)">{{ T.enter }}</button>
+              <span v-else-if="c.join_status === 'pending'" class="badge amber" style="margin-left:auto">{{ T.pending }}</span>
+              <span v-else-if="c.full" class="badge" style="margin-left:auto">{{ T.full }}</span>
+              <button v-else class="btn sm primary" style="margin-left:auto" type="button" :disabled="applyingId === c.id" @click="apply(c)">
+                {{ applyingId === c.id ? T.applying : T.apply }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </template>
+
+    <!-- ═════════ 详情 ═════════ -->
+    <template v-else>
+      <a class="small muted" href="/circles" @click.prevent="goHome" style="display:inline-block;margin-bottom:14px">← {{ T.back }}</a>
+
+      <div v-if="detailLoading" class="detail-hero" style="padding:22px"><div class="skel" style="height:60px;width:50%"></div></div>
+      <div v-else-if="!detail.circle" class="empty"><div class="e">🫥</div>{{ detailErr || T.notFound }}</div>
+
+      <template v-else>
+        <div class="detail-hero">
+          <div class="top">
+            <span class="av" :style="{ background: color(detail.circle.name) }">{{ (detail.circle.name || '?').slice(0, 1) }}</span>
+            <div style="flex:1;min-width:200px;padding-top:4px">
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <h1 style="font-size:24px;font-weight:700;letter-spacing:-.02em">{{ detail.circle.name }}</h1>
+                <span v-if="detail.circle.is_owner" class="badge blue">{{ T.owner }}</span>
+              </div>
+              <p class="muted" style="margin-top:4px">{{ detail.circle.description || T.noDesc }}</p>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;padding-top:6px;position:relative">
+              <button v-if="detail.circle.code" class="btn primary" type="button" @click="copyInvite">{{ copied ? T.copied + ' ✓' : T.copyInvite }}</button>
+              <button class="btn icon" type="button" :aria-label="T.more" @click.stop="menuOpen = !menuOpen">⋯</button>
+              <div v-if="menuOpen" class="menu" @click.stop>
+                <button v-if="detail.circle.is_owner" class="danger" type="button" @click="dissolve">{{ T.dissolve }}</button>
+                <button v-else class="danger" type="button" @click="leave">{{ T.leave }}</button>
+              </div>
+            </div>
+          </div>
+          <div class="stats">
+            <div>
+              <div class="xs muted">{{ T.statMembers }}</div>
+              <div style="font-size:20px;font-weight:700">{{ detail.circle.member_count || members.length }}<span v-if="detail.circle.max_members" class="small muted" style="font-weight:500"> / {{ detail.circle.max_members }}</span></div>
+              <div class="bar" v-if="detail.circle.max_members" style="margin-top:6px"><i :class="{ hot: pct(detail.circle) >= 90 }" :style="{ width: Math.max(pct(detail.circle), 3) + '%' }"></i></div>
+            </div>
+            <div><div class="xs muted">{{ T.statModels }}</div><div style="font-size:20px;font-weight:700">{{ detail.models.length }}</div></div>
+            <div><div class="xs muted">{{ T.statAgents }}</div><div style="font-size:20px;font-weight:700">{{ detail.agents.length }}</div></div>
+            <div><div class="xs muted">{{ T.statScenes }}</div><div style="font-size:20px;font-weight:700">{{ detail.scenes.length + detail.mods.length }}</div></div>
+          </div>
+        </div>
+
+        <!-- 圈主：入圈申请（有才显示） -->
+        <section v-if="detail.circle.is_owner && joinRequests.length" class="section" style="margin-top:0;margin-bottom:24px">
+          <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:var(--radius-lg);overflow:hidden">
+            <div style="padding:12px 14px 6px;font-weight:650;color:#92400e">{{ T.joinRequests }} <span class="small" style="font-weight:500">{{ joinRequests.length }}</span></div>
+            <div v-for="r in joinRequests" :key="r.id" class="req">
+              <span class="av sm round" :style="{ background: color(r.nickname || r.email) }">{{ (r.nickname || r.email || '?').slice(0, 1) }}</span>
+              <div style="flex:1;min-width:0">
+                <div class="ell small" style="font-weight:550">{{ r.nickname || r.email || ('#' + r.user_id) }}</div>
+                <div class="ell xs muted">{{ r.message || T.noMsg }}</div>
+              </div>
+              <button class="btn sm primary" type="button" @click="approveReq(r)">{{ T.approve }}</button>
+              <button class="btn sm ghost" type="button" @click="rejectReq(r)">{{ T.reject }}</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- 本圈可用：圈子作为交易范围的核心 -->
+        <section class="section" style="margin-top:0">
+          <div class="section-h"><h2>{{ T.available }}</h2><span class="n">{{ supplyCount }}</span><span class="r muted">{{ T.availableHint }}</span></div>
+          <div class="tabs" v-if="supplyTabs.length > 1">
+            <button v-for="s in supplyTabs" :key="s.id" type="button" :class="{ on: supplyTab === s.id }" @click="supplyTab = s.id">
+              {{ s.label }}<span class="n">{{ s.n }}</span>
+            </button>
+          </div>
+          <div v-if="!supplyCount" class="empty"><div class="e">🤝</div>{{ T.availableEmpty }}</div>
+          <div v-else class="table">
+            <template v-if="curSupply === 'models'">
+              <a v-for="m in detail.models" :key="'m' + (m.id || m.name)" class="trow srow"
+                 :href="modelHref(m) || undefined" @click="!modelHref(m) && $event.preventDefault()">
+                <div style="display:flex;align-items:center;gap:10px;min-width:0">
+                  <span class="av sm" style="background:#2563eb">◆</span>
+                  <span class="mono ell">{{ m.id || m.name }}</span>
+                </div>
+                <span class="small muted hide-sm">{{ typeLabel(m.model_type) }}</span>
+                <span style="text-align:right"><span v-if="modelHref(m)" class="btn sm cta">{{ T.tryNow }}</span><span v-else class="xs faint">{{ T.noTry }}</span></span>
+              </a>
+            </template>
+            <template v-else-if="curSupply === 'agents'">
+              <a v-for="a in detail.agents" :key="'a' + (a.worker_id || '') + ':' + (a.id || a.name)" class="trow srow" :href="'/a/' + encodeURIComponent(a.id)">
+                <div style="display:flex;align-items:center;gap:10px;min-width:0">
+                  <span class="av sm" :style="{ background: color(a.display_name || a.name) }">{{ (a.display_name || a.name || a.id || '?').slice(0, 1) }}</span>
+                  <div style="min-width:0">
+                    <div class="ell" style="font-weight:550">{{ a.display_name || a.name || a.id }}</div>
+                    <div class="ell xs muted">{{ a.description || T.noDesc }}</div>
+                  </div>
+                </div>
+                <span class="small muted hide-sm">{{ a.runtime || '—' }}</span>
+                <span style="text-align:right"><span class="btn sm cta">{{ T.tryNow }}</span></span>
+              </a>
+            </template>
+            <template v-else-if="curSupply === 'scenes'">
+              <a v-for="s in detail.scenes" :key="'s' + s.id" class="trow srow" :href="'/studio/chat?id=' + s.id">
+                <div style="display:flex;align-items:center;gap:10px;min-width:0">
+                  <span class="av sm" style="background:#059669">{{ s.icon || '🎭' }}</span>
+                  <div style="min-width:0">
+                    <div class="ell" style="font-weight:550">{{ s.name }}</div>
+                    <div class="ell xs muted">{{ s.intro || T.noDesc }}</div>
+                  </div>
+                </div>
+                <span class="small muted hide-sm ell">{{ s.default_model || '—' }}</span>
+                <span style="text-align:right"><span class="btn sm cta">{{ T.use }}</span></span>
+              </a>
+            </template>
+            <template v-else>
+              <div v-for="m in detail.mods" :key="'p' + m.id" class="trow srow">
+                <div style="display:flex;align-items:center;gap:10px;min-width:0">
+                  <span class="av sm" style="background:#a1a1aa">📜</span>
+                  <div style="min-width:0">
+                    <div class="ell" style="font-weight:550">{{ m.name }}</div>
+                    <div class="ell xs muted">{{ m.intro || T.noDesc }}</div>
+                  </div>
+                </div>
+                <span class="small muted hide-sm">{{ m.price || 0 }} ⚡</span>
+                <span style="text-align:right">
+                  <span v-if="m.mine" class="badge">{{ T.mineMod }}</span>
+                  <span v-else-if="m.purchased" class="badge green">{{ T.owned }}</span>
+                  <button v-else class="btn sm" type="button" @click="buyMod(m)">{{ T.buy }}</button>
+                </span>
+              </div>
+            </template>
+          </div>
+        </section>
+
+        <!-- 圈友 -->
+        <section class="section">
+          <div class="section-h"><h2>{{ T.members }}</h2><span class="n">{{ members.length }}</span></div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px">
+            <span v-for="m in sortedMembers" :key="m.id" class="member-chip">
+              <span class="av sm round" style="width:22px;height:22px;font-size:10px" :style="{ background: color(m.nickname || m.email) }">{{ (m.nickname || m.email || '?').slice(0, 1) }}</span>
+              {{ m.nickname || (m.email || '').split('@')[0] || '?' }}
+              <span v-if="m.id === detail.circle.owner_id" class="xs" style="color:var(--link)">{{ T.owner }}</span>
+            </span>
+          </div>
+        </section>
+      </template>
+    </template>
+  </main>
+
+  <footer class="footer"><span>Token Bank · {{ T.footer }}</span><a href="/">{{ T.home }}</a><a href="/network">{{ T.navNetwork }}</a></footer>
+
+  <!-- 登录 / 注册 -->
+  <div v-if="showAuth" class="mask" @click.self="showAuth = false">
+    <div class="modal">
+      <h3>{{ T.welcome }}</h3>
+      <p class="sub">{{ T.needLogin }}</p>
+      <div class="seg">
+        <button type="button" :class="{ on: authTab === 'login' }" @click="authTab = 'login'">{{ T.login }}</button>
+        <button type="button" :class="{ on: authTab === 'register' }" @click="authTab = 'register'">{{ T.register }}</button>
       </div>
-      <div class="field">
-        <label>{{ T.email }}</label>
-        <input type="email" v-model="form.email" autocomplete="email">
-      </div>
-      <div class="field">
-        <label>{{ T.password }}</label>
-        <input type="password" v-model="form.password" autocomplete="current-password">
-      </div>
-      <button class="btn" style="width:100%" type="button" :disabled="authLoading" @click="authTab==='login'?doLogin():doRegister()">
-        {{ authLoading ? '…' : (authTab==='login' ? T.login : T.register) }}
+      <div class="field" v-if="authTab === 'register'"><label>{{ T.nickname }}</label><input v-model="form.nickname" autocomplete="nickname"></div>
+      <div class="field"><label>{{ T.email }}</label><input type="email" v-model="form.email" autocomplete="email"></div>
+      <div class="field"><label>{{ T.password }}</label><input type="password" v-model="form.password" autocomplete="current-password" @keydown.enter="submitAuth"></div>
+      <button class="btn primary" style="width:100%;height:38px" type="button" :disabled="authLoading" @click="submitAuth">
+        {{ authLoading ? '…' : (authTab === 'login' ? T.login : T.register) }}
       </button>
       <p v-if="authErr" class="err">{{ authErr }}</p>
     </div>
   </div>
 
-  <!-- 注意：勿用无指令的裸 <template> 包主内容——浏览器会把子节点放进 DocumentFragment，in-DOM 模板下页面会空白 -->
-  <div>
-    <div class="h1">{{ view === 'detail' ? (detail.circle?.name || T.title) : T.title }}</div>
-    <p class="sub">{{ view === 'detail' ? (detail.circle?.description || T.noDesc) : T.subtitle }}</p>
-
-    <div v-if="banner" class="banner" :class="banner.type">
-      <span>{{ banner.text }}</span>
-      <button type="button" class="ghost-btn" @click="banner=null">×</button>
-    </div>
-    <p v-if="fatal" class="err">{{ fatal }}</p>
-
-    <!-- 列表 / 浏览 -->
-    <template v-if="view !== 'detail'">
-      <div class="toolbar">
-        <div class="tabs">
-          <button type="button" :class="{ active: view==='home' }" @click="goHome">{{ T.tabMine }}</button>
-          <button type="button" :class="{ active: view==='browse' }" @click="goBrowse">{{ T.tabBrowse }}</button>
-        </div>
-        <button v-if="view==='home' && loggedIn" class="btn" type="button" @click="showCreate=!showCreate">{{ showCreate ? T.cancel : T.create }}</button>
-      </div>
-
-      <div v-if="view==='home' && showCreate" class="card">
-        <div class="field"><label>{{ T.name }}</label><input v-model="createForm.name" maxlength="40" :placeholder="T.namePh"></div>
-        <div class="field"><label>{{ T.desc }}</label><input v-model="createForm.desc" maxlength="120" :placeholder="T.descPh"></div>
-        <button class="btn" type="button" :disabled="busy" @click="createCircle">{{ T.createSubmit }}</button>
-      </div>
-
-      <template v-if="view==='home'">
-        <div class="card">
-          <div class="toolbar" style="margin-top:0">
-            <strong>{{ T.myOwned }}</strong>
-          </div>
-          <div v-if="loading" class="state">{{ T.loading }}</div>
-          <div v-else-if="!owned.length" class="state">{{ T.noOwned }}</div>
-          <button v-for="c in owned" :key="'o'+c.id" type="button" class="row" @click="goDetail(c.id)">
-            <span class="avatar">{{ (c.name||'?')[0] }}</span>
-            <div style="min-width:0;flex:1">
-              <div class="name">{{ c.name }}</div>
-              <div class="desc">{{ c.description || T.noDesc }}</div>
-            </div>
-            <div class="side"><b>{{ T.membersN.replace('{n}', String(c.member_count||0)) }}</b>{{ T.owner }}</div>
-          </button>
-        </div>
-
-        <div class="card">
-          <div class="toolbar" style="margin-top:0">
-            <strong>{{ T.myJoined }}</strong>
-          </div>
-          <div class="search-row">
-            <input v-model="joinInput" :placeholder="T.joinPh" @keydown.enter.prevent="previewJoin">
-            <button class="btn" type="button" :disabled="busy || !joinInput.trim()" @click="previewJoin">{{ T.joinBtn }}</button>
-          </div>
-          <div v-if="!joined.length && !loading" class="state">{{ T.noJoined }}</div>
-          <button v-for="c in joined" :key="'j'+c.id" type="button" class="row" @click="goDetail(c.id)">
-            <span class="avatar">{{ (c.name||'?')[0] }}</span>
-            <div style="min-width:0;flex:1">
-              <div class="name">{{ c.name }}</div>
-              <div class="desc">{{ c.description || T.noDesc }}</div>
-            </div>
-            <div class="side"><b>{{ T.membersN.replace('{n}', String(c.member_count||0)) }}</b>{{ T.member }}</div>
-          </button>
-        </div>
-      </template>
-
-      <template v-else>
-        <div class="search-row">
-          <input v-model="browseQ" :placeholder="T.searchPh" @keydown.enter.prevent="loadBrowse">
-          <button class="btn" type="button" @click="loadBrowse">{{ T.search }}</button>
-        </div>
-        <div v-if="loading" class="state">{{ T.loading }}</div>
-        <div v-else-if="!browseList.length" class="state">{{ T.noBrowse }}</div>
-        <div v-else class="card">
-          <button v-for="c in browseList" :key="'b'+c.id" type="button" class="row" @click="onBrowseClick(c)">
-            <span class="avatar">{{ (c.name||'?')[0] }}</span>
-            <div style="min-width:0;flex:1">
-              <div class="name">{{ c.name }}</div>
-              <div class="desc">{{ c.description || T.noDesc }}</div>
-            </div>
-            <div class="side">
-              <b>{{ T.membersN.replace('{n}', String(c.member_count||0)) }}</b>
-              {{ browseStatus(c) }}
-            </div>
-          </button>
-        </div>
-      </template>
-    </template>
-
-    <!-- 详情 -->
-    <template v-else>
-      <div class="toolbar">
-        <button class="ghost-btn" type="button" @click="goHome">← {{ T.back }}</button>
-        <div class="actions" style="margin:0">
-          <button v-if="detail.circle?.is_owner" class="btn-sm" type="button" @click="openInvite">{{ T.invite }}</button>
-          <button v-if="detail.circle?.is_owner" class="btn-sm btn-danger" type="button" @click="dissolve">{{ T.dissolve }}</button>
-          <button v-else class="btn-sm btn-danger" type="button" @click="leave">{{ T.leave }}</button>
-        </div>
-      </div>
-
-      <div v-if="detailLoading" class="state">{{ T.loading }}</div>
-      <template v-else-if="detail.circle">
-        <div class="card">
-          <div class="toolbar" style="margin-top:0"><strong>{{ T.members }}</strong>
-            <span class="desc">{{ T.membersN.replace('{n}', String(detail.circle.member_count||members.length)) }}</span>
-          </div>
-          <div class="members">
-            <div v-for="m in members" :key="m.id" class="member">
-              <div class="av" :style="{ background: avatarColor(m.nickname||m.email||'?') }">{{ (m.nickname||m.email||'?')[0] }}</div>
-              <div class="nm">{{ m.nickname || (m.email||'').split('@')[0] || '?' }}</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 共享模型：点击进网页试用对话 -->
-        <div class="card">
-          <strong>{{ T.sharedModels }}</strong>
-          <div v-if="!(detail.models||[]).length" class="state" style="padding:16px">{{ T.noModels }}</div>
-          <div v-else class="supply-list">
-            <a
-              v-for="m in detail.models"
-              :key="'m'+(m.id||m.name)"
-              class="supply-row"
-              :class="{ disabled: !modelHref(m) }"
-              :href="modelHref(m) || undefined"
-              @click="!modelHref(m) && $event.preventDefault()"
-            >
-              <span class="supply-ico model">{{ (m.id||m.name||'?')[0] }}</span>
-              <div class="supply-main">
-                <div class="supply-title" style="font-family:var(--mono)">{{ m.id || m.name }}</div>
-                <div class="supply-desc">{{ typeLabel(m.model_type) }}</div>
-              </div>
-              <span class="supply-cta">{{ modelHref(m) ? T.tryNow : T.noTry }}</span>
-            </a>
-          </div>
-        </div>
-
-        <!-- 共享智能体：点击进智能体对话页 -->
-        <div class="card">
-          <strong>{{ T.sharedAgents }}</strong>
-          <div v-if="!(detail.agents||[]).length" class="state" style="padding:16px">{{ T.noAgents }}</div>
-          <div v-else class="supply-list">
-            <a
-              v-for="a in detail.agents"
-              :key="'a'+(a.worker_id||'')+':'+(a.id||a.name)"
-              class="supply-row"
-              :href="'/a/' + encodeURIComponent(a.id)"
-            >
-              <span class="supply-ico agent">{{ (a.display_name||a.name||a.id||'?')[0] }}</span>
-              <div class="supply-main">
-                <div class="supply-title">{{ a.display_name || a.name || a.id }}</div>
-                <div class="supply-desc">{{ a.description || a.runtime || T.noDesc }}</div>
-              </div>
-              <span class="supply-cta">{{ T.tryNow }}</span>
-            </a>
-          </div>
-        </div>
-
-        <!-- 圈内场景 / 玩法 -->
-        <div class="card">
-          <strong>{{ lang==='zh'?'场景 / 玩法':'Scenes' }}</strong>
-          <div v-if="!(detail.scenes||[]).length" class="state" style="padding:16px">{{ lang==='zh'?'圈内暂无场景':'No scenes' }}</div>
-          <div v-else class="supply-list">
-            <a v-for="s in detail.scenes" :key="'sc'+s.id" class="supply-row" :href="'/studio/chat?id='+s.id">
-              <span class="supply-ico model">{{ s.icon || '🎭' }}</span>
-              <div class="supply-main">
-                <div class="supply-title">{{ s.name }}</div>
-                <div class="supply-desc">{{ s.intro || T.noDesc }}<span v-if="s.default_model"> · {{ s.default_model }}</span></div>
-              </div>
-              <span class="supply-cta">{{ lang==='zh'?'使用':'Use' }}</span>
-            </a>
-          </div>
-        </div>
-
-        <!-- 圈内插件 / 设定 -->
-        <div class="card">
-          <strong>{{ lang==='zh'?'插件 / 设定':'Plugins' }}</strong>
-          <div v-if="studioMsg" class="banner ok" style="margin-top:8px">{{ studioMsg }}</div>
-          <div v-if="!(detail.mods||[]).length" class="state" style="padding:16px">{{ lang==='zh'?'圈内暂无插件':'No plugins' }}</div>
-          <div v-else class="supply-list">
-            <div v-for="m in detail.mods" :key="'md'+m.id" class="supply-row" style="cursor:default">
-              <span class="supply-ico">📜</span>
-              <div class="supply-main">
-                <div class="supply-title">{{ m.name }} <span style="font-size:10px;color:#bcbcbc">🔒</span></div>
-                <div class="supply-desc">{{ m.intro || T.noDesc }}</div>
-              </div>
-              <span v-if="m.mine" class="supply-cta">{{ lang==='zh'?'我发布':'Mine' }}</span>
-              <span v-else-if="m.purchased" class="supply-cta" style="color:#16a34a">{{ lang==='zh'?'已购买':'Owned' }}</span>
-              <button v-else class="btn-sm" type="button" @click="buyMod(m)">{{ m.price }}⚡ {{ lang==='zh'?'购买':'Buy' }}</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="card" v-if="detail.circle.is_owner && joinRequests.length">
-          <strong>{{ T.joinRequests }}</strong>
-          <div v-for="r in joinRequests" :key="r.id" class="row" style="cursor:default;margin-top:8px">
-            <div style="flex:1;min-width:0">
-              <div class="name">{{ r.nickname || r.email || ('#'+r.user_id) }}</div>
-              <div class="desc">{{ r.message || T.noMsg }}</div>
-            </div>
-            <div class="actions" style="margin:0">
-              <button class="btn-sm" type="button" @click="approveReq(r)">{{ T.approve }}</button>
-              <button class="btn-sm btn-danger" type="button" @click="rejectReq(r)">{{ T.reject }}</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="card">
-          <div class="toolbar" style="margin-top:0">
-            <strong>{{ T.posts }}</strong>
-            <button class="btn-sm" type="button" @click="showComposer=!showComposer">{{ showComposer ? T.cancel : T.newPost }}</button>
-          </div>
-          <div v-if="showComposer" class="composer" style="margin-bottom:12px">
-            <textarea v-model="draft" rows="3" :placeholder="T.postPh" maxlength="2000"></textarea>
-            <div class="actions">
-              <button class="btn" type="button" :disabled="busy || !draft.trim()" @click="createPost">{{ T.send }}</button>
-            </div>
-          </div>
-          <div v-if="!(detail.posts||[]).length" class="state">{{ T.noPosts }}</div>
-          <div v-for="p in detail.posts" :key="p.id" class="post">
-            <div class="meta">{{ authorLabel(p) }} · {{ fmtTime(p.created_at) }}</div>
-            <div v-if="editId===p.id">
-              <textarea v-model="editText" rows="3" maxlength="2000"></textarea>
-              <div class="actions">
-                <button class="btn" type="button" @click="saveEdit(p)">{{ T.save }}</button>
-                <button class="btn-sm" type="button" @click="editId=null">{{ T.cancel }}</button>
-              </div>
-            </div>
-            <div v-else class="body">{{ p.content }}</div>
-            <div class="actions">
-              <button class="btn-sm" type="button" @click="replyingId = replyingId===p.id ? null : p.id">{{ T.reply }}{{ (p.replies||[]).length ? ' · '+(p.replies||[]).length : '' }}</button>
-              <button v-if="isMine(p)" class="btn-sm" type="button" @click="startEdit(p)">{{ T.edit }}</button>
-              <button v-if="isMine(p)" class="btn-sm btn-danger" type="button" @click="delPost(p)">{{ T.delete }}</button>
-            </div>
-            <div v-for="r in (p.replies||[])" :key="r.id" class="reply">
-              <div class="meta">{{ authorLabel(r) }} · {{ fmtTime(r.created_at) }}</div>
-              <div class="body">{{ r.content }}</div>
-              <div class="actions" v-if="isMine(r)">
-                <button class="btn-sm btn-danger" type="button" @click="delReply(p, r)">{{ T.delete }}</button>
-              </div>
-            </div>
-            <div v-if="replyingId===p.id" class="composer" style="margin-top:8px">
-              <textarea v-model="replyDraft" rows="2" :placeholder="T.replyPh" maxlength="2000"></textarea>
-              <div class="actions">
-                <button class="btn" type="button" :disabled="busy || !replyDraft.trim()" @click="sendReply(p)">{{ T.send }}</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </template>
-    </template>
-  </div>
-
-  <div v-if="inviteModal" class="modal-mask" @click.self="inviteModal=null">
+  <!-- 创建圈子 -->
+  <div v-if="modal === 'create'" class="mask" @click.self="modal = null">
     <div class="modal">
-      <h3 style="margin-bottom:8px">{{ T.invite }}</h3>
-      <p class="sub" style="margin-bottom:10px">{{ inviteModal.circle.name }}</p>
-      <div class="mono" style="padding:10px;background:var(--bg-muted);border-radius:8px;margin-bottom:12px">{{ inviteModal.url }}</div>
-      <div class="actions">
-        <button class="btn" type="button" @click="copy(inviteModal.url)">{{ T.copy }}</button>
-        <button class="btn-sm" type="button" @click="inviteModal=null">{{ T.cancel }}</button>
+      <h3>{{ T.create }}</h3>
+      <p class="sub">{{ T.createHint }}</p>
+      <div class="field"><label>{{ T.name }}</label><input v-model="createForm.name" maxlength="40" :placeholder="T.namePh" @keydown.enter="createCircle"></div>
+      <div class="field"><label>{{ T.desc }}</label><input v-model="createForm.desc" maxlength="120" :placeholder="T.descPh"></div>
+      <div class="foot">
+        <button class="btn ghost" type="button" @click="modal = null">{{ T.cancel }}</button>
+        <button class="btn primary" type="button" :disabled="busy || !createForm.name.trim()" @click="createCircle">{{ T.createSubmit }}</button>
       </div>
     </div>
   </div>
 
-  <div class="footer">Token Bank · {{ T.footer }}</div>
+  <!-- 邀请码加入 -->
+  <div v-if="modal === 'join'" class="mask" @click.self="closeJoin">
+    <div class="modal">
+      <h3>{{ T.joinByCode }}</h3>
+      <p class="sub">{{ T.joinHint }}</p>
+      <template v-if="!joinPreview">
+        <div class="field"><input v-model="joinInput" :placeholder="T.joinPh" @keydown.enter="previewJoin"></div>
+        <div class="foot">
+          <button class="btn ghost" type="button" @click="closeJoin">{{ T.cancel }}</button>
+          <button class="btn primary" type="button" :disabled="busy || !joinInput.trim()" @click="previewJoin">{{ T.next }}</button>
+        </div>
+      </template>
+      <template v-else>
+        <div style="display:flex;gap:12px;align-items:center;padding:12px;background:var(--bg-muted);border-radius:12px;margin-bottom:12px">
+          <span class="av" :style="{ background: color(joinPreview.circle?.name) }">{{ (joinPreview.circle?.name || '?').slice(0, 1) }}</span>
+          <div style="min-width:0">
+            <div style="font-weight:650" class="ell">{{ joinPreview.circle?.name }}</div>
+            <div class="xs muted ell">{{ joinPreview.circle?.description || T.noDesc }}</div>
+          </div>
+        </div>
+        <div class="foot">
+          <button class="btn ghost" type="button" @click="joinPreview = null">{{ T.back }}</button>
+          <button class="btn primary" type="button" :disabled="busy" @click="confirmJoin">{{ T.joinBtn }}</button>
+        </div>
+      </template>
+      <p v-if="joinErr" class="err">{{ joinErr }}</p>
+    </div>
+  </div>
+
+  <div v-if="toast" class="toast" :class="toast.type">{{ toast.text }}</div>
 </div>
 
 <script>
-const { createApp, ref, computed, onMounted } = Vue
+const { createApp, ref, computed, onMounted, watch } = Vue
 
 let _storageOk = false
 const _mem = {}
-try { localStorage.setItem('__probe','1'); localStorage.removeItem('__probe'); _storageOk = true } catch {}
-function storageGet(k){ try { return _storageOk ? localStorage.getItem(k) : (_mem[k]??null) } catch { return _mem[k]??null } }
-function storageSet(k,v){ try { if(_storageOk) localStorage.setItem(k,v); else _mem[k]=v } catch { _mem[k]=v } }
-function storageRemove(k){ try { if(_storageOk) localStorage.removeItem(k); else delete _mem[k] } catch { delete _mem[k] } }
+try { localStorage.setItem('__probe', '1'); localStorage.removeItem('__probe'); _storageOk = true } catch {}
+function storageGet(k) { try { return _storageOk ? localStorage.getItem(k) : (_mem[k] ?? null) } catch { return _mem[k] ?? null } }
+function storageSet(k, v) { try { if (_storageOk) localStorage.setItem(k, v); else _mem[k] = v } catch { _mem[k] = v } }
+function storageRemove(k) { try { if (_storageOk) localStorage.removeItem(k); else delete _mem[k] } catch { delete _mem[k] } }
 
-const AV_COLORS = ['#2563eb','#7c3aed','#059669','#d97706','#db2777','#0d9488']
-function avatarColor(name){
-  let h=0; const s=String(name||'')
-  for(let i=0;i<s.length;i++) h=s.charCodeAt(i)+((h<<5)-h)
-  return AV_COLORS[Math.abs(h)%AV_COLORS.length]
+const AV_COLORS = ['#2563eb', '#7c3aed', '#059669', '#d97706', '#db2777', '#0d9488', '#4f46e5']
+function color(name) {
+  let h = 0; const s = String(name || '')
+  for (let i = 0; i < s.length; i++) h = s.charCodeAt(i) + ((h << 5) - h)
+  return AV_COLORS[Math.abs(h) % AV_COLORS.length]
 }
 
 createApp({
   setup() {
-    const lang = ref(storageGet('tb_lang') || ((navigator.language||'').startsWith('zh')?'zh':'en'))
-    const showAuth = ref(false)
+    const lang = ref(storageGet('tb_lang') || ((navigator.language || '').startsWith('zh') ? 'zh' : 'en'))
     const i18n = {
       zh: {
-        title:'圈子', subtitle:'浏览公开圈子，或登录后创建与加入',
-        network:'全球网络', app:'账户', logout:'退出', login:'登录', register:'注册',
-        needLogin:'登录后可申请加入、创建圈子与查看圈内动态', nickname:'昵称', email:'邮箱', password:'密码',
-        tabMine:'我的圈子', tabBrowse:'浏览圈子', create:'创建圈子', cancel:'取消',
-        createSubmit:'创建', name:'名称', desc:'简介', namePh:'圈子名称', descPh:'一句话介绍（可选）',
-        myOwned:'我创建的', myJoined:'我加入的', owner:'圈主', member:'成员',
-        membersN:'{n} 人', noOwned:'还没有创建圈子', noJoined:'还没有加入圈子', noBrowse:'暂无公开圈子',
-        joinPh:'邀请码或邀请链接', joinBtn:'加入', searchPh:'搜索圈子…', search:'搜索',
-        loading:'加载中…', noDesc:'暂无简介', back:'返回列表',
-        invite:'邀请链接', dissolve:'解散', leave:'退出', members:'圈友',
-        sharedModels:'共享模型', sharedAgents:'共享智能体',
-        noModels:'暂无圈友在线共享模型', noAgents:'暂无圈友在线共享智能体',
-        tryNow:'试用 →', noTry:'不支持网页试用',
-        typeChat:'对话', typeVision:'视觉', typeImage:'生图', typeEmbed:'嵌入',
-        joinRequests:'入圈申请', approve:'通过', reject:'拒绝', noMsg:'（无留言）',
-        posts:'动态', newPost:'发帖', postPh:'说点什么…', send:'发送', reply:'回复', replyPh:'回复…',
-        edit:'编辑', save:'保存', delete:'删除', noPosts:'还没有动态', copy:'复制链接',
-        footer:'网页版圈子',
-        applyConfirm:'是否申请加入「{name}」？', applySent:'已发送入圈申请', pending:'已申请',
-        open:'可申请', full:'已满', joined:'已加入', applying:'申请中…',
-        dissolveConfirm:'确定解散「{name}」？', leaveConfirm:'确定退出「{name}」？',
-        deleteConfirm:'确定删除？',
+        navNetwork: '社区网络', navCircles: '圈子', account: '我的账户', logout: '退出', login: '登录', register: '注册',
+        title: '圈子', subtitle: '圈子决定你和谁交易：把模型与智能体只分享给信任的人，邀请好友入圈双方都得积分。',
+        joinByCode: '用邀请码加入', create: '创建圈子', mine: '我的圈子', discover: '发现公开圈子',
+        discoverHint: '申请后由圈主审批', searchPh: '搜索圈子名称或简介…',
+        signinTitle: '登录后管理你的圈子', signinDesc: '创建圈子、审批入圈申请、查看圈内共享的模型与智能体',
+        noMine: '还没有圈子，创建一个邀请朋友吧', noBrowse: '暂无公开圈子', noMatch: '没有匹配的圈子',
+        owner: '圈主', member: '成员', youOwn: '你是圈主', youMember: '你是成员', enter: '进入', membersN: '{n} 人',
+        reqN: '{n} 条申请', pendingTotal: '{n} 条入圈申请待处理',
+        apply: '申请加入', applying: '申请中…', pending: '已申请', full: '已满', open: '开放申请',
+        noDesc: '暂无简介', back: '返回', notFound: '圈子不存在或你还不是成员',
+        copyInvite: '复制邀请链接', copied: '已复制', more: '更多', dissolve: '解散圈子', leave: '退出圈子',
+        statMembers: '成员', statModels: '共享模型', statAgents: '共享智能体', statScenes: '场景 / 插件',
+        joinRequests: '入圈申请', approve: '通过', reject: '拒绝', noMsg: '（无留言）',
+        available: '本圈可用', availableHint: '仅圈内成员可见 · 点击即可试用',
+        availableEmpty: '圈内还没有共享内容。在客户端「交易 → 上架供给」里选择本圈即可共享。',
+        tabModels: '模型', tabAgents: '智能体', tabScenes: '场景', tabMods: '插件',
+        tryNow: '试用', use: '使用', noTry: '仅 API', buy: '购买', owned: '已购买', mineMod: '我发布',
+        typeChat: '对话', typeVision: '视觉', typeImage: '生图', typeEmbed: '嵌入',
+        members: '圈友', footer: '圈子', home: '首页',
+        welcome: '欢迎来到 Token Bank', needLogin: '登录后可创建、加入圈子并查看圈内共享',
+        nickname: '昵称', email: '邮箱', password: '密码',
+        createHint: '建好后复制邀请链接发给朋友即可', name: '名称', desc: '简介', namePh: '比如：AI 工程师互助', descPh: '一句话介绍（可选）',
+        createSubmit: '创建', cancel: '取消', next: '下一步', joinBtn: '加入圈子',
+        joinHint: '粘贴朋友发给你的邀请链接或邀请码', joinPh: '邀请链接或邀请码',
+        applySent: '已发送入圈申请，等待圈主通过', joined: '已加入圈子', created: '圈子已创建',
+        dissolveConfirm: '确定解散「{name}」？此操作不可恢复', leaveConfirm: '确定退出「{name}」？',
+        buyConfirm: '用 {n} 社区积分购买「{name}」？', bought: '购买成功', error: '操作失败', netErr: '网络错误',
       },
       en: {
-        title:'Circles', subtitle:'Browse public circles, or sign in to create and join',
-        network:'Network', app:'Account', logout:'Log out', login:'Sign in', register:'Sign up',
-        needLogin:'Sign in to apply, create circles, and view posts', nickname:'Nickname', email:'Email', password:'Password',
-        tabMine:'My circles', tabBrowse:'Browse', create:'Create', cancel:'Cancel',
-        createSubmit:'Create', name:'Name', desc:'Description', namePh:'Circle name', descPh:'Short description (optional)',
-        myOwned:'Created by me', myJoined:'Joined', owner:'Owner', member:'Member',
-        membersN:'{n} members', noOwned:'No circles created yet', noJoined:'No joined circles', noBrowse:'No public circles',
-        joinPh:'Invite code or link', joinBtn:'Join', searchPh:'Search circles…', search:'Search',
-        loading:'Loading…', noDesc:'No description', back:'Back',
-        invite:'Invite link', dissolve:'Dissolve', leave:'Leave', members:'Members',
-        sharedModels:'Shared models', sharedAgents:'Shared agents',
-        noModels:'No models shared online', noAgents:'No agents shared online',
-        tryNow:'Try →', noTry:'Not available on web',
-        typeChat:'Chat', typeVision:'Vision', typeImage:'Image', typeEmbed:'Embedding',
-        joinRequests:'Join requests', approve:'Approve', reject:'Reject', noMsg:'(no message)',
-        posts:'Posts', newPost:'New post', postPh:'Write something…', send:'Send', reply:'Reply', replyPh:'Reply…',
-        edit:'Edit', save:'Save', delete:'Delete', noPosts:'No posts yet', copy:'Copy link',
-        footer:'Circles on the web',
-        applyConfirm:'Apply to join “{name}”?', applySent:'Join request sent', pending:'Pending',
-        open:'Open', full:'Full', joined:'Joined', applying:'Applying…',
-        dissolveConfirm:'Dissolve “{name}”?', leaveConfirm:'Leave “{name}”?',
-        deleteConfirm:'Delete this?',
+        navNetwork: 'Network', navCircles: 'Circles', account: 'My account', logout: 'Log out', login: 'Sign in', register: 'Sign up',
+        title: 'Circles', subtitle: 'Circles decide who you trade with: share models and agents only with people you trust. Invites earn both sides credits.',
+        joinByCode: 'Join with code', create: 'Create circle', mine: 'My circles', discover: 'Discover public circles',
+        discoverHint: 'Owners approve join requests', searchPh: 'Search circles…',
+        signinTitle: 'Sign in to manage your circles', signinDesc: 'Create circles, approve requests, and see what members share',
+        noMine: 'No circles yet — create one and invite friends', noBrowse: 'No public circles yet', noMatch: 'No matching circles',
+        owner: 'Owner', member: 'Member', youOwn: 'You own this', youMember: 'Member', enter: 'Open', membersN: '{n} members',
+        reqN: '{n} requests', pendingTotal: '{n} join requests pending',
+        apply: 'Apply', applying: 'Applying…', pending: 'Pending', full: 'Full', open: 'Open to apply',
+        noDesc: 'No description', back: 'Back', notFound: 'Circle not found or you are not a member',
+        copyInvite: 'Copy invite link', copied: 'Copied', more: 'More', dissolve: 'Dissolve circle', leave: 'Leave circle',
+        statMembers: 'Members', statModels: 'Shared models', statAgents: 'Shared agents', statScenes: 'Scenes / plugins',
+        joinRequests: 'Join requests', approve: 'Approve', reject: 'Reject', noMsg: '(no message)',
+        available: 'Available in this circle', availableHint: 'Members only · click to try',
+        availableEmpty: 'Nothing shared yet. In the app, choose this circle under Trade → Supply.',
+        tabModels: 'Models', tabAgents: 'Agents', tabScenes: 'Scenes', tabMods: 'Plugins',
+        tryNow: 'Try', use: 'Use', noTry: 'API only', buy: 'Buy', owned: 'Owned', mineMod: 'Mine',
+        typeChat: 'Chat', typeVision: 'Vision', typeImage: 'Image', typeEmbed: 'Embedding',
+        members: 'Members', footer: 'Circles', home: 'Home',
+        welcome: 'Welcome to Token Bank', needLogin: 'Sign in to create or join circles and see what is shared',
+        nickname: 'Nickname', email: 'Email', password: 'Password',
+        createHint: 'Then copy the invite link and send it to friends', name: 'Name', desc: 'Description', namePh: 'e.g. AI engineers', descPh: 'Short description (optional)',
+        createSubmit: 'Create', cancel: 'Cancel', next: 'Next', joinBtn: 'Join circle',
+        joinHint: 'Paste the invite link or code a friend sent you', joinPh: 'Invite link or code',
+        applySent: 'Request sent — waiting for the owner', joined: 'Joined the circle', created: 'Circle created',
+        dissolveConfirm: 'Dissolve “{name}”? This cannot be undone', leaveConfirm: 'Leave “{name}”?',
+        buyConfirm: 'Spend {n} credits on “{name}”?', bought: 'Purchased', error: 'Something went wrong', netErr: 'Network error',
       },
     }
     const T = computed(() => i18n[lang.value] || i18n.zh)
-    function toggleLang(){
-      lang.value = lang.value==='zh'?'en':'zh'
+    function toggleLang() {
+      lang.value = lang.value === 'zh' ? 'en' : 'zh'
       storageSet('tb_lang', lang.value)
-      document.documentElement.lang = lang.value==='zh'?'zh-CN':'en'
+      document.documentElement.lang = lang.value === 'zh' ? 'zh-CN' : 'en'
     }
 
+    // 轻提示取代 alert
+    const toast = ref(null)
+    let toastTimer = null
+    function notify(text, type = '') {
+      toast.value = { text, type }
+      clearTimeout(toastTimer)
+      toastTimer = setTimeout(() => { toast.value = null }, 2600)
+    }
+    const errText = (data, fallback) => (typeof data?.detail === 'string' ? data.detail : (fallback || T.value.error))
+
+    // ── 登录态 ──
     const loggedIn = ref(!!storageGet('user_token'))
+    const profile = ref(null)
+    const showAuth = ref(false)
     const authTab = ref('login')
     const authLoading = ref(false)
     const authErr = ref('')
-    const form = ref({ email:'', password:'', nickname:'' })
-    // 访客默认浏览公开列表；登录用户默认「我的」
-    const view = ref(storageGet('user_token') ? 'home' : 'browse')
-    const loading = ref(false)
-    const detailLoading = ref(false)
-    const busy = ref(false)
-    const fatal = ref('')
-    const banner = ref(null)
-    const owned = ref([])
-    const joined = ref([])
-    const browseList = ref([])
-    const browseQ = ref('')
-    const showCreate = ref(false)
-    const createForm = ref({ name:'', desc:'' })
-    const joinInput = ref('')
-    const detail = ref({ circle:null, posts:[], models:[], agents:[], scenes:[], mods:[] })
-    const studioMsg = ref('')
-    const members = ref([])
-    const joinRequests = ref([])
-    const showComposer = ref(false)
-    const draft = ref('')
-    const editId = ref(null)
-    const editText = ref('')
-    const replyingId = ref(null)
-    const replyDraft = ref('')
-    const inviteModal = ref(null)
-    const profile = ref(null)
-    const detailId = ref(null)
-
-    function getToken(){ return storageGet('user_token') || '' }
-    function logout(){
-      storageRemove('user_token')
-      loggedIn.value=false
-      profile.value=null
-      showAuth.value=false
-      // 退出后回到公开浏览
-      view.value='browse'
-      detailId.value=null
-      loadBrowse()
-      syncUrl()
+    const form = ref({ email: '', password: '', nickname: '' })
+    let afterAuth = null
+    function openAuth(then) { authErr.value = ''; afterAuth = then || null; showAuth.value = true }
+    function needAuth(fn) { if (loggedIn.value) fn(); else openAuth(fn) }
+    function getToken() { return storageGet('user_token') || '' }
+    function logout() {
+      storageRemove('user_token'); loggedIn.value = false; profile.value = null
+      owned.value = []; joined.value = []
+      goHome()
     }
-    function openAuth(){ authErr.value=''; showAuth.value=true }
-    function requireAuth(){
-      if (loggedIn.value) return true
-      openAuth()
-      return false
-    }
-
-    async function api(path, opts={}){
-      const headers = { ...(opts.headers||{}) }
-      if (opts.body && !headers['Content-Type'] && !(opts.body instanceof FormData)) headers['Content-Type']='application/json'
+    async function api(path, opts = {}) {
+      const headers = { ...(opts.headers || {}) }
+      if (opts.body && !headers['Content-Type']) headers['Content-Type'] = 'application/json'
       const tok = getToken()
-      if (tok) headers.Authorization = 'Bearer '+tok
+      if (tok) headers.Authorization = 'Bearer ' + tok
       const r = await fetch(path, { ...opts, headers })
-      let data=null
-      try { data = await r.json() } catch { data=null }
-      if (r.status===401){ logout(); throw new Error('auth') }
+      let data = null
+      try { data = await r.json() } catch { data = null }
+      if (r.status === 401 && tok) { storageRemove('user_token'); loggedIn.value = false; throw new Error('auth') }
       return { r, data }
     }
-
-    function fmtTime(iso){
-      if (!iso) return '—'
-      try { return formatServerTime(iso, lang.value==='zh'?'zh-CN':'en-US') } catch { return String(iso).slice(0,16) }
-    }
-    // 帖子/回复作者字段为扁平 nickname、email（与客户端一致）
-    function authorLabel(p){
-      const a = p.author || p || {}
-      return a.nickname || (a.email||'').split('@')[0] || ('#'+(p.author_id||''))
-    }
-    function isMine(p){ return profile.value && p.author_id === profile.value.id }
-    function typeLabel(t){
-      const k = String(t||'chat').toLowerCase()
-      if (k==='vision') return T.value.typeVision
-      if (k==='image') return T.value.typeImage
-      if (k==='embedding') return T.value.typeEmbed
-      return T.value.typeChat
-    }
-    // embedding 网页无对话页；其余进 /m/{name}
-    function modelHref(m){
-      const id = m?.id || m?.name
-      if (!id) return ''
-      if (String(m?.model_type||'').toLowerCase()==='embedding') return ''
-      return '/m/' + encodeURIComponent(id)
-    }
-    function browseStatus(c){
-      if (c.join_status==='member') return T.value.joined
-      if (c.join_status==='pending') return T.value.pending
-      if (c.full) return T.value.full
-      return T.value.open
-    }
-    async function copy(text){
-      try { await navigator.clipboard.writeText(text) } catch {
-        const ta=document.createElement('textarea'); ta.value=text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta)
-      }
-    }
-
-    function syncUrl(){
-      let path='/circles'
-      if (view.value==='browse') path='/circles/browse'
-      if (view.value==='detail' && detailId.value) path='/c/'+detailId.value
-      try { history.replaceState(null,'',path) } catch {}
-      document.title = (detail.value.circle?.name || T.value.title) + ' · Token Bank'
-    }
-
-    function parseRoute(){
-      const m = location.pathname.match(/^\/c\/(\d+)/)
-      if (m){ view.value='detail'; detailId.value=Number(m[1]); return }
-      if (location.pathname.indexOf('/circles/browse')===0){ view.value='browse'; return }
-      view.value='home'
-    }
-
-    async function fetchProfile(){
+    async function submitAuth() {
+      authErr.value = ''
+      const f = form.value
+      if (!f.email || !f.password) { authErr.value = T.value.email + ' / ' + T.value.password; return }
+      authLoading.value = true
       try {
-        const { r, data } = await api('/user/profile')
-        if (r.ok) profile.value = data
-      } catch {}
+        const path = authTab.value === 'login' ? '/user/login' : '/user/register'
+        const body = authTab.value === 'login' ? { email: f.email, password: f.password } : { email: f.email, password: f.password, nickname: f.nickname || '' }
+        const rr = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+        const dd = await rr.json().catch(() => null)
+        if (!rr.ok) { authErr.value = errText(dd); return }
+        storageSet('user_token', dd.token)
+        loggedIn.value = true
+        showAuth.value = false
+        await boot()
+        if (afterAuth) { const fn = afterAuth; afterAuth = null; fn() }
+      } catch { authErr.value = T.value.netErr } finally { authLoading.value = false }
     }
 
-    async function loadMine(){
-      loading.value=true; fatal.value=''
-      try {
-        const [o,j] = await Promise.all([
-          api('/user/circles'),
-          api('/user/circles/joined'),
-        ])
-        const ownedList = o.r.ok ? (o.data.circles||[]) : []
-        const ownedIds = new Set(ownedList.map(c=>c.id))
-        const joinedList = (j.r.ok ? (j.data.circles||[]) : []).filter(c=>!ownedIds.has(c.id))
-        owned.value = ownedList
-        joined.value = joinedList
-      } catch(e) {
-        if (e.message!=='auth') fatal.value = String(e.message||e)
-      } finally { loading.value=false }
-    }
+    // ── 列表 ──
+    const view = ref('home')
+    const owned = ref([])
+    const joined = ref([])
+    const requestCounts = ref({})
+    const loadingMine = ref(false)
+    const browseList = ref([])
+    const browseQ = ref('')
+    const loadingBrowse = ref(false)
+    const applyingId = ref(null)
+    const busy = ref(false)
+    const modal = ref(null)
+    const createForm = ref({ name: '', desc: '' })
+    const joinInput = ref('')
+    const joinPreview = ref(null)
+    const joinErr = ref('')
 
-    async function loadBrowse(){
-      loading.value=true
-      fatal.value=''
+    const mine = computed(() => [
+      ...owned.value.map(c => ({ ...c, _owner: true })),
+      ...joined.value.map(c => ({ ...c, _owner: false })),
+    ])
+    const totalPending = computed(() => Object.values(requestCounts.value).reduce((a, b) => a + b, 0))
+    const myIds = computed(() => new Set(mine.value.map(c => c.id)))
+    // 发现：排除已在「我的圈子」里的，本地过滤即时响应
+    const shownBrowse = computed(() => {
+      const k = browseQ.value.trim().toLowerCase()
+      return browseList.value
+        .filter(c => !myIds.value.has(c.id) && c.join_status !== 'member')
+        .filter(c => !k || String(c.name || '').toLowerCase().includes(k) || String(c.description || '').toLowerCase().includes(k))
+    })
+    function pct(c) { return c.max_members ? Math.min(100, Math.round((c.member_count || 0) / c.max_members * 100)) : 0 }
+
+    async function loadMine() {
+      if (!loggedIn.value) return
+      loadingMine.value = true
       try {
-        const q = browseQ.value.trim()
-        // 未登录：公开接口；已登录：带入圈状态的浏览接口
-        if (!loggedIn.value){
+        const [o, j] = await Promise.all([api('/user/circles'), api('/user/circles/joined')])
+        const ol = o.r.ok ? (o.data.circles || []) : []
+        const ids = new Set(ol.map(c => c.id))
+        owned.value = ol
+        joined.value = (j.r.ok ? (j.data.circles || []) : []).filter(c => !ids.has(c.id))
+        // 圈主：待审批数（不阻塞列表）
+        Promise.all(ol.map(c => api('/user/circles/' + c.id + '/join-requests')
+          .then(({ r, data }) => [c.id, r.ok ? (data.requests || []).length : 0]).catch(() => [c.id, 0])))
+          .then(pairs => { requestCounts.value = Object.fromEntries(pairs) })
+      } catch {} finally { loadingMine.value = false }
+    }
+    async function loadBrowse() {
+      loadingBrowse.value = true
+      try {
+        if (!loggedIn.value) {
           const rr = await fetch('/public/network')
-          const dd = await rr.json().catch(()=>null)
-          let list = rr.ok ? (dd?.available_circles||[]) : []
-          const qq = q.toLowerCase()
-          if (qq){
-            list = list.filter(c =>
-              String(c.name||'').toLowerCase().includes(qq) ||
-              String(c.description||'').toLowerCase().includes(qq)
-            )
-          }
-          browseList.value = list
-          return
+          const dd = await rr.json().catch(() => null)
+          browseList.value = rr.ok ? (dd?.available_circles || []) : []
+        } else {
+          const { r, data } = await api('/user/circles/browse')
+          browseList.value = r.ok ? (data.circles || []) : []
         }
-        const { r, data } = await api('/user/circles/browse'+(q?('?q='+encodeURIComponent(q)):''))
-        browseList.value = r.ok ? (data.circles||[]) : []
-      } catch(e) {
-        if (e.message!=='auth') fatal.value = String(e.message||e)
-      } finally { loading.value=false }
+      } catch {} finally { loadingBrowse.value = false }
+    }
+    async function apply(c) {
+      if (!loggedIn.value) { openAuth(() => apply(c)); return }
+      applyingId.value = c.id
+      try {
+        const { r, data } = await api('/user/circles/' + c.id + '/apply', { method: 'POST', body: JSON.stringify({ message: '' }) })
+        if (!r.ok) { notify(errText(data), 'warn'); return }
+        if (data?.already_member) { goDetail(c.id); return }
+        if (data?.full) { c.full = true; notify(T.value.full, 'warn'); return }
+        c.join_status = 'pending'
+        notify(T.value.applySent)
+      } catch { notify(T.value.netErr, 'warn') } finally { applyingId.value = null }
+    }
+    async function createCircle() {
+      const name = createForm.value.name.trim()
+      if (!name) return
+      busy.value = true
+      try {
+        const { r, data } = await api('/user/circles', { method: 'POST', body: JSON.stringify({ name, description: createForm.value.desc.trim() }) })
+        if (!r.ok) { notify(errText(data), 'warn'); return }
+        modal.value = null
+        createForm.value = { name: '', desc: '' }
+        notify(T.value.created)
+        await loadMine()
+        if (data?.circle?.id) goDetail(data.circle.id)
+      } finally { busy.value = false }
+    }
+    function extractCode(input) {
+      const s = (input || '').trim()
+      try { return new URL(s).searchParams.get('c') || s } catch { return s }
+    }
+    function closeJoin() { modal.value = null; joinPreview.value = null; joinErr.value = '' }
+    async function previewJoin() {
+      const code = extractCode(joinInput.value)
+      if (!code) return
+      busy.value = true; joinErr.value = ''
+      try {
+        const { r, data } = await api('/user/circles/join/' + encodeURIComponent(code))
+        if (!r.ok) { joinErr.value = errText(data); return }
+        if (data.already_member) { closeJoin(); if (data.circle?.id) goDetail(data.circle.id); return }
+        if (data.full) { joinErr.value = T.value.full; return }
+        joinPreview.value = { ...data, code }
+      } finally { busy.value = false }
+    }
+    async function confirmJoin() {
+      if (!joinPreview.value) return
+      busy.value = true
+      try {
+        const { r, data } = await api('/user/circles/join/' + encodeURIComponent(joinPreview.value.code), { method: 'POST' })
+        if (!r.ok) { joinErr.value = errText(data); return }
+        const cid = joinPreview.value.circle?.id
+        closeJoin(); joinInput.value = ''
+        notify(T.value.joined)
+        await loadMine()
+        if (cid) goDetail(cid)
+      } finally { busy.value = false }
     }
 
-    async function loadDetail(id){
-      detailLoading.value=true; fatal.value=''
-      detailId.value=id
+    // ── 详情 ──
+    const detailId = ref(null)
+    const detail = ref({ circle: null, models: [], agents: [], scenes: [], mods: [] })
+    const detailLoading = ref(false)
+    const detailErr = ref('')
+    const members = ref([])
+    const joinRequests = ref([])
+    const supplyTab = ref('models')
+    const copied = ref(false)
+    const menuOpen = ref(false)
+
+    const supplyTabs = computed(() => {
+      const t = T.value, d = detail.value
+      return [
+        { id: 'models', label: t.tabModels, n: d.models.length },
+        { id: 'agents', label: t.tabAgents, n: d.agents.length },
+        { id: 'scenes', label: t.tabScenes, n: d.scenes.length },
+        { id: 'mods', label: t.tabMods, n: d.mods.length },
+      ].filter(s => s.n > 0)
+    })
+    const supplyCount = computed(() => supplyTabs.value.reduce((a, s) => a + s.n, 0))
+    const curSupply = computed(() => (supplyTabs.value.some(s => s.id === supplyTab.value) ? supplyTab.value : (supplyTabs.value[0]?.id || 'models')))
+    const sortedMembers = computed(() => {
+      const oid = detail.value.circle?.owner_id
+      return [...members.value].sort((a, b) => (b.id === oid) - (a.id === oid))
+    })
+
+    async function loadDetail(id) {
+      detailLoading.value = true; detailErr.value = ''; detailId.value = id; menuOpen.value = false
       try {
         const [{ r, data }, mem, sc, md] = await Promise.all([
-          api('/user/circles/'+id),
-          api('/user/circles/'+id+'/members').catch(()=>({ r:{ok:false}, data:{} })),
-          api('/user/circles/'+id+'/scenes').catch(()=>({ r:{ok:false}, data:{} })),
-          api('/user/circles/'+id+'/mods').catch(()=>({ r:{ok:false}, data:{} })),
+          api('/user/circles/' + id),
+          api('/user/circles/' + id + '/members').catch(() => ({ r: { ok: false }, data: {} })),
+          api('/user/circles/' + id + '/scenes').catch(() => ({ r: { ok: false }, data: {} })),
+          api('/user/circles/' + id + '/mods').catch(() => ({ r: { ok: false }, data: {} })),
         ])
-        if (!r.ok){
-          fatal.value = (typeof data?.detail==='string'?data.detail:T.value.loading)
-          detail.value = { circle:null, posts:[], models:[], agents:[], scenes:[], mods:[] }
+        if (!r.ok) {
+          detailErr.value = errText(data, T.value.notFound)
+          detail.value = { circle: null, models: [], agents: [], scenes: [], mods: [] }
           return
         }
         detail.value = {
           circle: data.circle,
-          posts: data.posts||[],
-          models: data.models||[],
-          agents: data.agents||[],
-          scenes: sc.r?.ok ? (sc.data.scenes||[]) : [],
-          mods: md.r?.ok ? (md.data.mods||[]) : [],
+          models: data.models || [],
+          agents: data.agents || [],
+          scenes: sc.r?.ok ? (sc.data.scenes || []) : [],
+          mods: md.r?.ok ? (md.data.mods || []) : [],
         }
-        members.value = mem.r?.ok ? (mem.data.members||[]) : []
+        members.value = mem.r?.ok ? (mem.data.members || []) : []
         joinRequests.value = []
-        if (data.circle?.is_owner){
-          const jr = await api('/user/circles/'+id+'/join-requests')
-          if (jr.r.ok) joinRequests.value = jr.data.requests||[]
+        if (data.circle?.is_owner) {
+          const jr = await api('/user/circles/' + id + '/join-requests')
+          if (jr.r.ok) joinRequests.value = jr.data.requests || []
         }
-      } catch(e) {
-        if (e.message!=='auth') fatal.value = String(e.message||e)
-      } finally { detailLoading.value=false; syncUrl() }
+      } catch (e) {
+        if (e.message !== 'auth') detailErr.value = T.value.netErr
+      } finally { detailLoading.value = false; syncUrl() }
     }
-
-    async function buyMod(m){
-      studioMsg.value=''
-      if (m.mine || m.purchased) return
-      if (!confirm((lang.value==='zh'?'用 ':'Spend ')+(m.price||0)+(lang.value==='zh'?' 社区积分购买「'+m.name+'」？':' credits?'))) return
-      try {
-        const { r, data } = await api('/user/circles/'+detailId.value+'/mods/'+m.id+'/buy', { method:'POST' })
-        if (!r.ok){ studioMsg.value = (typeof data?.detail==='string'?data.detail:('HTTP '+r.status)); return }
-        studioMsg.value = lang.value==='zh'?'购买成功':'Purchased'
-        loadDetail(detailId.value)
-      } catch(e){ studioMsg.value = String(e.message||e) }
+    function typeLabel(t) {
+      const k = String(t || 'chat').toLowerCase(), x = T.value
+      return k === 'vision' ? x.typeVision : k === 'image' ? x.typeImage : k === 'embedding' ? x.typeEmbed : x.typeChat
     }
-
-    function goHome(){
-      if (!requireAuth()) return
-      view.value='home'; detailId.value=null; syncUrl(); loadMine()
+    function modelHref(m) {
+      const id = m?.id || m?.name
+      if (!id || String(m?.model_type || '').toLowerCase() === 'embedding') return ''
+      return '/m/' + encodeURIComponent(id)
     }
-    function goBrowse(){ view.value='browse'; detailId.value=null; syncUrl(); loadBrowse() }
-    function goDetail(id){
-      if (!requireAuth()) return
-      view.value='detail'; loadDetail(id)
-    }
-
-    async function doLogin(){
-      authErr.value=''
-      if (!form.value.email||!form.value.password){ authErr.value=T.value.email+' / '+T.value.password; return }
-      authLoading.value=true
-      try {
-        const rr = await fetch('/user/login',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email:form.value.email, password:form.value.password }) })
-        const dd = await rr.json().catch(()=>null)
-        if (!rr.ok){ authErr.value = (typeof dd?.detail==='string'?dd.detail:'Login failed'); return }
-        storageSet('user_token', dd.token)
-        loggedIn.value=true
-        showAuth.value=false
-        await boot()
-      } catch { authErr.value='Network error' }
-      finally { authLoading.value=false }
-    }
-
-    async function doRegister(){
-      authErr.value=''
-      if (!form.value.email||!form.value.password) return
-      authLoading.value=true
-      try {
-        const rr = await fetch('/user/register',{ method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ email:form.value.email, password:form.value.password, nickname:form.value.nickname||'' }) })
-        const dd = await rr.json().catch(()=>null)
-        if (!rr.ok){ authErr.value = (typeof dd?.detail==='string'?dd.detail:'Error'); return }
-        storageSet('user_token', dd.token)
-        loggedIn.value=true
-        showAuth.value=false
-        await boot()
-      } catch { authErr.value='Network error' }
-      finally { authLoading.value=false }
-    }
-
-    async function createCircle(){
-      const name = createForm.value.name.trim()
-      if (!name) return
-      busy.value=true
-      try {
-        const { r, data } = await api('/user/circles',{ method:'POST', body: JSON.stringify({ name, description: createForm.value.desc.trim() }) })
-        if (!r.ok){ banner.value={ type:'warn', text: typeof data?.detail==='string'?data.detail:'Error' }; return }
-        showCreate.value=false
-        createForm.value={ name:'', desc:'' }
-        await loadMine()
-        if (data.circle?.id) goDetail(data.circle.id)
-      } finally { busy.value=false }
-    }
-
-    function extractCode(input){
-      const s=(input||'').trim()
-      try { return new URL(s).searchParams.get('c') || s } catch { return s }
-    }
-
-    async function previewJoin(){
-      const code = extractCode(joinInput.value)
-      if (!code) return
-      busy.value=true
-      try {
-        const { r, data } = await api('/user/circles/join/'+encodeURIComponent(code))
-        if (!r.ok){ banner.value={ type:'warn', text: typeof data?.detail==='string'?data.detail:'Invalid' }; return }
-        if (data.already_member){ banner.value={ type:'info', text: T.value.joined }; if (data.circle?.id) goDetail(data.circle.id); return }
-        if (data.full){ banner.value={ type:'warn', text: T.value.full }; return }
-        if (!confirm((lang.value==='zh'?'加入「':'Join “')+(data.circle?.name||'')+(lang.value==='zh'?'」？':'”?'))) return
-        const jr = await api('/user/circles/join/'+encodeURIComponent(code),{ method:'POST' })
-        if (!jr.r.ok){ banner.value={ type:'warn', text: typeof jr.data?.detail==='string'?jr.data.detail:'Error' }; return }
-        joinInput.value=''
-        banner.value={ type:'ok', text: T.value.joined }
-        await loadMine()
-        if (data.circle?.id) goDetail(data.circle.id)
-      } finally { busy.value=false }
-    }
-
-    async function onBrowseClick(c){
-      if (!requireAuth()) return
-      if (c.join_status==='member'){ goDetail(c.id); return }
-      if (c.join_status==='pending'){ banner.value={ type:'info', text: T.value.pending }; return }
-      if (c.full){ banner.value={ type:'warn', text: T.value.full }; return }
-      if (!confirm(T.value.applyConfirm.replace('{name}', c.name||''))) return
-      busy.value=true
-      try {
-        const { r, data } = await api('/user/circles/'+c.id+'/apply',{ method:'POST', body: JSON.stringify({ message:'' }) })
-        if (!r.ok){ banner.value={ type:'warn', text: typeof data?.detail==='string'?data.detail:'Error' }; return }
-        if (data.already_member){ goDetail(c.id); return }
-        c.join_status='pending'
-        banner.value={ type:'ok', text: T.value.applySent }
-      } finally { busy.value=false }
-    }
-
-    function openInvite(){
+    async function copyInvite() {
       const c = detail.value.circle
       if (!c?.code) return
-      inviteModal.value = { circle:c, url: location.origin+'/app?c='+encodeURIComponent(c.code) }
+      const url = location.origin + '/app?c=' + encodeURIComponent(c.code)
+      try { await navigator.clipboard.writeText(url) } catch {
+        const ta = document.createElement('textarea'); ta.value = url; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta)
+      }
+      copied.value = true
+      setTimeout(() => { copied.value = false }, 2000)
     }
-
-    async function dissolve(){
+    async function dissolve() {
+      menuOpen.value = false
       const c = detail.value.circle
-      if (!c || !confirm(T.value.dissolveConfirm.replace('{name}', c.name||''))) return
-      const { r, data } = await api('/user/circles/'+c.id,{ method:'DELETE' })
-      if (!r.ok){ banner.value={ type:'warn', text: typeof data?.detail==='string'?data.detail:'Error' }; return }
+      if (!c || !confirm(T.value.dissolveConfirm.replace('{name}', c.name || ''))) return
+      const { r, data } = await api('/user/circles/' + c.id, { method: 'DELETE' })
+      if (!r.ok) { notify(errText(data), 'warn'); return }
       goHome()
     }
-    async function leave(){
+    async function leave() {
+      menuOpen.value = false
       const c = detail.value.circle
-      if (!c || !confirm(T.value.leaveConfirm.replace('{name}', c.name||''))) return
-      const { r, data } = await api('/user/circles/'+c.id+'/leave',{ method:'POST' })
-      if (!r.ok){ banner.value={ type:'warn', text: typeof data?.detail==='string'?data.detail:'Error' }; return }
+      if (!c || !confirm(T.value.leaveConfirm.replace('{name}', c.name || ''))) return
+      const { r, data } = await api('/user/circles/' + c.id + '/leave', { method: 'POST' })
+      if (!r.ok) { notify(errText(data), 'warn'); return }
       goHome()
     }
-
-    async function approveReq(req){
-      const { r, data } = await api(`/user/circles/${detailId.value}/join-requests/${req.id}/approve`,{ method:'POST' })
-      if (!r.ok){ banner.value={ type:'warn', text: typeof data?.detail==='string'?data.detail:'Error' }; return }
-      joinRequests.value = joinRequests.value.filter(x=>x.id!==req.id)
+    async function approveReq(req) {
+      const { r, data } = await api(`/user/circles/${detailId.value}/join-requests/${req.id}/approve`, { method: 'POST' })
+      if (!r.ok) { notify(errText(data), 'warn'); return }
+      joinRequests.value = joinRequests.value.filter(x => x.id !== req.id)
       loadDetail(detailId.value)
     }
-    async function rejectReq(req){
-      const { r, data } = await api(`/user/circles/${detailId.value}/join-requests/${req.id}/reject`,{ method:'POST' })
-      if (!r.ok){ banner.value={ type:'warn', text: typeof data?.detail==='string'?data.detail:'Error' }; return }
-      joinRequests.value = joinRequests.value.filter(x=>x.id!==req.id)
+    async function rejectReq(req) {
+      const { r, data } = await api(`/user/circles/${detailId.value}/join-requests/${req.id}/reject`, { method: 'POST' })
+      if (!r.ok) { notify(errText(data), 'warn'); return }
+      joinRequests.value = joinRequests.value.filter(x => x.id !== req.id)
+    }
+    async function buyMod(m) {
+      if (m.mine || m.purchased) return
+      if (!confirm(T.value.buyConfirm.replace('{n}', String(m.price || 0)).replace('{name}', m.name || ''))) return
+      const { r, data } = await api('/user/circles/' + detailId.value + '/mods/' + m.id + '/buy', { method: 'POST' })
+      if (!r.ok) { notify(errText(data), 'warn'); return }
+      notify(T.value.bought)
+      loadDetail(detailId.value)
     }
 
-    async function createPost(){
-      const text = draft.value.trim(); if (!text) return
-      busy.value=true
-      try {
-        const { r, data } = await api('/user/circles/'+detailId.value+'/posts',{ method:'POST', body: JSON.stringify({ content:text }) })
-        if (!r.ok){ banner.value={ type:'warn', text: typeof data?.detail==='string'?data.detail:'Error' }; return }
-        detail.value.posts = [data.post, ...(detail.value.posts||[])]
-        draft.value=''; showComposer.value=false
-      } finally { busy.value=false }
+    // ── 路由 ──
+    function syncUrl() {
+      const path = view.value === 'detail' && detailId.value ? '/c/' + detailId.value : '/circles'
+      try { if (location.pathname !== path) history.pushState(null, '', path) } catch {}
+      document.title = (view.value === 'detail' ? (detail.value.circle?.name || T.value.title) : T.value.title) + ' · Token Bank'
     }
-    function startEdit(p){ editId.value=p.id; editText.value=p.content||'' }
-    async function saveEdit(p){
-      const text=editText.value.trim(); if(!text) return
-      busy.value=true
-      try {
-        const { r, data } = await api(`/user/circles/${detailId.value}/posts/${p.id}`,{ method:'PUT', body: JSON.stringify({ content:text }) })
-        if (!r.ok){ banner.value={ type:'warn', text: typeof data?.detail==='string'?data.detail:'Error' }; return }
-        detail.value.posts = (detail.value.posts||[]).map(x=>x.id===p.id?{...x,...data.post}:x)
-        editId.value=null
-      } finally { busy.value=false }
+    function goHome() {
+      view.value = 'home'; detailId.value = null; syncUrl()
+      loadMine(); loadBrowse()
+      window.scrollTo({ top: 0 })
     }
-    async function delPost(p){
-      if (!confirm(T.value.deleteConfirm)) return
-      const { r, data } = await api(`/user/circles/${detailId.value}/posts/${p.id}`,{ method:'DELETE' })
-      if (!r.ok){ banner.value={ type:'warn', text: typeof data?.detail==='string'?data.detail:'Error' }; return }
-      detail.value.posts = (detail.value.posts||[]).filter(x=>x.id!==p.id)
+    function goDetail(id) {
+      if (!loggedIn.value) { openAuth(() => goDetail(id)); return }
+      view.value = 'detail'; supplyTab.value = 'models'
+      window.scrollTo({ top: 0 })
+      loadDetail(id)
     }
-    async function sendReply(p){
-      const text=replyDraft.value.trim(); if(!text) return
-      busy.value=true
-      try {
-        const { r, data } = await api(`/user/circles/${detailId.value}/posts/${p.id}/replies`,{ method:'POST', body: JSON.stringify({ content:text }) })
-        if (!r.ok){ banner.value={ type:'warn', text: typeof data?.detail==='string'?data.detail:'Error' }; return }
-        detail.value.posts = (detail.value.posts||[]).map(x=>x.id===p.id?{...x, replies:[...(x.replies||[]), data.reply]}:x)
-        replyDraft.value=''; replyingId.value=null
-      } finally { busy.value=false }
-    }
-    async function delReply(p, reply){
-      if (!confirm(T.value.deleteConfirm)) return
-      const { r, data } = await api(`/user/circles/${detailId.value}/posts/${p.id}/replies/${reply.id}`,{ method:'DELETE' })
-      if (!r.ok){ banner.value={ type:'warn', text: typeof data?.detail==='string'?data.detail:'Error' }; return }
-      detail.value.posts = (detail.value.posts||[]).map(x=>x.id===p.id?{...x, replies:(x.replies||[]).filter(rr=>rr.id!==reply.id)}:x)
-    }
+    window.addEventListener('popstate', () => route())
+    document.addEventListener('click', () => { menuOpen.value = false })
 
-    // 处理邀请码 ?c=：预览后入圈并进入主页
-    async function consumeInviteCode(code){
-      if (!code) return false
-      try {
-        const { r, data } = await api('/user/circles/join/'+encodeURIComponent(code))
-        if (!r.ok){ banner.value={ type:'warn', text: typeof data?.detail==='string'?data.detail:'Invalid' }; return false }
-        const cid = data.circle?.id
-        if (data.already_member){
-          if (cid){ view.value='detail'; await loadDetail(cid); return true }
-          return false
-        }
-        if (data.full){ banner.value={ type:'warn', text: T.value.full }; return false }
-        const jr = await api('/user/circles/join/'+encodeURIComponent(code),{ method:'POST' })
-        if (!jr.r.ok){ banner.value={ type:'warn', text: typeof jr.data?.detail==='string'?jr.data.detail:'Error' }; return false }
-        banner.value={ type:'ok', text: T.value.joined }
-        if (cid){ view.value='detail'; await loadDetail(cid); return true }
-      } catch(e) {
-        if (e.message!=='auth') banner.value={ type:'warn', text: String(e.message||e) }
+    async function route() {
+      const m = location.pathname.match(/^\/c\/(\d+)/)
+      if (m) {
+        if (!loggedIn.value) { view.value = 'home'; await Promise.all([loadBrowse()]); openAuth(() => goDetail(Number(m[1]))); return }
+        view.value = 'detail'; await loadDetail(Number(m[1])); return
       }
-      return false
+      view.value = 'home'
+      await Promise.all([loadMine(), loadBrowse()])
+      if (location.pathname.indexOf('/circles/browse') === 0) {
+        setTimeout(() => document.getElementById('discover')?.scrollIntoView({ behavior: 'smooth' }), 50)
+      }
     }
 
-    async function boot(){
-      if (loggedIn.value) await fetchProfile()
-      // URL 邀请码优先于普通路由（需登录）
-      let invite = ''
-      try { invite = new URLSearchParams(location.search).get('c') || '' } catch {}
-      if (invite && loggedIn.value){
-        const ok = await consumeInviteCode(invite)
-        try {
-          const url = new URL(location.href)
-          url.searchParams.delete('c')
-          history.replaceState(null,'', url.pathname + (url.search||'') + url.hash)
-        } catch {}
-        if (ok) return
+    // 邀请链接 ?c=：登录后预览并确认加入
+    async function boot() {
+      if (loggedIn.value) {
+        try { const { r, data } = await api('/user/profile'); if (r.ok) profile.value = data } catch {}
       }
-      parseRoute()
-      // 访客只能看公开列表；详情/我的圈子需登录
-      if (!loggedIn.value){
-        if (view.value==='detail' || invite) openAuth()
-        view.value='browse'
-        detailId.value=null
-        await loadBrowse()
-        syncUrl()
-        return
+      let invite = '', q = ''
+      try { const sp = new URLSearchParams(location.search); invite = sp.get('c') || ''; q = sp.get('q') || '' } catch {}
+      if (q) browseQ.value = q
+      await route()
+      if (invite) {
+        try { const u = new URL(location.href); u.searchParams.delete('c'); history.replaceState(null, '', u.pathname + u.search) } catch {}
+        joinInput.value = invite
+        const open = () => { modal.value = 'join'; previewJoin() }
+        if (loggedIn.value) open(); else openAuth(open)
       }
-      if (view.value==='detail' && detailId.value) await loadDetail(detailId.value)
-      else if (view.value==='browse') await loadBrowse()
-      else await loadMine()
-      syncUrl()
     }
 
-    onMounted(async ()=>{
-      document.documentElement.lang = lang.value==='zh'?'zh-CN':'en'
-      try {
-        const c = new URLSearchParams(location.search).get('c')
-        if (c) joinInput.value = c
-      } catch {}
-      await boot()
+    onMounted(() => {
+      document.documentElement.lang = lang.value === 'zh' ? 'zh-CN' : 'en'
+      boot()
     })
 
     return {
-      lang, T, toggleLang, loggedIn, showAuth, openAuth, authTab, authLoading, authErr, form,
-      doLogin, doRegister, logout,
-      view, loading, detailLoading, busy, fatal, banner,
-      owned, joined, browseList, browseQ, showCreate, createForm, joinInput,
-      detail, members, joinRequests, showComposer, draft, editId, editText,
-      replyingId, replyDraft, inviteModal, profile,
-      goHome, goBrowse, goDetail, loadBrowse, createCircle, previewJoin, onBrowseClick,
-      browseStatus, openInvite, dissolve, leave, approveReq, rejectReq,
-      createPost, startEdit, saveEdit, delPost, sendReply, delReply,
-      fmtTime, authorLabel, isMine, typeLabel, modelHref, avatarColor, copy,
-      studioMsg, buyMod,
+      lang, T, toggleLang, toast, loggedIn, profile, showAuth, openAuth, needAuth, authTab, authLoading, authErr, form, submitAuth, logout,
+      view, mine, requestCounts, totalPending, loadingMine, browseQ, shownBrowse, loadingBrowse, applyingId, busy, modal,
+      createForm, createCircle, joinInput, joinPreview, joinErr, previewJoin, confirmJoin, closeJoin, apply, pct, color,
+      detail, detailLoading, detailErr, members, sortedMembers, joinRequests, supplyTabs, supplyTab, curSupply, supplyCount,
+      copied, menuOpen, copyInvite, dissolve, leave, approveReq, rejectReq, buyMod, typeLabel, modelHref, goHome, goDetail,
     }
-  }
+  },
 }).mount('#app')
 </script>
 </body>

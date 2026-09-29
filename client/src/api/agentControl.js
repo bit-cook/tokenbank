@@ -1,5 +1,5 @@
 // client/src/api/agentControl.js
-// 贡献页 Agent 启停：Electron IPC 或 Docker admin-api
+// 交易页 Agent 启停：Electron IPC 或 Docker admin-api
 import { isElectron } from './adapter';
 
 const ADMIN_BASE = import.meta.env?.VITE_ADMIN_BASE ?? '';

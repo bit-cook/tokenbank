@@ -81,7 +81,7 @@ The system automatically extracts work portraits from real call records and sess
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  Desktop (Electron · Mac / Windows) or CLI / Docker Web UI      │
-│  Gateway · Providers · Resources · Playground · Usage · …       │
+│  Gateway · Models · Assets · Playground · Usage · …          │
 └────────────────────────────┬────────────────────────────────────┘
                              │ loopback
                              ▼
@@ -217,17 +217,17 @@ Desktop, CLI, and server gateways each register as a device — **usage is repor
 
 ### Unified subscription management
 
-The **Profile** tab is the single hub for all billing accounts; **Providers** handles keys and routing:
+The **Profile** tab is the single hub for all billing accounts; **Models** handles keys and routing:
 
 | Type | How it's managed | Typical use |
 |---|---|---|
 | **APP subscription** | Register ChatGPT / Claude / Gemini / Cursor plans and monthly cost | Stats-only on official sub, or OAuth → API gateway |
 | **API subscription** | Separate catalog for vendor API plans (e.g. Volcengine Coding Plan) | API Key gateway, billed separately from APP subs |
-| **Pay-as-you-go** | Register providers, model lists, and USD/M-token list prices | Providers page only exposes models configured here; cost estimates use these rates |
+| **Pay-as-you-go** | Register providers, model lists, and USD/M-token list prices | The Models page only exposes models configured here; cost estimates use these rates |
 
 - **Cloud sync** — subscriptions and PAYG config download on login; Mac / Windows / Linux stay in sync
 - **Billing overlay** — daily subscription amortization + PAYG estimates alongside raw token stats
-- **Supply linkage** — Profile defines *what you use and what it costs*; Providers defines *how to connect and route*
+- **Supply linkage** — Profile defines *what you use and what it costs*; Models defines *how to connect and route*
 
 ### Dynamic supply delivery
 
@@ -267,14 +267,14 @@ Run multiple logins of the same CLI (Claude Code / Codex). The gateway picks the
 
 - Set a **main agent** as the aggregation entry for natural-language tasks (**image input** supported)
 - The main agent can plan steps and dispatch to other onboarded agents (including Kimi / Cursor runtimes)
-- **Community agents**: hire on demand from Contribute; tasks run on **their device**, without downloading their source — lower risk than running unknown agents locally
+- **Community agents**: hire on demand from the Trade page; tasks run on **their device**, without downloading their source — lower risk than running unknown agents locally
 - Built-in `tokenbank-agent-bridge` MCP: `tb_list_agents` / `tb_dispatch_agent` for orchestration
 - Chunked conversation stream, visible tool calls, stop then continue
 - Agent visibility is gated by **runtime projection + hosted install** — only projected, available agents appear
 
 ### AI assets in one place: MCP · Skill · Prompt · Agent
 
-Skills in one folder, MCP configs in three, prompts in a text file you can't find — the **Resources** tab gathers community picks and your own assets into one ordered library, and **projects** them to every agent instead of copying them around. Edit once, and every managed agent gets the same version.
+Skills in one folder, MCP configs in three, prompts in a text file you can't find — the **Assets** tab gathers community picks and your own assets into one ordered library, and **projects** them to every agent instead of copying them around. Edit once, and every managed agent gets the same version.
 
 | Type | Capability |
 |---|---|
@@ -345,7 +345,7 @@ spend   = ((prompt + completion tokens) / 1000) × consume_rate
 
 Contribute rate > consume rate; plus check-in, wheel, and referrals. Circles share models and credits.
 
-**Hire agents:** On Contribute, list projected assistants (card/bio only) or hire community agents per use; jobs run on their device without downloading their source; shareable landing pages for tryouts. Launch from Playground or a hosted app.
+**Hire agents:** On the Trade page, list projected assistants (card/bio only) or hire community agents per use; jobs run on their device without downloading their source; shareable landing pages for tryouts. Launch from Playground or a hosted app.
 
 ---
 
@@ -429,11 +429,11 @@ Per-session steps, tool calls, skills used, and token breakdown (sealed reasonin
 
 ![Session Trace](server/static/screenshots/session-trace.webp)
 
-### Providers · personal compute + community sharing
+### Models · personal compute + community sharing
 
 Speed-test personal models with status lights; spend credits on community-shared models.
 
-![Providers](server/static/screenshots/providers.webp)
+![Models](server/static/screenshots/providers.webp)
 
 ### Assets · Agents / Skills / Prompts
 
@@ -455,17 +455,17 @@ Requests / tokens / free-hit rate / estimated cost; per-app mix and daily trend.
 
 ![Usage](server/static/screenshots/usage.webp)
 
-### Circles · share compute with friends
+### Circles · trade only with people you trust
 
-Create or join circles; invite friends to share models and credits.
+Circles are the scope of trading: create or join one under **Trade → Circles**, list supply to chosen circles, and filter hiring to circle-only agents. Inviting friends earns both sides credits.
 
 ![Circles](server/static/screenshots/circles.webp)
 
-### Contribute · earn from idle quota
+### Trade · earn from idle quota
 
 Contribute local models to the community network for credits; keys never leave the machine. You can also list assistants for others to **hire**—only the card and bio are public; runs stay on your device.
 
-![Contribute](server/static/screenshots/contribute.webp)
+![Trade](server/static/screenshots/contribute.webp)
 
 ### Global network · node map
 
@@ -485,8 +485,8 @@ Gateway status, per-app TTFT / today’s usage; open the main panel in one click
 | **Gateway** | **One-click onboarding** (WorkBuddy / Trae / …) + **multi-account CLI**; session Trace; scene / task-type routes |
 | **Playground** | **Agent orchestration** (community agents, image input); tool streams, stop/resume |
 | **Assets** | Community **MCP / Skill / Prompt / Agent** catalog; projection gating; **built-in MCP relay**; portrait recommendations |
-| **Providers** | **Local sources** and **community sharing**; modalities (text/vision/image/embedding); speed tests & dynamic catalog |
-| **Circles / Contribute / Network** | Circles · contributor nodes / **hire agents** · global node map (also usable on the web) |
+| **Models** | **Local sources** and **community sharing**; modalities (text/vision/image/embedding); speed tests & dynamic catalog |
+| **Trade (incl. Circles) / Network** | **Hire agents** · list supply · circles as trade scope / community network map (also usable on the web) |
 | **Config** | Gateway port, timeout, concurrency · lossless compression · cloud account & relay key |
 
 ---

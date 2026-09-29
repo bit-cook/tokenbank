@@ -1,12 +1,20 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLang } from '../store/lang';
-import ResourceAssetCard, {
+import { createPortal } from 'react-dom';
+import {
+  ASSET_BTN_GHOST,
   ASSET_BTN_MANAGED,
   ASSET_BTN_PRIMARY,
+  AssetLogo,
   buildPreviewText,
   resourceDescription,
   resourceDisplayName,
+  typeVisual,
 } from './ResourceAssetCard';
+import {
+  LIB_LIST_CLS, libRowCls, LibrarySectionHead, LibraryRowTitle,
+  LibraryInspector, InspectorSection, InspectorPreview,
+} from './LibraryControls';
 import PortraitShareModal, { PortraitVisualBoard } from './PortraitShareCard';
 import { tagToPurpose } from '../lib/resource-purpose';
 import { completeEnablePackage, copyText } from '../lib/resource-enable';
@@ -735,6 +743,10 @@ export default function PersonalizedRecommend({
   panel = 'recommend',
   /** 无画像时引导去画像页 */
   onGoPortrait,
+  /** 与资产库共用的选中态 / 详情面板挂载点（key 前缀 reco:） */
+  selectedKey = null,
+  onSelect,
+  inspectorHost = null,
 }) {
   const { t } = useLang();
   const rtype = normType(typeFilter);
@@ -1529,21 +1541,24 @@ export default function PersonalizedRecommend({
   return (
     <div className="space-y-3">
       {ready.step === 'needAgent' && (
-        <div className="rounded-lg border border-amber-300 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-900/20 p-3 text-xs space-y-2">
-          <p className="text-amber-800 dark:text-amber-200">{t('resources.reco.needAgent')}</p>
-          <p className="text-amber-700/80 dark:text-amber-300/70">{t('resources.reco.needAgentHint')}</p>
-          <div className="flex flex-wrap gap-2">
+        <div className={`${LIB_LIST_CLS} p-4 text-xs space-y-2`}>
+          <p className="flex items-center gap-1.5 text-[13px] font-semibold text-zinc-900 dark:text-zinc-50">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400" aria-hidden />
+            {t('resources.reco.needAgent')}
+          </p>
+          <p className="text-zinc-500 dark:text-zinc-400">{t('resources.reco.needAgentHint')}</p>
+          <div className="flex flex-wrap gap-2 pt-1">
             <button
               type="button"
               onClick={() => (onNeedAgent ? onNeedAgent() : (onNeedProject ? onNeedProject() : null))}
-              className="px-3 py-1.5 rounded-md bg-amber-600 text-white hover:bg-amber-700"
+              className={ASSET_BTN_PRIMARY}
             >
               {t('resources.skillInstall.goManageAgent')}
             </button>
             <button
               type="button"
               onClick={retryBuiltinSetup}
-              className="px-3 py-1.5 rounded-md border border-amber-400/80 text-amber-800 dark:text-amber-200 hover:bg-amber-100/60 dark:hover:bg-amber-950/40"
+              className={ASSET_BTN_GHOST}
             >
               {t('resources.skillInstall.retrySetup')}
             </button>
@@ -1551,75 +1566,76 @@ export default function PersonalizedRecommend({
         </div>
       )}
 
-      {ready.step === 'ready' && phase !== 'review' && phase !== 'analyzing' && phase !== 'discovering' && (
-        <div className="space-y-2">
-          {runtimes.length > 0 && (
-            <div className="flex flex-wrap items-center gap-2">
-              {renderRuntimePicker()}
-              {runtimeBusy && (
-                <span className="text-[10px] text-zinc-400">{t('resources.reco.runtimeSwitching')}</span>
-              )}
-            </div>
-          )}
-          {hasSharedPortrait && phase !== 'mining' && (
-            <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-zinc-50/80 dark:bg-zinc-800/40 p-3 space-y-2">
-              <p className="text-[11px] text-zinc-500">{t('resources.reco.portraitReusable')}</p>
-              {sharedPortrait.persona && (
-                <p className="text-xs text-zinc-600 dark:text-zinc-300 line-clamp-2">{sharedPortrait.persona}</p>
-              )}
-              <div className="flex flex-wrap items-center gap-2">
-                {isRecommendPanel && (
-                  <button type="button" onClick={reusePortrait} disabled={busy || runtimeBusy}
-                    className="px-3 py-1.5 rounded-md bg-violet-600 text-white text-xs hover:bg-violet-700 disabled:opacity-50">
-                    {t('resources.reco.reusePortrait', { type: typeLabel })}
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={isPortraitPanel ? mine : (onGoPortrait || mine)}
-                  disabled={busy || runtimeBusy}
-                  className="px-3 py-1.5 rounded-md border border-zinc-300 dark:border-zinc-600 text-xs text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 disabled:opacity-50"
-                >
-                  {isPortraitPanel
-                    ? t('resources.reco.remine')
-                    : (onGoPortrait ? t('resources.reco.goPortraitRemine') : t('resources.reco.remine'))}
-                </button>
-                {canShare && (
-                  <button type="button" onClick={() => setShareOpen(true)} disabled={busy}
-                    className="px-3 py-1.5 rounded-md border border-amber-300/80 dark:border-amber-700/60 text-xs text-amber-800 dark:text-amber-200 hover:bg-amber-50 dark:hover:bg-amber-950/30 disabled:opacity-50">
-                    {t('resources.reco.share')}
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={deletePortrait}
-                  disabled={busy || runtimeBusy}
-                  className="px-3 py-1.5 rounded-md border border-red-300/80 dark:border-red-800/60 text-xs text-red-600 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-50"
-                >
-                  {t('resources.reco.delete')}
-                </button>
-                {sharedPortrait.digest && sharedPortrait.digest.sessions != null && (
-                  <span className="text-[10px] text-zinc-400">{t('resources.reco.sessions', { n: sharedPortrait.digest.sessions })}</span>
+      {ready.step === 'ready' && phase !== 'review' && phase !== 'analyzing' && phase !== 'discovering' && (() => {
+        const showPortrait = hasSharedPortrait && phase !== 'mining';
+        const sessions = showPortrait
+          ? sharedPortrait.digest?.sessions
+          : digest?.sessions;
+        return (
+          <div className={`${LIB_LIST_CLS} p-4`}>
+            <div className="flex flex-wrap items-start gap-3">
+              <span className="w-9 h-9 shrink-0 rounded-xl bg-violet-50 dark:bg-violet-950/40 text-violet-600 dark:text-violet-300 flex items-center justify-center text-base" aria-hidden>✦</span>
+              <div className="min-w-0 flex-1">
+                <h3 className="text-[13px] font-semibold text-zinc-900 dark:text-zinc-50">
+                  {showPortrait ? t('resources.reco.portraitTitle') : t('resources.reco.heroTitle')}
+                </h3>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 line-clamp-2">
+                  {showPortrait ? (sharedPortrait.persona || t('resources.reco.portraitReusable')) : t('resources.reco.heroDesc')}
+                </p>
+                {sessions != null && (
+                  <p className="text-[10px] text-zinc-400 mt-1">{t('resources.reco.sessions', { n: sessions })}</p>
                 )}
               </div>
+              {runtimes.length > 0 && (
+                <div className="flex items-center gap-2 shrink-0">
+                  {renderRuntimePicker({ compact: true })}
+                  {runtimeBusy && <span className="text-[10px] text-zinc-400">{t('resources.reco.runtimeSwitching')}</span>}
+                </div>
+              )}
             </div>
-          )}
-          {(!hasSharedPortrait || phase === 'mining') && (
-            <div className="flex flex-wrap items-center gap-3">
-              {isPortraitPanel || !onGoPortrait ? (
-                <button type="button" onClick={mine} disabled={busy || runtimeBusy}
-                  className="px-4 py-2 rounded-lg bg-violet-600 text-white text-sm hover:bg-violet-700 disabled:opacity-50">{mineLabel}</button>
+            <div className="flex flex-wrap items-center gap-2 mt-3 pl-12">
+              {showPortrait ? (
+                <>
+                  {isRecommendPanel && (
+                    <button type="button" onClick={reusePortrait} disabled={busy || runtimeBusy} className={ASSET_BTN_PRIMARY}>
+                      {t('resources.reco.reusePortrait', { type: typeLabel })}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={isPortraitPanel ? mine : (onGoPortrait || mine)}
+                    disabled={busy || runtimeBusy}
+                    className={ASSET_BTN_GHOST}
+                  >
+                    {isPortraitPanel
+                      ? t('resources.reco.remine')
+                      : (onGoPortrait ? t('resources.reco.goPortraitRemine') : t('resources.reco.remine'))}
+                  </button>
+                  {canShare && (
+                    <button type="button" onClick={() => setShareOpen(true)} disabled={busy} className={ASSET_BTN_GHOST}>
+                      {t('resources.reco.share')}
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={deletePortrait}
+                    disabled={busy || runtimeBusy}
+                    className="ml-auto text-xs px-3 py-1.5 rounded-xl text-zinc-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-45"
+                  >
+                    {t('resources.reco.delete')}
+                  </button>
+                </>
+              ) : isPortraitPanel || !onGoPortrait ? (
+                <button type="button" onClick={mine} disabled={busy || runtimeBusy} className={ASSET_BTN_PRIMARY}>{mineLabel}</button>
               ) : (
-                <button type="button" onClick={onGoPortrait}
-                  className="px-4 py-2 rounded-lg bg-violet-600 text-white text-sm hover:bg-violet-700">
+                <button type="button" onClick={onGoPortrait} className={ASSET_BTN_PRIMARY}>
                   {t('resources.reco.goPortraitMine')}
                 </button>
               )}
-              {digest && <span className="text-xs text-zinc-400">{t('resources.reco.sessions', { n: digest.sessions })}</span>}
             </div>
-          )}
-        </div>
-      )}
+          </div>
+        );
+      })()}
 
       {msg && <p className="text-xs text-emerald-600">{msg}</p>}
       {err && <p className="text-xs text-red-500">{err}</p>}
@@ -1764,143 +1780,146 @@ export default function PersonalizedRecommend({
         t={t}
       />
 
-      {/* 推荐结果：仅推荐板块 */}
-      {isRecommendPanel && items && items.length > 0 && phase !== 'analyzing' && phase !== 'discovering' && (
-        <>
-          <div className="flex items-center justify-between text-[11px] text-zinc-400">
-            <span>{t('resources.reco.forYou', {
-              n: hasListFilter ? (visibleItems?.length || 0) : items.length,
-              type: typeLabel,
-              ago: savedAt ? fmtAgo(savedAt, t) : '',
-            })}</span>
-            <div className="flex items-center gap-2">
-              {hasSharedPortrait && (
-                <button type="button" onClick={reusePortrait} className="text-violet-600 dark:text-violet-300 hover:underline">
-                  {t('resources.reco.reusePortrait', { type: typeLabel })}
-                </button>
-              )}
-              <span>{t('resources.reco.remineHint')}</span>
-            </div>
-          </div>
-          {hasListFilter && (!visibleItems || visibleItems.length === 0) ? (
-            <div className="text-center py-6 space-y-2">
-              <p className="text-xs text-zinc-400">
-                {String(searchQuery || '').trim()
-                  ? t('resources.reco.searchFilteredEmpty')
-                  : t('resources.emptyTagFiltered')}
-              </p>
-              <p className="text-[11px] text-zinc-400">
-                {t('resources.reco.purposeFilteredHint', { n: items.length })}
-              </p>
-            </div>
-          ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            {(visibleItems || items).map((rec, idx) => {
-              const key = recKey(rec) || `x-${idx}`;
-              const st = installing[key] || (rec.adopted ? 'done' : undefined);
-              // 技能 / 提示词 / 智能体：进库统一称「纳管」
-              const actionLabel = st === 'done' ? t('resources.reco.adopted')
-                : st === 'busy' ? t('resources.reco.working')
-                  : t('resources.reco.adopt');
-              const expanded = expandedKey === key;
-              const cardItem = {
-                ...rec,
-                name: rtype === 'skill' ? (rec.slug || rec.name) : (rec.name || rec.slug),
-                display_name: rec.display_name || rec.name,
-                description: resourceDescription(rec),
-                content: rec.content || rec.soul || '',
-                metadata: { icon: rec.icon },
-              };
-              return (
-                <ResourceAssetCard
-                  key={key}
-                  type={rtype}
-                  item={cardItem}
-                  typeLabel={typeLabel}
-                  categoryLabel={rec.category ? catLabel(rec.category) : ''}
-                  description={resourceDescription(cardItem)}
-                  previewText={buildPreviewText(rtype, {
-                    ...cardItem,
-                    // 无正文时预览说明 + 匹配理由
-                    content: cardItem.content || [
-                      resourceDescription(cardItem),
-                      rec.reason ? `${t('resources.reco.reason')}: ${rec.reason}` : '',
-                    ].filter(Boolean).join('\n\n'),
-                  })}
-                  expanded={expanded}
-                  onTogglePreview={() => setExpandedKey(expanded ? null : key)}
-                  previewLabel={t('resources.preview')}
-                  collapseLabel={t('resources.collapse')}
-                  emptyPreviewLabel={t('resources.emptyDetail')}
-                  layout="stack"
-                  className={expanded ? 'sm:col-span-2' : ''}
-                  meta={(
-                    <>
-                      {rtype === 'assistant' && (rec.source === 'catalog' || rec.source === 'composed') && (
-                        <div className="flex flex-wrap gap-1 pt-1.5">
-                          <span
-                            className={`text-[10px] px-1.5 py-0.5 rounded border ${
-                              rec.source === 'composed'
-                                ? 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300 border-amber-200/60 dark:border-amber-800/50'
-                                : 'bg-sky-50 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300 border-sky-200/60 dark:border-sky-800/50'
-                            }`}
-                            title={rec.source === 'composed'
-                              ? t('resources.reco.fromComposedHint')
-                              : t('resources.reco.fromCatalogHint')}
-                          >
-                            {rec.source === 'composed'
-                              ? t('resources.reco.fromComposed')
-                              : t('resources.reco.fromCatalog')}
-                          </span>
-                          {Array.isArray(rec.skills) && rec.skills.map((sk) => (
-                            <span key={sk} className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/50">
-                              {sk}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      {rtype === 'assistant' && !(rec.source === 'catalog' || rec.source === 'composed')
-                        && Array.isArray(rec.skills) && rec.skills.length > 0 && (
-                        <div className="flex flex-wrap gap-1 pt-1.5">
-                          {rec.skills.map((sk) => (
-                            <span key={sk} className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 border border-emerald-200/60 dark:border-emerald-800/50">
-                              {sk}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      {rec.reason && (
-                        <p className="text-[11px] text-violet-600 dark:text-violet-300 mt-1.5">
-                          {t('resources.reco.reason')}: {rec.reason}
-                        </p>
-                      )}
-                      {!!rec.downloads && (
-                        <p className="text-[10px] text-zinc-400 mt-1">
-                          {t('resources.reco.downloads', { n: rec.downloads })}
-                        </p>
-                      )}
-                      {rtype === 'prompt' && !!rec.source && (
-                        <p className="text-[10px] text-zinc-400 mt-1 truncate" title={rec.source}>{rec.source}</p>
-                      )}
-                    </>
-                  )}
-                  actions={(
-                    <button
-                      type="button"
-                      onClick={() => install(rec)}
-                      disabled={st === 'busy' || st === 'done'}
-                      className={st === 'done' ? ASSET_BTN_MANAGED : ASSET_BTN_PRIMARY}
-                    >
-                      {actionLabel}
+      {/* 推荐结果：与资产库同一列表 + 右侧详情 */}
+      {isRecommendPanel && items && items.length > 0 && phase !== 'analyzing' && phase !== 'discovering' && (() => {
+        const list = visibleItems || items;
+        const rows = list.map((rec, idx) => {
+          const key = recKey(rec) || `x-${idx}`;
+          const st = installing[key] || (rec.adopted ? 'done' : undefined);
+          const cardItem = {
+            ...rec,
+            name: rtype === 'skill' ? (rec.slug || rec.name) : (rec.name || rec.slug),
+            display_name: rec.display_name || rec.name,
+            description: resourceDescription(rec),
+            content: rec.content || rec.soul || '',
+            metadata: { icon: rec.icon },
+          };
+          return { rec, key, selKey: `reco:${key}`, st, cardItem, name: resourceDisplayName(rtype, cardItem) };
+        });
+        const visual = typeVisual(rtype);
+        const actionBtn = (r, block = false) => (
+          <button
+            type="button"
+            onClick={() => install(r.rec)}
+            disabled={r.st === 'busy' || r.st === 'done'}
+            className={`${r.st === 'done' ? ASSET_BTN_MANAGED : ASSET_BTN_PRIMARY} ${block ? 'w-full' : '!px-3 !py-1 !text-[11px] !rounded-lg'}`}
+          >
+            {r.st === 'done' ? t('resources.reco.adopted') : r.st === 'busy' ? t('resources.reco.working') : t('resources.reco.adopt')}
+          </button>
+        );
+        const sel = rows.find(r => r.selKey === selectedKey);
+        const logo = (r) => (LogoComp
+          ? <LogoComp type={rtype} icon={r.rec.icon} name={r.name || r.key} />
+          : <AssetLogo type={rtype} icon={r.rec.icon} name={r.name || r.key} />);
+        const inspector = sel && (
+          <LibraryInspector
+            logo={logo(sel)}
+            title={sel.name}
+            closeLabel={t('resources.collapse')}
+            onClose={() => onSelect?.(null)}
+            chips={(
+              <>
+                <span className={`text-[10px] px-1.5 py-px rounded font-medium ${visual.chip}`}>{typeLabel}</span>
+                {sel.rec.category && <span className="text-[10px] text-zinc-400">{catLabel(sel.rec.category)}</span>}
+              </>
+            )}
+            desc={resourceDescription(sel.cardItem)}
+            stats={sel.rec.downloads ? [[t('resources.reco.downloadsLabel'), sel.rec.downloads]] : null}
+            footer={actionBtn(sel, true)}
+          >
+            {sel.rec.reason && (
+              <InspectorSection title={t('resources.reco.reason')}>
+                <p className="text-xs leading-relaxed text-violet-700 dark:text-violet-300">{sel.rec.reason}</p>
+              </InspectorSection>
+            )}
+            {rtype === 'assistant' && Array.isArray(sel.rec.skills) && sel.rec.skills.length > 0 && (
+              <InspectorSection title={t('resources.reco.skillsLabel')}>
+                <div className="flex flex-wrap gap-1.5">
+                  {sel.rec.skills.map(sk => (
+                    <span key={sk} className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300">{sk}</span>
+                  ))}
+                </div>
+                {(sel.rec.source === 'catalog' || sel.rec.source === 'composed') && (
+                  <p className="text-[10px] text-zinc-400 mt-2">
+                    {sel.rec.source === 'composed' ? t('resources.reco.fromComposedHint') : t('resources.reco.fromCatalogHint')}
+                  </p>
+                )}
+              </InspectorSection>
+            )}
+            {rtype === 'prompt' && !!sel.rec.source && (
+              <InspectorSection title={t('resources.reco.sourceLabel')}>
+                <p className="text-[11px] text-zinc-500 break-all">{sel.rec.source}</p>
+              </InspectorSection>
+            )}
+            <InspectorSection title={t('resources.preview')}>
+              <InspectorPreview text={buildPreviewText(rtype, {
+                ...sel.cardItem,
+                content: sel.cardItem.content || resourceDescription(sel.cardItem),
+              }) || t('resources.emptyDetail')} />
+            </InspectorSection>
+          </LibraryInspector>
+        );
+        return (
+          <section>
+            <LibrarySectionHead
+              title={t('resources.reco.listTitle')}
+              count={rows.length}
+              extra={(
+                <>
+                  {savedAt && <span>{t('resources.reco.updatedAgo', { ago: fmtAgo(savedAt, t) })}</span>}
+                  {hasSharedPortrait && (
+                    <button type="button" onClick={reusePortrait} className="text-blue-600 dark:text-blue-400 hover:underline">
+                      {t('resources.reco.refresh')}
                     </button>
                   )}
-                />
-              );
-            })}
-          </div>
-          )}
-        </>
-      )}
+                </>
+              )}
+            />
+            {hasListFilter && rows.length === 0 ? (
+              <div className={`${LIB_LIST_CLS} text-center py-8 space-y-2`}>
+                <p className="text-xs text-zinc-400">
+                  {String(searchQuery || '').trim()
+                    ? t('resources.reco.searchFilteredEmpty')
+                    : t('resources.emptyTagFiltered')}
+                </p>
+                <p className="text-[11px] text-zinc-400">
+                  {t('resources.reco.purposeFilteredHint', { n: items.length })}
+                </p>
+              </div>
+            ) : (
+              <ul className={LIB_LIST_CLS} role="listbox" aria-label={t('resources.reco.listTitle')}>
+                {rows.map(r => {
+                  const isSel = r.selKey === selectedKey;
+                  return (
+                    <li
+                      key={r.key}
+                      role="option"
+                      aria-selected={isSel}
+                      onClick={() => onSelect?.(isSel ? null : r.selKey)}
+                      className={`${libRowCls(isSel)} grid-cols-[minmax(0,1fr)_auto]`}
+                    >
+                      <LibraryRowTitle
+                        logo={logo(r)}
+                        name={r.name}
+                        sub={r.rec.reason || resourceDescription(r.cardItem)}
+                        subClass={r.rec.reason ? 'text-violet-600/90 dark:text-violet-300/90' : undefined}
+                        chips={(
+                          <>
+                            <span className={`shrink-0 text-[10px] px-1.5 py-px rounded font-medium ${visual.chip}`}>{typeLabel}</span>
+                            {r.rec.category && <span className="shrink-0 text-[10px] text-zinc-400">{catLabel(r.rec.category)}</span>}
+                          </>
+                        )}
+                      />
+                      <div onClick={e => e.stopPropagation()}>{actionBtn(r)}</div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            {inspector && (inspectorHost ? createPortal(inspector, inspectorHost) : inspector)}
+          </section>
+        );
+      })()}
     </div>
   );
 }

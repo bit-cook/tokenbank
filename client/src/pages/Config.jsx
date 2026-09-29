@@ -314,7 +314,7 @@ function Settings({ user, onLogout, serverUrl, setServerUrl }) {
               { value: 'error', label: 'Error' },
               { value: 'warn', label: 'Warn' },
               { value: 'info', label: 'Info' },
-              { value: 'debug', label: 'PlayGround' },
+              { value: 'debug', label: 'Debug' },
             ]}
           />
         </div>

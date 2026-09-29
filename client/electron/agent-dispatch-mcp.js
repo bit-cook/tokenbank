@@ -15,7 +15,7 @@ const WORKING_DIR = process.env.TB_WORKING_DIR || process.cwd();
 const TOOLS = [
   {
     name: 'tb_list_agents',
-    description: '【仅编排】列出本机已雇佣的社区智能体(community:*)，供 tb_dispatch_agent 派发。不含未雇佣的在线目录、本地 assistant、CLI，避免列表过长。雇佣请在 Token Bank「贡献」页操作。',
+    description: '【仅编排】列出本机已雇佣的社区智能体(community:*)，供 tb_dispatch_agent 派发。不含未雇佣的在线目录、本地 assistant、CLI，避免列表过长。雇佣请在 Token Bank「交易」页操作。',
     inputSchema: { type: 'object', properties: {} },
   },
   {
@@ -38,16 +38,16 @@ const TOOLS = [
   },
   {
     name: 'tb_list_community_agents',
-    description: '列出本机已雇佣的社区智能体名片（无正文）。不返回未雇佣的在线目录。新雇佣请在 Token Bank「贡献」页操作；雇佣后可用 tb_dispatch_agent。',
+    description: '列出本机已雇佣的社区智能体名片（无正文）。不返回未雇佣的在线目录。新雇佣请在 Token Bank「交易」页操作；雇佣后可用 tb_dispatch_agent。',
     inputSchema: { type: 'object', properties: {} },
   },
   {
     name: 'tb_hire_community_agent',
-    description: '雇佣社区智能体到本机名单（只存名片，不下载 Prompt/兵书）。可选同时发起一次远程任务。通常在贡献页雇佣即可；雇佣后可用 tb_dispatch_agent(agent_id=community:…)。',
+    description: '雇佣社区智能体到本机名单（只存名片，不下载 Prompt/兵书）。可选同时发起一次远程任务。通常在「交易」页雇佣即可；雇佣后可用 tb_dispatch_agent(agent_id=community:…)。',
     inputSchema: {
       type: 'object',
       properties: {
-        assistant_id: { type: 'string', description: '社区智能体 id（来自贡献页社区列表）' },
+        assistant_id: { type: 'string', description: '社区智能体 id（来自「交易」页社区列表）' },
         worker_id: { type: 'string', description: '可选：钉选在线节点 worker_id' },
         display_name: { type: 'string' },
         runtime: { type: 'string' },
@@ -101,11 +101,11 @@ async function handleToolCall(name, args = {}) {
       '1. 下列仅为本机已雇佣的社区智能体；有匹配则用 tb_dispatch_agent 派发，勿自己做。',
       '2. 任务在对方设备执行，只拿结果，勿尝试拉取正文。',
       '3. 子任务 prompt 写清：目标 + 约束 + 期望产出。',
-      '4. 列表为空：请用户在 Token Bank「贡献 → 社区智能体」雇佣后再派发；或自行完成并告知用户。',
+      '4. 列表为空：请用户在 Token Bank「交易 → 社区智能体」雇佣后再派发；或自行完成并告知用户。',
     ].join('\n');
     return textResult(lines.length
       ? `${hint}\n\n${lines.join('\n')}`
-      : `${hint}\n\n（尚无已雇佣社区智能体 — 请到贡献页雇佣，或自行完成）`);
+      : `${hint}\n\n（尚无已雇佣社区智能体 — 请到「交易」页雇佣，或自行完成）`);
   }
 
   if (name === 'tb_list_community_agents') {
@@ -125,8 +125,8 @@ async function handleToolCall(name, args = {}) {
       });
       return textResult(
         lines.length
-          ? `已雇佣社区智能体（仅本机名单，无正文）\n派发：tb_dispatch_agent；新雇佣请到贡献页。\n\n${lines.join('\n')}`
-          : '尚无已雇佣社区智能体。请到 Token Bank「贡献 → 社区智能体」雇佣后再调用。',
+          ? `已雇佣社区智能体（仅本机名单，无正文）\n派发：tb_dispatch_agent；新雇佣请到「交易」页。\n\n${lines.join('\n')}`
+          : '尚无已雇佣社区智能体。请到 Token Bank「交易 → 社区智能体」雇佣后再调用。',
       );
     } catch (e) {
       return textResult(`列出已雇佣社区智能体失败: ${e.message}`, true);

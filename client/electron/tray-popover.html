@@ -728,7 +728,7 @@
 
     function renderUsage(state) {
       const labels = L(state);
-      $('usageTitle').textContent = labels.usageTitle || '供给源额度';
+      $('usageTitle').textContent = labels.usageTitle || '模型来源额度';
       $('usageTag').textContent = labels.usageTag || 'QUOTA';
       const list = $('usageList');
       const items = Array.isArray(state.providersUsage) ? state.providersUsage : [];

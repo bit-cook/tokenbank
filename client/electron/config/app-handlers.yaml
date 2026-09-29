@@ -406,7 +406,7 @@ var_schema:
   models: { type: string_list, label: "展示模型（逗号分隔）" }
   route_bindable: { type: boolean, label: "可绑定路由" }
   allow_direct: { type: boolean, label: "允许直连（API Key 应用）" }
-  provider_id: { type: string, label: "供给源 ID" }
+  provider_id: { type: string, label: "模型来源 ID" }
   tier: { type: string, label: "档位（paid/free）" }
   billing_type: { type: string, label: "计费类型（subscription/api-key）" }
   data_source: { type: string, label: "数据来源标识" }

@@ -413,7 +413,7 @@ async function handleToolCall(name, args = {}) {
     if (!hit) {
       const names = listRelayedMcpsSafe().map((s) => s.display_name || s.name).join('、') || '无';
       return textResult(
-        `当前应用未中转 MCP: ${serverRef}。已中转: ${names}。请用户在 Token Bank 对该应用勾选「中转」，或先 tb_list_resources(type=mcp)。`,
+        `当前应用未中转 MCP: ${serverRef}。已中转: ${names}。请用户到 Token Bank「资产 → MCP 工具」把它投射到此应用，或先 tb_list_resources(type=mcp)。`,
         true,
       );
     }
@@ -470,7 +470,7 @@ async function handleToolCall(name, args = {}) {
       if (!rows.length) {
         if (type === 'mcp') {
           return textResult(
-            '（当前 Agent 暂无已中转的 MCP。用户点名 Pipeworx 等服务时，请提示到 Token Bank「MCP」页对该应用勾选「中转」。）',
+            '（当前 Agent 暂无已中转的 MCP。用户点名 Pipeworx 等服务时，请提示用户到 Token Bank「资产 → MCP 工具」把该 MCP 投射到此应用。）',
           );
         }
         const label = type === 'assistant' ? '智能体' : (type !== 'all' ? type : '资源');

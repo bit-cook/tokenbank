@@ -123,3 +123,33 @@ def test_pick_agent_workers_falls_back_when_pinned_offline():
         assert len(pin) == 1 and pin[0].worker_id == "old-pin"
     finally:
         pool._workers = old
+
+
+def test_list_agents_exposes_only_shared_circle_ids():
+    from worker_pool import pool
+
+    class _W:
+        def __init__(self, wid, agents, circles=None):
+            self.worker_id = wid
+            self.agents = agents
+            self.active_requests = 0
+            self.circle_ids = list(circles or [])
+            self.circle_id = self.circle_ids[0] if len(self.circle_ids) == 1 else None
+            self.name = wid
+            self.owner_nickname = "adam"
+
+    prev = list(pool._workers)
+    try:
+        pool._workers = [
+            _W("w-pub", [{"id": "pub", "visibility": "public"}], circles=[7]),
+            _W("w-cir", [{"id": "sec", "visibility": "circle"}], circles=[7, 8, 9]),
+        ]
+        rows = {r["id"]: r for r in pool.list_agents_for_user(user_circle_ids={7, 9, 42})}
+        assert rows["pub"]["circle_ids"] == []
+        # 只返回与请求者的交集（8 不属于请求者）
+        assert rows["sec"]["circle_ids"] == [7, 9]
+        pub_rows = pool.list_agents_for_user(public_only=True)
+        assert [r["id"] for r in pub_rows] == ["pub"]
+        assert pub_rows[0]["circle_ids"] == []
+    finally:
+        pool._workers = prev

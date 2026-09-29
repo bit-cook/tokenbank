@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>模型试用 · Token Bank</title>
-<meta name="description" content="试用全球网络上的模型">
+<meta name="description" content="试用社区网络上的模型">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -279,7 +279,7 @@ createApp({
     const lang = ref(storageGet('tb_lang') || ((navigator.language || '').startsWith('zh') ? 'zh' : 'en'))
     const i18n = {
       zh: {
-        unavailable: '无法试用', badModel: '暂无可用模型', backNet: '返回全球网络', backNetwork: '← 全球网络',
+        unavailable: '无法试用', badModel: '暂无可用模型', backNet: '返回社区网络', backNetwork: '← 社区网络',
         meta: '未登录可试用一轮；登录后按积分规则多轮对话，可随时切换模型。',
         metaImage: '图像模型用于文生图：需登录，按正常积分扣费。',
         creditsRate: '{n} 积分/千Token',

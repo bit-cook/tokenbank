@@ -210,6 +210,8 @@ const MIGRATIONS = [
   'ALTER TABLE requests ADD COLUMN app_id              TEXT',
   'ALTER TABLE requests ADD COLUMN cost_usd     REAL',
   'ALTER TABLE requests ADD COLUMN billing_type TEXT',
+  // 客户端原本请求的模型（换模后与 model 不同），用于估算「帮你省了多少」
+  'ALTER TABLE requests ADD COLUMN requested_model TEXT',
   // Agent 聚合系统扩展
   'ALTER TABLE requests ADD COLUMN agent_id TEXT',
   'ALTER TABLE requests ADD COLUMN mcp_server_id TEXT',
@@ -431,8 +433,8 @@ function init(dbDir, opts = {}) {
     _insertStmt = db.prepare(
       'INSERT OR IGNORE INTO requests ' +
       '(ts, api_key, app_id, model, provider_id, tier, tokens, input_tokens, output_tokens, cache_create_tokens, cache_read_tokens, ' +
-      ' request_id, data_source, session_id, status_code, error, is_streaming, latency_ms, first_token_ms, cost_usd, billing_type) ' +
-      'VALUES (?,?,?,?,?,?,?,?,?,?,?, ?,?,?,?,?,?,?,?,?,?)'
+      ' request_id, data_source, session_id, status_code, error, is_streaming, latency_ms, first_token_ms, cost_usd, billing_type, requested_model) ' +
+      'VALUES (?,?,?,?,?,?,?,?,?,?,?, ?,?,?,?,?,?,?,?,?,?,?)'
     );
     _getImportStateStmt = db.prepare('SELECT mtime, size FROM import_state WHERE path = ?');
     _setImportStateStmt = db.prepare(
@@ -548,7 +550,7 @@ function record({ api_key, app_id, model, provider_id, tier, tokens,
                   input_tokens, output_tokens, cache_create_tokens, cache_read_tokens,
                   ts, request_id, data_source, session_id, status_code, error,
                   is_streaming, latency_ms, first_token_ms,
-                  cost_usd, billing_type } = {}) {
+                  cost_usd, billing_type, requested_model } = {}) {
   if (!db || !_insertStmt) return false;
   try {
     const inTok   = input_tokens        || 0;
@@ -576,6 +578,7 @@ function record({ api_key, app_id, model, provider_id, tier, tokens,
       (first_token_ms != null) ? first_token_ms : null,
       (cost_usd       != null) ? cost_usd       : null,
       billing_type  || null,
+      requested_model || null,
     );
     if (info.changes > 0) return true;
     // proxy 先写入占位行时，会话补录用同 message.id 合并更完整的 token

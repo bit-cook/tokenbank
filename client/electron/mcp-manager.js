@@ -30,7 +30,7 @@ const ORCHESTRATOR_SYSTEM = [
   '',
   '【决策优先级】',
   'A. 已雇佣社区智能体（community:*）＞ B. 自己动手。',
-  'B 仅当 list 为空或无匹配；须简述「无人可派」原因；新雇佣请用户到 Token Bank 贡献页操作。',
+  'B 仅当 list 为空或无匹配；须简述「无人可派」原因；新雇佣请用户到 Token Bank 「交易」页操作。',
   '',
   '【异常兜底】',
   '- list 失败/为空：重试一次 list；仍空则自行完成，并告知用户暂无已雇佣智能体。',
@@ -1474,7 +1474,7 @@ class MCPManager {
         success: true,
         server: this.getServer(existing.id),
         alreadyInstalled: true,
-        hint: '该 MCP 已在 Token Bank 纳管；可在「已纳管」页安装到其他 Agent。',
+        hint: '该 MCP 已在 Token Bank 纳管；可在「资产 → MCP 工具」中投射到其他应用。',
       };
     }
 

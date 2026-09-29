@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { getConfig, getLocalConfig, getGateway } from '../api/adapter';
 import { loadGatewayAvailableModels, resolveGatewayModelType, resolveLocalGatewayBase } from '../api/gatewayModels';
 import { encodeTierModelRoute } from '../lib/route-binding';
@@ -787,6 +787,7 @@ function saveDebugMode(mode) {
 export default function Debug() {
   const { t } = useLang();
   const location = useLocation();
+  const navigate = useNavigate();
   const isDebugRouteRef = useRef(location.pathname === '/debug');
   isDebugRouteRef.current = location.pathname === '/debug';
   
@@ -2313,14 +2314,24 @@ export default function Debug() {
           ]);
           if (cancelled) return;
           setSceneRoutes(Array.isArray(lc?.scene_routes) ? lc.scene_routes : []);
-          const mapped = list.map(({ id, tier }) => ({
-            name: id,
-            tier,
-            type: resolveGatewayModelType(id, c),
+          const provById = Object.fromEntries((c?.providers || []).map(p => [p.id, p]));
+          // 付费源未配 Key（如 Claude Code 官方订阅透传）：只能由对应客户端带自身登录凭证调用，游乐场直接发会失败
+          const needsClientAuth = (m) => {
+            if (m.personal || m.tier !== 'paid' || !m.owner) return false;
+            const p = provById[m.owner];
+            return !!p && p.type === 'paid' && !p.token;
+          };
+          const mapped = list.map((m) => ({
+            name: m.id,
+            tier: m.tier,
+            type: resolveGatewayModelType(m.id, c),
+            ...(needsClientAuth(m) ? { needsClientAuth: true } : {}),
           }));
           setModels(mapped);
           const preferred = mapped.filter(m => imageMode ? m.type === 'image' : m.type !== 'image');
-          setModel(modelSelectValue(preferred[0] || mapped[0]));
+          // 默认选第一个游乐场能直接调用的模型；都不可用时仍选第一个，由输入区提示引导
+          const usable = preferred.filter(m => !m.needsClientAuth);
+          setModel(modelSelectValue(usable[0] || preferred[0] || mapped[0]));
           setManualModel(mapped.length === 0);
         } catch {
           if (!cancelled) { setModels([]); setManualModel(true); }
@@ -2382,7 +2393,7 @@ export default function Debug() {
     );
     if (!imageMode && sceneKeys.has(model)) return;
     if (preferred.length && !preferred.some(m => modelSelectValue(m) === model)) {
-      setModel(modelSelectValue(preferred[0]));
+      setModel(modelSelectValue(preferred.find(m => !m.needsClientAuth) || preferred[0]));
     }
   }, [imageMode, models, model, sceneRoutes]);
 
@@ -2504,6 +2515,12 @@ export default function Debug() {
   const effectiveBase = selectedId === '__custom__' ? manualBaseUrl : (provOpts.find(o => o.id === selectedId)?.base_url || '');
   const anthropic     = isAnthropicUrl(effectiveBase);
   const filteredModels = models.filter(m => imageMode ? m.type === 'image' : m.type !== 'image');
+  // 本地网关下无可直接调用的模型（列表为空，或选中的是需客户端凭证的源且未填 Key）→ 输入区给出引导
+  const selectedModelEntry = models.find(m => modelSelectValue(m) === model);
+  const modelBlockReason = (selectedId !== '__local_gw__' || loadingModels || manualModel || token) ? null
+    : filteredModels.length === 0 ? 'none'
+    : selectedModelEntry?.needsClientAuth ? 'clientAuth'
+    : null;
   // 仅本地网关 + 对话模式展示场景路由（图像生成走图片类模型）
   const debugSceneRoutes = (selectedId === '__local_gw__' && !imageMode)
     ? usableSceneRoutes(sceneRoutes, models)
@@ -2513,7 +2530,7 @@ export default function Debug() {
     const text = input.trim();
     const attachUrls = pendingImages.map(p => p.dataUrl).filter(Boolean);
     // 对话模式：有文字或附图即可；文生图仍要求文字
-    if (!model || !effectiveBase || sending) return;
+    if (!model || !effectiveBase || sending || modelBlockReason) return;
     if (imageMode ? !text : (!text && !attachUrls.length)) return;
 
     if (imageMode) {
@@ -2769,7 +2786,7 @@ export default function Debug() {
                       const tms = filteredModels.filter(m => g.tiers.includes(m.tier));
                       return tms.length ? (
                         <optgroup key={g.key} label={t(`debug.tier.${g.key}`)}>
-                          {tms.map(m => <option key={modelSelectValue(m)} value={modelSelectValue(m)}>{m.name}</option>)}
+                          {tms.map(m => <option key={modelSelectValue(m)} value={modelSelectValue(m)}>{m.name}{m.needsClientAuth ? t('debug.needsClientAuthTag') : ''}</option>)}
                         </optgroup>
                       ) : null;
                     })
@@ -3018,13 +3035,24 @@ export default function Debug() {
         />
         {mode === 'llm' ? (
           <div className="space-y-2">
-            {/* 提示词模版 / 历史 */}
+            {modelBlockReason && (
+              <div className="flex items-center gap-3 rounded-lg border border-blue-200/70 dark:border-blue-900/50 bg-blue-50/70 dark:bg-blue-950/30 px-3 py-2 text-xs text-zinc-600 dark:text-zinc-300">
+                <span className="flex-1">
+                  {modelBlockReason === 'none' ? t('debug.noUsableModel') : t('debug.clientAuthModel')}
+                </span>
+                <button type="button" onClick={() => navigate('/providers')}
+                  className="shrink-0 px-2.5 py-1 rounded-md bg-blue-600 text-white hover:bg-blue-700 transition-colors">
+                  {t('debug.goProviders')}
+                </button>
+              </div>
+            )}
+            {/* 提示词模板 / 历史 */}
             <div className="flex gap-2 items-center flex-wrap">
               <select
                 value={selectedPromptId}
                 onChange={e => applyPromptSelection(e.target.value)}
                 title={t('debug.promptSelectTitle')}
-                className={`${fieldCls} px-2 py-1 max-w-[160px]`}
+                className={`${fieldCls} px-2 py-1 max-w-[280px]`}
               >
                 {(() => {
                   // 图像模式只列图片类；对话模式只列文本类（缺省视为文本）
@@ -3135,6 +3163,7 @@ export default function Debug() {
                   sending
                   || !model
                   || !effectiveBase
+                  || !!modelBlockReason
                   || (imageMode ? !input.trim() : (!input.trim() && pendingImages.length === 0))
                 }
                 className={`${primaryBtn} w-9 h-9`}
