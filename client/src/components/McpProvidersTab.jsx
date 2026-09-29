@@ -168,10 +168,14 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
   const [gatewayApps, setGatewayApps] = useState([]);
   /** 选中行（右侧详情）：m:<serverId> / c:<catalogId> */
   const [selectedKey, setSelectedKey] = useState(null);
+  /** 内置卡展开：null=自动（有未就绪应用时展开） */
+  const [builtinCardOpen, setBuiltinCardOpen] = useState(null);
 
   useEffect(() => { if (createSignal) setShowCustom(true); }, [createSignal]);
   // 上报已纳管数量（资源页「资产库」计数）
-  useEffect(() => { onCountChange?.(loading ? null : servers.length); }, [servers.length, loading, onCountChange]);
+  // 计数只含可管理的第三方 MCP（内置与中转条目属基础设施）
+  const listableCount = servers.filter((s) => !s.builtin && !isRelaySelfServer(s)).length;
+  useEffect(() => { onCountChange?.(loading ? null : listableCount); }, [listableCount, loading, onCountChange]);
 
   // 主栏有 backdrop-filter 时 fixed 会相对主栏定位；弹窗挂到 body 并复位滚动
   useEffect(() => {
@@ -366,7 +370,7 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
 
   /** 可勾选同步的 MCP（已启用、非 Bridge） */
   const syncSelectableServers = servers.filter(
-    s => s.status === 'active' && s.id !== 'tokenbank-agent-bridge',
+    s => s.status === 'active' && s.id !== 'tokenbank-agent-bridge' && !s.builtin && !isRelaySelfServer(s),
   );
   const selectedSyncableIds = selectedServerIds.filter(id =>
     syncSelectableServers.some(s => s.id === id),
@@ -482,13 +486,13 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
   }
 
   /**
-   * 投射的实现方式：统一经 TokenBank 网关中转（应用只需配置一次中转地址，增减 MCP 不再改应用配置，
-   * 密钥只存在 TokenBank）。仅不支持中转的内置 MCP 回退为写入应用配置；已写入配置的老条目保留，可在此撤销。
+   * 投射的实现方式：第三方 MCP 经 TokenBank 网关中转（应用只需配置一次中转地址，增减 MCP 不再改应用配置，
+   * 密钥只存在 TokenBank）；内置 MCP 属默认基础设施，直接写入应用配置。已写入配置的第三方老条目保留，可撤销。
    */
   function autoTransport(server, target) {
+    // 内置 MCP 默认直接写入应用配置（由 TokenBank 按应用生成正确条目）；API 应用只能经中转
+    if (server.builtin && target.kind !== 'api-app' && target.agent?.projectable) return 'project';
     if (canRelay(server)) return 'relay';
-    // 不支持中转的内置 MCP：回退写入应用配置
-    if (target.kind !== 'api-app' && target.agent?.projectable && server.builtin) return 'project';
     return null;
   }
 
@@ -504,17 +508,19 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
   }
 
   /** 中转地址行：等宽显示 + 复制接入配置（含鉴权头） */
-  function renderRelayUrl(appId, { compact = false } = {}) {
+  function renderRelayUrl(appId, { compact = false, copy = true } = {}) {
     const url = relayUrlFor(appId);
     if (!url) return <span className="text-[10px] text-zinc-400">{t('providers.mcp.gatewayNotReady')}</span>;
     return (
       <div className={`flex items-center gap-1.5 min-w-0 ${compact ? '' : 'mt-0.5'}`}>
         <code className={`flex-1 min-w-0 text-[10px] font-mono text-zinc-500 dark:text-zinc-400 select-all ${compact ? 'break-all' : 'truncate'}`} title={url}>{url}</code>
-        <button type="button" onClick={() => copyRelayConfigFor(appId)}
-          title={t('resources.mcp.relayOnce')}
-          className="shrink-0 text-[10px] text-blue-600 dark:text-blue-400 hover:underline">
-          {t('resources.mcp.copyRelay')}
-        </button>
+        {copy && (
+          <button type="button" onClick={() => copyRelayConfigFor(appId)}
+            title={t('resources.mcp.relayOnce')}
+            className="shrink-0 text-[10px] text-blue-600 dark:text-blue-400 hover:underline">
+            {t('resources.mcp.copyRelay')}
+          </button>
+        )}
       </div>
     );
   }
@@ -1403,32 +1409,193 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
     );
   }
 
+  /** 应用配置里的 TokenBank 中转条目（扫描导入的 url 指向本网关）：属基础设施，不作为普通 MCP 列出 */
+  function isRelaySelfServer(s) {
+    const url = String(s?.url || s?.metadata?.url || '');
+    const base = relayBase();
+    if (base && url.startsWith(`${base}/mcp`)) return true;
+    return String(s?.name || '') === 'tokenbank-relay';
+  }
+
+  /** 内置工具：模型 / 资源为每个应用的必备项；提示词按需下发（有提示词投射时） */
+  const BUILTIN_REQUIRED_IDS = ['tokenbank-models', 'tokenbank-resources'];
+  function builtinRequiredServers() {
+    return servers.filter((s) => BUILTIN_REQUIRED_IDS.includes(s.id) && s.status === 'active');
+  }
+
+  /** 已在配置里接入中转网关的应用（桌面 / CLI） */
+  function relayConnectedIds() {
+    const set = new Set();
+    for (const s of servers) {
+      if (!isRelaySelfServer(s)) continue;
+      for (const id of getInstalledAgentIds(s)) set.add(id);
+    }
+    return set;
+  }
+
+  function appSetupStatus(tg, relaySet) {
+    const builtins = builtinRequiredServers();
+    const builtinOk = tg.kind === 'api-app'
+      ? null
+      : builtins.length > 0 && builtins.every((b) => getInstalledAgentIds(b).includes(tg.id));
+    const relayOk = tg.kind === 'api-app' ? null : relaySet.has(tg.id);
+    return { builtinOk, relayOk, ready: builtinOk !== false && relayOk !== false };
+  }
+
+  /** 一键为某应用写入内置工具（模型 / 资源） */
+  async function setupBuiltinsFor(tg) {
+    if (!tg.agent?.syncClientId) return;
+    setBusy(`setup-${tg.id}`);
+    setSyncMsg('');
+    try {
+      for (const b of builtinRequiredServers()) {
+        const previously = getInstalledAgentIds(b);
+        if (previously.includes(tg.id)) continue;
+        const keep = previously.map((id) => syncWritableAgents.find((a) => a.id === id)?.syncClientId || id);
+        const selected = [...new Set([...keep, tg.agent.syncClientId])];
+        const res = await window.electronAPI.mcp.setServerSyncClients({
+          serverId: b.id,
+          clientIds: selected,
+          syncClientIds: [...new Set([...previously, ...selected])],
+        });
+        if (!res?.success) throw new Error(res?.error || t('providers.mcp.installFailed'));
+      }
+      await loadAll({ silent: true });
+      setSyncMsg(t('resources.mcp.builtinDone', { app: tg.label }));
+    } catch (e) {
+      setSyncMsg(e.message);
+    } finally {
+      setBusy('');
+    }
+  }
+
+  /** 复制中转接入：Claude Code 给一条命令，其它应用给 JSON */
+  async function copyRelaySetup(tg) {
+    const url = relayUrlFor(tg.id);
+    const token = gatewayInfo?.endpoint?.token;
+    if (tg.id === 'claude-code' && url && token) {
+      try {
+        await navigator.clipboard.writeText(`claude mcp add --transport http tokenbank-relay ${url} --header "Authorization: Bearer ${token}"`);
+        setSyncMsg(t('resources.mcp.relayCmdCopied'));
+      } catch {
+        alert(t('providers.mcp.gatewayCopyFailed'));
+      }
+      return;
+    }
+    await copyRelayConfigFor(tg.id);
+  }
+
+  /** 置顶：TokenBank 内置（默认基础设施）+ 各应用接入引导 */
+  function renderBuiltinCard() {
+    const relaySet = relayConnectedIds();
+    const targets = addTargets();
+    const rows = targets.map((tg) => ({ tg, st: appSetupStatus(tg, relaySet) }));
+    const readyN = rows.filter((r) => r.st.ready).length;
+    const allReady = rows.length > 0 && readyN === rows.length;
+    const open = builtinCardOpen ?? !allReady;
+    const builtins = servers.filter((s) => s.builtin);
+    const pill = (ok, label) => (ok == null ? (
+      <span className="text-[10px] text-zinc-300 dark:text-zinc-600">—</span>
+    ) : (
+      <span className={`inline-flex items-center gap-1 text-[10px] ${ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
+        <span aria-hidden>{ok ? '✓' : '!'}</span>{label}
+      </span>
+    ));
+    return (
+      <div className={LIB_LIST_CLS}>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3">
+          <span className="w-8 h-8 rounded-xl bg-amber-50 dark:bg-amber-950/40 flex items-center justify-center" aria-hidden>🏦</span>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-[13px] font-semibold text-zinc-900 dark:text-zinc-50">{t('resources.mcp.builtinTitle')}</h3>
+              <span className="text-[10px] px-1.5 py-px rounded bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300">{t('resources.mcp.builtinDefault')}</span>
+              <span className="inline-flex items-center gap-1 text-[11px] text-zinc-500">
+                <span className={`w-1.5 h-1.5 rounded-full ${gatewayInfo?.running ? 'bg-emerald-500' : 'bg-zinc-300'}`} aria-hidden />
+                {gatewayInfo?.running ? t('providers.mcp.gatewayRunning') : t('providers.mcp.gatewayStopped')}
+              </span>
+            </div>
+            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">{t('resources.mcp.builtinDesc')}</p>
+          </div>
+          <span className={`text-[11px] ${allReady ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
+            {t('resources.mcp.readyCount', { n: readyN, total: rows.length })}
+          </span>
+          <button type="button" onClick={() => setBuiltinCardOpen(!open)} className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline">
+            {open ? t('resources.collapse') : t('resources.mcp.setupExpand')}
+          </button>
+        </div>
+        {open && (
+          <>
+            <div className="flex flex-wrap items-center gap-1.5 px-4 pb-3 -mt-1">
+              <span className="text-[10px] text-zinc-400 mr-1">{t('resources.mcp.builtinTools')}</span>
+              {builtins.map((b) => (
+                <button key={b.id} type="button" onClick={() => setSelectedKey(`m:${b.id}`)}
+                  className={`text-[11px] px-2 py-0.5 rounded-md border transition-colors ${
+                    selectedKey === `m:${b.id}`
+                      ? 'border-blue-300 bg-blue-50 text-blue-700 dark:border-blue-800 dark:bg-blue-950/40 dark:text-blue-300'
+                      : 'border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-white dark:hover:bg-zinc-800'
+                  }`}>
+                  {(b.display_name || b.name).replace(/^Token Bank\s*/i, '')}
+                </button>
+              ))}
+            </div>
+            <ul className="border-t border-zinc-100 dark:border-white/[0.05]">
+              {rows.length === 0 && <li className="px-4 py-3 text-[11px] text-zinc-400">{t('providers.mcp.noAgents')}</li>}
+              {rows.map(({ tg, st }) => (
+                <li key={tg.id} className="px-4 py-2 border-b last:border-b-0 border-zinc-100/90 dark:border-white/[0.05]">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <ServiceIcon id={tg.id} name={tg.label} boxClass="w-6 h-6" imgClass="w-3.5 h-3.5" className="!rounded-md" />
+                    <span className="text-xs text-zinc-800 dark:text-zinc-100 min-w-[6rem]">{tg.label}</span>
+                    {pill(st.builtinOk, t('resources.mcp.builtinTools'))}
+                    {pill(st.relayOk, t('resources.mcp.gateway'))}
+                    <div className="ml-auto flex items-center gap-2">
+                      {st.builtinOk === false && (
+                        <button type="button" disabled={!!busy} onClick={() => setupBuiltinsFor(tg)}
+                          className="tb-press text-[11px] px-2.5 py-1 rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-45">
+                          {busy === `setup-${tg.id}` ? t('providers.mcp.processing') : t('resources.mcp.setupBuiltin')}
+                        </button>
+                      )}
+                      {st.relayOk !== true && (
+                        <button type="button" onClick={() => copyRelaySetup(tg)}
+                          className="text-[11px] px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-white dark:hover:bg-zinc-800">
+                          {tg.id === 'claude-code' ? t('resources.mcp.copyCmd') : t('resources.mcp.copyRelay')}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {st.relayOk !== true && (
+                    <div className="pl-9 mt-1 space-y-0.5">
+                      <p className="text-[10px] text-zinc-400">
+                        {tg.kind === 'api-app'
+                          ? t('resources.mcp.guideApi')
+                          : tg.id === 'claude-code'
+                            ? t('resources.mcp.guideClaude')
+                            : t('resources.mcp.guideJson')}
+                      </p>
+                      {renderRelayUrl(tg.id, { compact: true, copy: false })}
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </div>
+    );
+  }
+
   function renderManagedView() {
     const selected = selectedKey?.startsWith('m:') ? servers.find(x => `m:${x.id}` === selectedKey) : null;
+    const listServers = filteredManagedServers.filter((s) => !s.builtin && !isRelaySelfServer(s));
     return (
       <>
-        {/* 中转网关：投射的实现方式，直接展示地址 */}
-        <div className={`${LIB_LIST_CLS} px-4 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs`}>
-          <span className="font-medium text-zinc-700 dark:text-zinc-200">{t('resources.mcp.gateway')}</span>
-          <span className="inline-flex items-center gap-1 text-[11px] text-zinc-500">
-            <span className={`w-1.5 h-1.5 rounded-full ${gatewayInfo?.running ? 'bg-emerald-500' : 'bg-zinc-300'}`} aria-hidden />
-            {gatewayInfo?.running ? t('providers.mcp.gatewayRunning') : t('providers.mcp.gatewayStopped')}
-          </span>
-          {relayBase() ? (
-            <code className="font-mono text-[11px] text-zinc-600 dark:text-zinc-300 select-all" title={t('resources.mcp.gatewayUrlHint')}>
-              {relayBase()}/mcp/<span className="text-blue-600 dark:text-blue-400">{t('resources.mcp.appIdPlaceholder')}</span>
-            </code>
-          ) : (
-            <span className="text-[11px] text-zinc-400">{t('providers.mcp.gatewayNotReady')}</span>
-          )}
-          <span className="text-[10px] text-zinc-400 basis-full">{t('resources.mcp.gatewayUrlHint')}</span>
-        </div>
+        {renderBuiltinCard()}
         {syncMsg && (
           <p className="text-xs text-zinc-600 dark:text-zinc-300 whitespace-pre-line rounded-lg bg-blue-50/70 dark:bg-blue-950/30 px-3 py-2">{syncMsg}</p>
         )}
         <div className="flex gap-4 items-start">
           <div className="flex-1 min-w-0 space-y-3">
-            {filteredManagedServers.length === 0 ? (
+            <LibrarySectionHead title={t('resources.mcp.thirdParty')} count={listServers.length} />
+            {listServers.length === 0 ? (
               <div className={`${LIB_LIST_CLS} p-6 text-center space-y-2`}>
                 <p className="text-xs text-zinc-400">
                   {agentTab && activeAgent
@@ -1466,7 +1633,7 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
                   <span />
                 </div>
                 <ul role="listbox" aria-label="MCP">
-                  {filteredManagedServers.map(renderManagedListRow)}
+                  {listServers.map(renderManagedListRow)}
                 </ul>
               </div>
             )}
