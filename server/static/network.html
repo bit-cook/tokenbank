@@ -24,11 +24,11 @@
 /* 左：浏览页签；右：常驻供给排行（突出交易价值） */
 .split{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:24px;align-items:start}
 .split .grid{grid-template-columns:repeat(auto-fill,minmax(240px,1fr))}
-.rank-card{position:sticky;top:72px;border:1px solid var(--border);border-radius:16px;background:var(--bg);overflow:hidden}
-.rank-hd{padding:14px 16px 12px;border-bottom:1px solid var(--border);background:linear-gradient(180deg,#fffaf0,#fff)}
-.rank-hd h3{font-size:15px;font-weight:650;display:flex;align-items:center;gap:6px;margin:0}
-.rank-hd p{font-size:12px;color:var(--text-muted);margin:3px 0 0}
-.rank-list{max-height:calc(100vh - 200px);overflow-y:auto}
+.rank-side{position:sticky;top:72px}
+.rank-side .tabs{align-items:center}
+.rank-side .tabs .sub{margin-left:auto;font-size:12px;color:var(--text-faint);white-space:nowrap}
+.rank-card{border:1px solid var(--border);border-radius:14px;background:var(--bg);overflow:hidden}
+.rank-list{max-height:calc(100vh - 220px);overflow-y:auto}
 .rk{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--border);color:inherit;text-decoration:none}
 .rk:last-child{border-bottom:0}
 a.rk:hover{background:var(--bg-soft,#fafafa)}
@@ -38,7 +38,7 @@ a.rk:hover{background:var(--bg-soft,#fafafa)}
 .rank-ft{padding:10px 16px;font-size:12px;color:var(--text-muted);border-top:1px solid var(--border);background:#fafafa}
 @media (max-width:960px){
   .split{grid-template-columns:minmax(0,1fr)}
-  .rank-card{position:static}
+  .rank-side{position:static}
   .rank-list{max-height:none}
 }
 </style>
@@ -207,11 +207,12 @@ a.rk:hover{background:var(--bg-soft,#fafafa)}
      </section>
 
       <!-- 供给排行：右侧常驻 -->
-      <aside class="rank-card" id="rank">
-        <div class="rank-hd">
-          <h3>🏆 {{ T.tabRank }}</h3>
-          <p>{{ T.rankSub }}</p>
+      <aside class="rank-side" id="rank">
+        <div class="tabs">
+          <button type="button" class="on" style="cursor:default">🏆 {{ T.tabRank }}</button>
+          <span class="sub">{{ T.rankSub }}</span>
         </div>
+        <div class="rank-card">
         <div v-if="loading" class="rank-list">
           <div v-for="i in 6" :key="i" class="rk"><span class="skel" style="height:14px"></span><span class="skel" style="height:14px;width:70%"></span><span class="skel" style="height:14px;width:48px"></span></div>
         </div>
@@ -228,6 +229,7 @@ a.rk:hover{background:var(--bg-soft,#fafafa)}
         </div>
         <div v-else class="empty" style="padding:28px 16px"><div class="e">🏆</div>{{ T.emptyRank }}</div>
         <div class="rank-ft">{{ T.rankFoot }}</div>
+        </div>
       </aside>
     </div>
   </main>
@@ -260,7 +262,7 @@ createApp({
         search: '搜索', searchPh: { models: '搜索模型…', agents: '搜索智能体、作者或用途…', resources: '搜索技能、提示词、场景…', circles: '搜索圈子…' },
         tryTip: '点击即可试用', all: '全部',
         colModel: '模型', colNodes: '节点', colLatency: '首字延迟', colSharer: '贡献者', colTokens: '本周期',
-        rankSub: '本周期贡献 Token 最多的供给者', rankFoot: '上架闲置模型或智能体，被调用即赚积分并进入排行',
+        rankSub: '按本周期贡献 Token', rankFoot: '上架闲置模型或智能体，被调用即赚积分并进入排行',
         nodesN: '{n} 节点', membersN: '{n} 人', noDesc: '暂无简介', online: '在线',
         tryChat: '对话', tryImage: '生图', tryAgent: '试用', noWeb: '仅 API', use: '使用', enter: '进入', view: '查看',
         typeChat: '文本', typeVision: '图文', typeImage: '生图', typeEmbedding: '嵌入',
@@ -280,7 +282,7 @@ createApp({
         search: 'Search', searchPh: { models: 'Search models…', agents: 'Search agents, owners or use cases…', resources: 'Search skills, prompts, scenes…', circles: 'Search circles…' },
         tryTip: 'Click to try', all: 'All',
         colModel: 'Model', colNodes: 'Nodes', colLatency: 'First token', colSharer: 'Sharer', colTokens: 'This period',
-        rankSub: 'Top suppliers by tokens served this period', rankFoot: 'List idle models or agents — every call earns credits and a spot here',
+        rankSub: 'By tokens served this period', rankFoot: 'List idle models or agents — every call earns credits and a spot here',
         nodesN: '{n} nodes', membersN: '{n} members', noDesc: 'No description', online: 'Online',
         tryChat: 'Chat', tryImage: 'Image', tryAgent: 'Try', noWeb: 'API only', use: 'Use', enter: 'Open', view: 'View',
         typeChat: 'Text', typeVision: 'Vision', typeImage: 'Image', typeEmbedding: 'Embedding',
