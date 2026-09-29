@@ -11,143 +11,45 @@
 <script src="/static/vue.global.prod.js"></script>
 <script src="/static/marked.min.js"></script>
 <script src="/static/purifier.min.js"></script>
-<style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --bg:#fff;--bg-muted:#f5f2f0;--bg-subtle:#faf9f5;
-  --text:#000;--text-secondary:#333;--text-muted:#7b7b7b;--text-faint:#bcbcbc;
-  --border:#e7e4e1;--border-light:#f0eeec;
-  --accent:#f1ccff;--primary:#000;--primary-fg:#fff;
-  --success:#16a34a;--danger:#dc2626;--warn:#d97706;
-  --radius:10px;--radius-lg:18px;
-  --font:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;
-  --mono:'Space Mono',ui-monospace,monospace;
-}
-body{font-family:var(--font);background:var(--bg-subtle);color:var(--text);font-size:14px;min-height:100vh;-webkit-font-smoothing:antialiased}
-a{color:inherit}
-.shell{max-width:720px;margin:0 auto;padding:24px 16px 48px;min-height:100vh;display:flex;flex-direction:column}
-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px}
-.brand{display:flex;align-items:center;gap:10px;font-weight:600;letter-spacing:-.01em;text-decoration:none}
-.brand-mark{width:28px;height:28px;border-radius:8px;object-fit:contain;display:block;flex-shrink:0}
-.lang-btn,.ghost-btn{background:transparent;border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer;font-family:inherit;color:var(--text-muted)}
-.lang-btn:hover,.ghost-btn:hover{color:var(--text);border-color:var(--text-muted)}
-.user-chip{font-size:13px;color:var(--text);font-weight:500;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.card{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:28px 24px;box-shadow:0 8px 24px rgba(0,0,0,.03)}
-.h1{font-size:22px;font-weight:700;letter-spacing:-.02em;margin-bottom:6px}
-.meta{color:var(--text-muted);font-size:13px;line-height:1.5;margin-bottom:16px;white-space:pre-wrap}
-.badges{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:20px}
-.badge{display:inline-flex;align-items:center;justify-content:center;height:24px;line-height:1;font-size:11px;padding:0 8px;border-radius:999px;border:1px solid var(--border);color:var(--text-muted);background:var(--bg-muted);box-sizing:border-box;vertical-align:middle}
-.badge.tone-ok{color:var(--success);border-color:#bbf7d0;background:#f0fdf4}
-.badge.tone-warn{color:var(--warn);border-color:#fde68a;background:#fffbeb}
-.badge.tone-err{color:var(--danger);border-color:#fecaca;background:#fef2f2}
-.field{margin-bottom:12px}
-label{display:block;color:var(--text-muted);font-size:12px;margin-bottom:5px}
-textarea,input[type=email],input[type=password],input[type=text]{
-  width:100%;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);
-  color:var(--text);font-size:14px;outline:none;font-family:inherit;resize:none
-}
-textarea:focus,input:focus{border-color:var(--text)}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 18px;background:var(--primary);color:var(--primary-fg);border:none;border-radius:var(--radius);cursor:pointer;font-size:14px;font-family:inherit;font-weight:500}
-.btn:hover:not(:disabled){opacity:.88}
-.btn:disabled{opacity:.45;cursor:not-allowed}
-.btn-block{width:100%}
-.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-.err{color:var(--danger);font-size:13px;margin-top:10px}
-.ok{color:var(--success);font-size:13px;margin-top:10px}
-.hint{color:var(--text-muted);font-size:12px;margin-top:8px;line-height:1.5}
-/* 多轮对话：固定高度，避免消息增减时页面跳动 */
-.chat{
-  display:flex;flex-direction:column;gap:10px;
-  height:360px;
-  overflow:auto;
-  margin:4px 0 14px;padding:12px;
-  background:var(--bg-muted);border:1px solid var(--border-light);border-radius:var(--radius)
-}
-.chat-empty{
-  color:var(--text-muted);font-size:13px;text-align:center;line-height:1.5;
-  margin:auto;padding:24px 12px
-}
-.composer{display:flex;flex-direction:column;gap:8px}
-.composer-row{display:flex;gap:8px;align-items:flex-end}
-.composer-row textarea{flex:1;height:44px;min-height:44px;max-height:44px;resize:none}
-.composer-row .btn{flex-shrink:0;height:44px}
-.bubble{max-width:88%;padding:10px 12px;border-radius:14px;font-size:13px;line-height:1.55;word-break:break-word}
-.bubble.user{align-self:flex-end;background:var(--primary);color:var(--primary-fg);border-bottom-right-radius:4px;white-space:pre-wrap}
-.bubble.assistant{align-self:flex-start;background:#fff;border:1px solid var(--border);color:var(--text);border-bottom-left-radius:4px}
-.bubble.pending{opacity:.85}
-.bubble.pending .md-body{font-style:italic}
-.bubble-imgs{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-.bubble-imgs img{max-width:160px;max-height:120px;border-radius:8px;object-fit:cover;display:block;background:rgba(255,255,255,.15)}
-.attach-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-.attach-thumb{position:relative;width:56px;height:56px;border-radius:8px;overflow:hidden;border:1px solid var(--border);background:var(--bg-muted)}
-.attach-thumb img{width:100%;height:100%;object-fit:cover;display:block}
-.attach-thumb button{position:absolute;top:2px;right:2px;width:18px;height:18px;border:none;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;font-size:11px;line-height:18px;cursor:pointer;padding:0}
-.attach-hint{font-size:11px;color:var(--text-muted)}
-/* Markdown 正文 */
-.md-body{line-height:1.6}
-.md-body>:first-child{margin-top:0}
-.md-body>:last-child{margin-bottom:0}
-.md-body p{margin:.45em 0}
-.md-body h1,.md-body h2,.md-body h3,.md-body h4{font-weight:700;letter-spacing:-.02em;margin:.7em 0 .35em;line-height:1.3}
-.md-body h1{font-size:1.2em}.md-body h2{font-size:1.1em}.md-body h3{font-size:1.05em}
-.md-body ul,.md-body ol{margin:.4em 0;padding-left:1.35em}
-.md-body li{margin:.15em 0}
-.md-body strong{font-weight:700}
-.md-body em{font-style:italic}
-.md-body a{color:#2563eb;text-decoration:underline}
-.md-body code{font-family:var(--mono);font-size:11.5px;background:var(--bg-muted);border:1px solid var(--border-light);border-radius:5px;padding:.1em .35em}
-.md-body pre{margin:.55em 0;padding:10px 12px;background:#1e1e1e;color:#f3f3f3;border-radius:8px;overflow:auto}
-.md-body pre code{background:transparent;border:none;padding:0;color:inherit;font-size:11.5px}
-.md-body blockquote{margin:.5em 0;padding:.35em .8em;border-left:3px solid var(--border);color:var(--text-muted);background:var(--bg-subtle)}
-.md-body hr{border:none;border-top:1px solid var(--border);margin:.8em 0}
-.md-body table{border-collapse:collapse;width:100%;margin:.55em 0;font-size:12px;display:block;overflow-x:auto;max-width:100%}
-.md-body th,.md-body td{border:1px solid var(--border);padding:6px 8px;text-align:left;vertical-align:top}
-.md-body th{background:var(--bg-muted);font-weight:600;white-space:nowrap}
-.md-body tr:nth-child(even) td{background:#fafafa}
-.composer .btn{flex-shrink:0;height:44px}
-.toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;flex-wrap:wrap}
-.ghost-link{background:transparent;border:none;color:var(--text-muted);font-size:12px;cursor:pointer;font-family:inherit;padding:0;text-decoration:underline}
-.ghost-link:hover{color:var(--text)}
-.auth-box{margin-top:16px;padding-top:16px;border-top:1px solid var(--border-light)}
-.auth-tabs{display:flex;margin-bottom:14px;border-bottom:1px solid var(--border-light)}
-.auth-tabs button{flex:1;padding:10px;background:transparent;border:none;color:var(--text-muted);cursor:pointer;font-size:14px;border-bottom:2px solid transparent;margin-bottom:-1px;font-family:inherit}
-.auth-tabs button.active{color:var(--text);border-bottom-color:var(--text);font-weight:600}
-.footer{margin-top:auto;padding-top:28px;color:var(--text-faint);font-size:12px;text-align:center}
-.mono{font-family:var(--mono);font-size:12px}
-.state{text-align:center;padding:48px 16px;color:var(--text-muted)}
-</style>
+<link rel="stylesheet" href="/static/chat.css">
+<script src="/static/chat-ui.js"></script>
 </head>
 <body>
-<div id="app" class="shell">
-  <header>
-    <a class="brand" href="/">
-      <img class="brand-mark" src="/static/logo.svg" alt="Token Bank" width="28" height="28">
-      <span>Token Bank</span>
-    </a>
-    <div class="row">
-      <a class="ghost-btn" href="/network" style="text-decoration:none">{{ T.backNetwork }}</a>
-      <span v-if="loggedIn && currentUserLabel" class="user-chip" :title="currentUserLabel">{{ currentUserLabel }}</span>
-      <button class="lang-btn" type="button" @click="toggleLang">{{ lang === 'zh' ? 'EN' : '中文' }}</button>
-      <button v-if="loggedIn" class="ghost-btn" type="button" @click="logout">{{ T.logout }}</button>
-      <a v-else class="ghost-btn" href="/app" style="text-decoration:none">{{ T.openApp }}</a>
+<div id="app" class="chat-app" v-cloak>
+  <nav class="cnav">
+    <div class="cnav-in">
+      <a class="brand" href="/"><img src="/static/logo.svg" alt="Token Bank"><span>Token Bank</span></a>
+      <a class="nav-back" href="/network#agents">{{ T.backNetwork }}</a>
+      <div class="nav-right">
+        <span v-if="loggedIn && profile" class="credit">💎 {{ Number(profile.credits_balance || 0).toFixed(1) }}</span>
+        <span v-if="loggedIn && currentUserLabel" class="who" :title="currentUserLabel">{{ currentUserLabel }}</span>
+        <button class="nbtn plain" type="button" @click="toggleLang">{{ lang === 'zh' ? 'EN' : '中文' }}</button>
+        <button v-if="loggedIn" class="nbtn" type="button" @click="logout">{{ T.logout }}</button>
+        <button v-else class="nbtn dark" type="button" @click="openAuth('login')">{{ T.login }}</button>
+      </div>
     </div>
-  </header>
+  </nav>
 
-  <div v-if="loading" class="state">{{ T.loading }}</div>
-
-  <div v-else-if="fatal && !showAuthGate" class="card">
-    <div class="h1">{{ T.unavailable }}</div>
-    <p class="meta">{{ fatal }}</p>
-    <a class="btn" href="/network" style="margin-top:8px;text-decoration:none">{{ T.backNetwork }}</a>
+  <div v-if="loading" class="state">
+    <div class="skel" style="width:64px;height:64px;border-radius:18px;margin:0 auto"></div>
+    <div class="skel" style="width:180px;height:18px;margin:16px auto 0"></div>
+    <div class="skel" style="width:260px;height:12px;margin:10px auto 0"></div>
   </div>
 
-  <div v-else-if="showAuthGate" class="card">
-    <div class="h1">{{ T.unavailable }}</div>
-    <p class="meta">{{ fatal || T.needAuthCircle }}</p>
-    <div class="auth-box" style="border-top:none;padding-top:0;margin-top:8px">
-      <div class="auth-tabs">
-        <button type="button" :class="{ active: authTab === 'login' }" @click="authTab='login'">{{ T.login }}</button>
-        <button type="button" :class="{ active: authTab === 'register' }" @click="authTab='register'">{{ T.register }}</button>
+  <div v-else-if="fatal && !showAuthGate" class="state">
+    <div class="av lg" style="background:#0a0a0a;margin:0 auto">?</div>
+    <h2>{{ T.unavailable }}</h2>
+    <p>{{ fatal }}</p>
+    <a class="btn" href="/network#agents">{{ T.backNetwork }}</a>
+  </div>
+
+  <div v-else-if="showAuthGate" class="state" style="max-width:400px;width:100%">
+    <div class="modal" style="box-shadow:0 12px 40px rgba(0,0,0,.08);text-align:left">
+      <h3>{{ T.unavailable }}</h3>
+      <p class="sub">{{ fatal || T.needAuthCircle }}</p>
+      <div class="seg">
+        <button type="button" :class="{ on: authTab === 'login' }" @click="authTab='login'">{{ T.login }}</button>
+        <button type="button" :class="{ on: authTab === 'register' }" @click="authTab='register'">{{ T.register }}</button>
       </div>
       <div class="field" v-if="authTab === 'register'">
         <label>{{ T.nickname }}</label>
@@ -159,107 +61,141 @@ textarea:focus,input:focus{border-color:var(--text)}
       </div>
       <div class="field">
         <label>{{ T.password }}</label>
-        <input type="password" v-model="form.password" autocomplete="current-password">
+        <input type="password" v-model="form.password" :autocomplete="authTab === 'login' ? 'current-password' : 'new-password'" @keydown.enter="authTab==='login' ? doLogin() : doRegister()">
       </div>
-      <button class="btn btn-block" type="button" :disabled="authLoading" @click="authTab==='login' ? doLogin() : doRegister()">
+      <button class="btn block" type="button" :disabled="authLoading" @click="authTab==='login' ? doLogin() : doRegister()">
         {{ authLoading ? (authTab==='login' ? T.loggingIn : T.registering) : (authTab==='login' ? T.login : T.register) }}
       </button>
-      <p v-if="authErr" class="err">{{ authErr }}</p>
+      <p v-if="authErr" class="m-err">{{ authErr }}</p>
     </div>
   </div>
 
-  <template v-else-if="agent">
-    <div class="card">
-      <div class="h1">{{ agent.display_name || agent.name || agent.id }}</div>
-      <p class="meta">{{ agent.description || T.noDesc }}</p>
-      <div class="badges">
-        <span class="badge tone-ok">{{ T.online }}</span>
-        <span class="badge">{{ agent.visibility === 'circle' ? T.circleShare : T.publicShare }}</span>
-        <span v-if="agent.runtime" class="badge mono">{{ agent.runtime }}</span>
-        <span v-if="agent.owner_nickname" class="badge">{{ agent.owner_nickname }}</span>
-        <span class="badge">{{ T.creditsPerTask.replace('{n}', String(creditsPerTask)) }}</span>
-      </div>
-
-      <div class="toolbar">
-        <span class="hint" style="margin:0">{{ loggedIn && profile ? T.balance.replace('{n}', Number(profile.credits_balance || 0).toFixed(1)) : T.chatHint }}</span>
-        <button v-if="messages.length" type="button" class="ghost-link" @click="clearChat" :disabled="running">{{ T.clear }}</button>
-      </div>
-
-      <div class="chat" ref="chatEl">
-        <div v-if="!messages.length" class="chat-empty">{{ T.chatEmpty }}</div>
-        <div
-          v-for="(m, i) in messages"
-          :key="i"
-          class="bubble"
-          :class="[m.role, { pending: m.pending }]"
-        >
-          <div
-            v-if="m.role === 'assistant'"
-            class="md-body"
-            v-html="renderMarkdown(m.content || (m.pending ? T.thinking : ''))"
-          ></div>
-          <template v-else>
-            <div v-if="m.content">{{ m.content }}</div>
-            <div v-if="m.images && m.images.length" class="bubble-imgs">
-              <img v-for="(src, j) in m.images" :key="j" :src="src" alt="">
-            </div>
-          </template>
-        </div>
-      </div>
-
-      <div class="composer">
-        <div v-if="pendingImages.length" class="attach-bar">
-          <div v-for="(p, i) in pendingImages" :key="p.id" class="attach-thumb">
-            <img :src="p.dataUrl" alt="">
-            <button type="button" :disabled="running" @click="removePendingImage(i)" title="×">×</button>
+  <main v-else-if="agent" class="cmain">
+    <header class="chead">
+      <div class="cinner">
+        <div class="av" :style="{ background: avatarColor(agentName) }">{{ agentName.slice(0, 1).toUpperCase() }}</div>
+        <div class="id">
+          <div class="id-t"><span class="id-name">{{ agentName }}</span>
+            <span class="tag" :class="{ circle: agent.visibility === 'circle' }">{{ agent.visibility === 'circle' ? T.circleShare : T.publicShare }}</span>
           </div>
-          <span class="attach-hint">{{ T.attachHint }}</span>
+          <div class="id-sub">
+            <span><span class="dot"></span>&nbsp; {{ T.online }}</span>
+            <template v-if="agent.owner_nickname"><span class="sep">·</span><a :href="'/u/' + encodeURIComponent(agent.owner_nickname)">@{{ agent.owner_nickname }}</a></template>
+            <template v-if="agent.runtime"><span class="sep">·</span><span>{{ agent.runtime }}</span></template>
+            <span class="sep">·</span><span>{{ T.creditsPerTask.replace('{n}', String(creditsPerTask)) }}</span>
+            <template v-if="agent.hire_count"><span class="sep">·</span><span>🔥 {{ T.hires.replace('{n}', String(agent.hire_count)) }}</span></template>
+          </div>
         </div>
-        <div class="composer-row">
-          <textarea
-            v-model="prompt"
-            rows="2"
-            :placeholder="T.promptPh"
-            :disabled="running || guestLocked"
-            @keydown.enter.exact.prevent="sendMessage"
-            @paste="onComposerPaste"
-          ></textarea>
-          <button class="btn" type="button" :disabled="running || guestLocked || (!prompt.trim() && !pendingImages.length)" @click="sendMessage">
-            {{ running ? ((messages.length && messages[messages.length - 1].pending && messages[messages.length - 1].content) ? T.streaming : T.running) : T.send }}
+        <div class="head-actions">
+          <button v-if="messages.length" type="button" class="nbtn" :disabled="running" @click="clearChat" :title="T.clear">
+            <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 4v12M4 10h12" stroke-linecap="round"/></svg><span>{{ T.newChat }}</span>
           </button>
         </div>
       </div>
-      <p v-if="err" class="err">{{ err }}</p>
+    </header>
 
-      <div v-if="!loggedIn && guestUsed" class="auth-box">
-        <p class="hint" style="margin-bottom:12px">{{ T.loginToContinue }}</p>
-        <div class="auth-tabs">
-          <button type="button" :class="{ active: authTab === 'login' }" @click="authTab='login'">{{ T.login }}</button>
-          <button type="button" :class="{ active: authTab === 'register' }" @click="authTab='register'">{{ T.register }}</button>
+    <div class="cscroll" ref="chatEl" @click="onChatClick">
+      <div class="cinner">
+        <div v-if="!messages.length" class="empty">
+          <div class="av lg" :style="{ background: avatarColor(agentName) }">{{ agentName.slice(0, 1).toUpperCase() }}</div>
+          <h2>{{ agentName }}</h2>
+          <p>{{ agent.description || T.noDesc }}</p>
+          <div class="sugs">
+            <button v-for="sg in suggestions" :key="sg.t" type="button" class="sug" @click="useSuggestion(sg)"><b>{{ sg.t }}</b><span>{{ sg.d }}</span></button>
+          </div>
         </div>
-        <div class="field" v-if="authTab === 'register'">
-          <label>{{ T.nickname }}</label>
-          <input type="text" v-model="form.nickname" autocomplete="nickname">
+        <div v-for="(m, i) in messages" :key="i" class="msg" :class="[m.role, { pending: m.pending }]">
+          <template v-if="m.role === 'assistant'">
+            <div class="av sm" :style="{ background: avatarColor(agentName) }">{{ agentName.slice(0, 1).toUpperCase() }}</div>
+            <div class="abody">
+              <span v-if="m.pending && (!m.content || m.content === T.thinking)" class="typing"><i></i><i></i><i></i></span>
+              <div v-else class="md-body" v-html="renderRich(m.content)"></div>
+              <div v-if="!m.pending && m.content" class="msg-tools">
+                <button type="button" class="mini" @click="copyMsg(m, $event)">{{ T.copy }}</button>
+              </div>
+            </div>
+          </template>
+          <div v-else style="display:flex;flex-direction:column;align-items:flex-end;max-width:100%">
+            <div v-if="m.content" class="ubub">{{ m.content }}</div>
+            <div v-if="m.images && m.images.length" class="uimgs"><img v-for="(src, j) in m.images" :key="j" :src="src" alt=""></div>
+          </div>
         </div>
-        <div class="field">
-          <label>{{ T.email }}</label>
-          <input type="email" v-model="form.email" autocomplete="email">
-        </div>
-        <div class="field">
-          <label>{{ T.password }}</label>
-          <input type="password" v-model="form.password" autocomplete="current-password">
-        </div>
-        <button class="btn btn-block" type="button" :disabled="authLoading" @click="authTab==='login' ? doLogin() : doRegister()">
-          {{ authLoading ? (authTab==='login' ? T.loggingIn : T.registering) : (authTab==='login' ? T.login : T.register) }}
-        </button>
-        <p v-if="authErr" class="err">{{ authErr }}</p>
       </div>
     </div>
-  </template>
 
-  <div class="footer">Token Bank · {{ T.footer }}</div>
+    <footer class="cfoot">
+      <div class="cinner">
+        <p v-if="err" class="err">{{ err }}</p>
+        <div v-if="guestLocked" class="gate">
+          <span class="g-ic">🔒</span>
+          <div class="g-t"><b>{{ T.trialDone }}</b>{{ T.gateSub }}</div>
+          <button type="button" class="btn sm" @click="openAuth('login')">{{ T.login }}</button>
+        </div>
+        <div v-else class="box">
+          <div v-if="pendingImages.length" class="attach">
+            <div v-for="(p, i) in pendingImages" :key="p.id" class="thumb">
+              <img :src="p.dataUrl" alt="">
+              <button type="button" :disabled="running" @click="removePendingImage(i)" title="×">×</button>
+            </div>
+          </div>
+          <textarea
+            ref="composerEl"
+            v-model="prompt"
+            rows="1"
+            :placeholder="T.promptPh"
+            :disabled="running"
+            @input="autoGrow($event.target)"
+            @keydown.enter.exact.prevent="sendMessage"
+            @paste="onComposerPaste"
+          ></textarea>
+          <div class="box-row">
+            <input ref="fileEl" type="file" accept="image/*" multiple hidden @change="onPickFiles">
+            <button type="button" class="icon-btn" :disabled="running" :title="T.attach" @click="fileEl && fileEl.click()">
+              <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M14.5 9.5 9.6 14.4a3.2 3.2 0 0 1-4.5-4.5l5.6-5.6a2.1 2.1 0 0 1 3 3l-5.5 5.5a1 1 0 0 1-1.5-1.5L11.6 6.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <span class="box-meta">{{ T.enterHint }}</span>
+            <button type="button" class="send" :disabled="running || (!prompt.trim() && !pendingImages.length)" :title="T.send" @click="sendMessage">
+              <svg v-if="!running" width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M10 16V4M5 9l5-5 5 5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span v-else class="typing" style="height:auto"><i style="background:#fff"></i><i style="background:#fff"></i><i style="background:#fff"></i></span>
+            </button>
+          </div>
+        </div>
+        <div v-if="!guestLocked" class="foot-hint">
+          <template v-if="loggedIn && profile">{{ T.balance.replace('{n}', Number(profile.credits_balance || 0).toFixed(1)) }} · {{ T.runsRemote }}</template>
+          <template v-else>{{ T.chatHint }} · <button type="button" @click="openAuth('register')">{{ T.register }}</button></template>
+        </div>
+      </div>
+    </footer>
+  </main>
+
+  <div v-if="authOpen && !loggedIn" class="mask" @click.self="authOpen = false">
+    <div class="modal" role="dialog" aria-modal="true">
+      <button type="button" class="x" @click="authOpen = false" aria-label="close">×</button>
+      <h3>{{ authTab === 'login' ? T.authTitleLogin : T.authTitleRegister }}</h3>
+      <p class="sub">{{ guestUsed ? T.loginToContinue : T.authSub }}</p>
+      <div class="seg">
+        <button type="button" :class="{ on: authTab === 'login' }" @click="authTab='login'">{{ T.login }}</button>
+        <button type="button" :class="{ on: authTab === 'register' }" @click="authTab='register'">{{ T.register }}</button>
+      </div>
+      <div class="field" v-if="authTab === 'register'">
+        <label>{{ T.nickname }}</label>
+        <input type="text" v-model="form.nickname" autocomplete="nickname">
+      </div>
+      <div class="field">
+        <label>{{ T.email }}</label>
+        <input type="email" v-model="form.email" autocomplete="email">
+      </div>
+      <div class="field">
+        <label>{{ T.password }}</label>
+        <input type="password" v-model="form.password" :autocomplete="authTab === 'login' ? 'current-password' : 'new-password'" @keydown.enter="authTab==='login' ? doLogin() : doRegister()">
+      </div>
+      <button class="btn block" type="button" :disabled="authLoading" @click="authTab==='login' ? doLogin() : doRegister()">
+        {{ authLoading ? (authTab==='login' ? T.loggingIn : T.registering) : (authTab==='login' ? T.login : T.register) }}
+      </button>
+      <p v-if="authErr" class="m-err">{{ authErr }}</p>
+    </div>
+  </div>
 </div>
-
 
 <script>
 const { createApp, ref, computed, onMounted, nextTick, watch } = Vue
@@ -294,10 +230,20 @@ createApp({
         attachSize: '单张图片过大',
         chatHint: '未登录可试一轮', chatEmpty: '发送一条消息试用；可粘贴图片；登录后可多轮追问。',
         clear: '清空对话', thinking: '…', streaming: '生成中…', toolRunning: '调用工具：{name}',
+        newChat: '新对话', copy: '复制', copied: '已复制', attach: '添加图片', hires: '{n} 次雇佣',
+        enterHint: 'Enter 发送 · Shift+Enter 换行', trialDone: '免费试用已用完', gateSub: '登录后继续对话，按每次积分扣费。',
+        runsRemote: '任务在分享者设备上执行', authTitleLogin: '登录 Token Bank', authTitleRegister: '注册 Token Bank',
+        authSub: '登录后可多轮对话，按次扣积分。',
+        sugs: [
+          { t: '你能做什么？', d: '介绍一下你的能力和适合的任务' },
+          { t: '给个示例', d: '演示一次你最擅长的任务' },
+          { t: '需要我提供什么？', d: '要完成任务，我应该给你哪些输入？' },
+          { t: '直接开始', d: '我先描述需求，你一步步引导我' },
+        ],
       },
       en: {
         loading: 'Loading…', unavailable: 'Agent unavailable', backHome: 'Home',
-        backNetwork: '← Global Network',
+        backNetwork: '← Network',
         noDesc: 'No description', online: 'Online', publicShare: 'Global', circleShare: 'Circle',
         creditsPerTask: '{n} credits / turn', promptPh: 'Message or paste image, Enter to send…',
         send: 'Send', running: 'Thinking…', needLogin: 'Circle agents are members-only. Public agents: one free guest turn.',
@@ -313,6 +259,16 @@ createApp({
         attachSize: 'Image too large',
         chatHint: 'One free guest turn', chatEmpty: 'Try one message (paste images OK); sign in for multi-turn chat.',
         clear: 'Clear', thinking: '…', streaming: 'Generating…', toolRunning: 'Tool: {name}',
+        newChat: 'New chat', copy: 'Copy', copied: 'Copied', attach: 'Add image', hires: '{n} hires',
+        enterHint: 'Enter to send · Shift+Enter for newline', trialDone: 'Free trial used', gateSub: 'Sign in to keep chatting, billed per turn.',
+        runsRemote: "Runs on the sharer's device", authTitleLogin: 'Sign in to Token Bank', authTitleRegister: 'Create your account',
+        authSub: 'Sign in for multi-turn chat, billed per turn.',
+        sugs: [
+          { t: 'What can you do?', d: 'Describe your skills and best-fit tasks' },
+          { t: 'Show an example', d: 'Demo the task you are best at' },
+          { t: 'What do you need?', d: 'Which inputs should I give you?' },
+          { t: 'Just start', d: 'I will describe my need, guide me step by step' },
+        ],
       },
     }
     const T = computed(() => i18n[lang.value] || i18n.zh)
@@ -883,7 +839,43 @@ createApp({
     }, { deep: true })
     watch(guestUsed, () => persistNow())
 
+    // ── 新版对话 UI ──
+    const authOpen = ref(false)
+    const composerEl = ref(null)
+    const fileEl = ref(null)
+    function openAuth(tab) { authTab.value = tab || 'login'; authErr.value = ''; authOpen.value = true }
+    watch(loggedIn, (v) => { if (v) authOpen.value = false })
+    watch(prompt, (v) => { if (!v) nextTick(() => ChatUI.autoGrow(composerEl.value)) })
+    const agentName = computed(() => String(agent.value?.display_name || agent.value?.name || agent.value?.id || '?'))
+    const suggestions = computed(() => {
+      const starters = Array.isArray(agent.value?.starters) ? agent.value.starters.filter(Boolean).slice(0, 4) : []
+      if (starters.length) return starters.map((x) => ({ t: String(x).slice(0, 18), d: String(x) }))
+      return T.value.sugs || []
+    })
+    function useSuggestion(sg) {
+      prompt.value = sg.d
+      nextTick(() => { const el = composerEl.value; if (el) { el.focus(); ChatUI.autoGrow(el) } })
+    }
+    function onPickFiles(e) {
+      const files = Array.from(e.target.files || [])
+      if (files.length) addAttachFiles(files)
+      e.target.value = ''
+    }
+    const autoGrow = (el) => ChatUI.autoGrow(el)
+    const avatarColor = (n) => ChatUI.avatarColor(n)
+    const renderRich = (raw) => ChatUI.wrapCode(renderMarkdown(raw), T.value.copy)
+    const onChatClick = (e) => ChatUI.onCopyClick(e, T.value.copied, T.value.copy)
+    function copyMsg(m, e) {
+      const btn = e.currentTarget
+      ChatUI.copyText(String(m.content || '')).then(() => {
+        btn.textContent = T.value.copied
+        setTimeout(() => { btn.textContent = T.value.copy }, 1400)
+      })
+    }
+
     return {
+      authOpen, openAuth, composerEl, fileEl, agentName, suggestions, useSuggestion, onPickFiles, autoGrow, avatarColor,
+      renderRich, onChatClick, copyMsg,
       lang, T, toggleLang, loading, fatal, showAuthGate, agent, creditsPerTask,
       loggedIn, profile, currentUserLabel, prompt, messages, pendingImages, chatEl, running, err, guestUsed, guestLocked,
       authTab, authLoading, authErr, form, doLogin, doRegister, logout,
