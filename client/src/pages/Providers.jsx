@@ -17,7 +17,6 @@ import { resolveModelsForModelView } from '../lib/personalAvailableModels';
 import { buildPersonalModelTypeMap, inferModelTypeFromName } from '../api/gatewayModels';
 import { encodeRoute } from '../lib/route-binding';
 import { avatarColor } from '../components/UserAvatar';
-import { readSupplyTab, saveSupplyTab } from '../components/McpProvidersTab';
 import UsageMeter from '../components/UsageMeter';
 
 /** 按当前语言覆盖 meta 中的 label / hint / getKey / oauth.label */
@@ -3533,7 +3532,6 @@ export default function Providers() {
   const [directBilling, setDirectBilling] = useState({});        // 直连源计费（按 agent_id）
   const [accountsData, setAccountsData] = useState(null);        // 完整账户快照（统计视图用）
   const [sourcesView, setSourcesView] = useState('model');       // 个人源视图：model | list（账户）
-  const [supplyTab, setSupplyTab] = useState(() => readSupplyTab()); // 供给源维度：model | mcp
   const [credModalKey, setCredModalKey] = useState(null);        // 添加实例后弹出的凭证配置弹窗（source key）
   // Track the last value written/loaded so we skip the initial load trigger
   const lastSaved = useRef(null);
@@ -4588,7 +4586,6 @@ export default function Providers() {
     const hit = personalSourceRows.map(sourceSummary).find(sm => (sm.modelNames || []).includes(model));
     // 账户尚未加载完：保留跳转请求，等数据到了再定位
     if (!hit && !accountsData) return;
-    setSupplyTab('model');
     setSourcesView('list');
     if (hit) setSelectedSourceKey(hit.key);
     navigate(provLocation.pathname, { replace: true, state: null });
@@ -4910,30 +4907,6 @@ export default function Providers() {
     return null;
   }
 
-  function renderSupplyDimensionTabs() {
-    if (!isElectron) return null;
-    return (
-      <div className="flex items-end gap-6 border-b border-zinc-200/80 dark:border-white/[0.08]" role="tablist">
-        {[['model', t('providers.supply.model')], ['mcp', t('providers.supply.mcp')]].map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            role="tab"
-            aria-selected={supplyTab === id}
-            onClick={() => { setSupplyTab(id); saveSupplyTab(id); }}
-            className={`-mb-px pb-2.5 text-[13px] border-b-2 transition-colors ${
-              supplyTab === id
-                ? 'border-zinc-900 dark:border-zinc-100 text-zinc-900 dark:text-zinc-50 font-semibold'
-                : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-    );
-  }
-
   function renderSourcesViewTabs() {
     return (
       <div className="inline-flex rounded-lg border border-zinc-300 dark:border-zinc-700 overflow-hidden text-xs shrink-0">
@@ -4952,26 +4925,10 @@ export default function Providers() {
       <div>
         <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50 tracking-tight">{t('providers.title')}</h1>
         <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
-          {supplyTab === 'mcp' ? t('providers.supply.mcpSubtitle') : t('providers.subtitle')}
+          {t('providers.subtitle')}
         </p>
-        <div className="mt-4">{renderSupplyDimensionTabs()}</div>
       </div>
 
-      {supplyTab === 'mcp' ? (
-        // MCP 工具已并入「资源」（与技能同为纳管 + 投射到应用的能力资产）；保留入口做引导
-        <div className="tb-soft-card rounded-2xl px-6 py-8 max-w-xl mx-auto text-center space-y-3">
-          <div className="text-2xl" aria-hidden>🔧</div>
-          <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{t('providers.supply.mcpMovedTitle')}</h2>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">{t('providers.supply.mcpMovedDesc')}</p>
-          <button
-            type="button"
-            onClick={() => navigate('/resources', { state: { resourceType: 'mcp' } })}
-            className="px-4 py-2 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700"
-          >
-            {t('providers.supply.mcpMovedGo')}
-          </button>
-        </div>
-      ) : (
       <>
       {/* 个人源：标题独立于 panel；统计 + 已添加卡片 + 添加源 */}
       <section className="space-y-3">
@@ -5061,7 +5018,6 @@ export default function Providers() {
         </div>
       </section>
       </>
-      )}
 
       {/* 添加实例后：凭证配置弹窗（复用 ProviderCard 的 API key / OAuth 配置，含 Claude 粘 code）*/}
       {credModalKey && (() => {

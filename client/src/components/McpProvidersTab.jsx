@@ -21,7 +21,6 @@ function McpLogo({ icon }) {
   );
 }
 
-const SUPPLY_TAB_KEY = 'tokenbank.providers.supplyTab';
 const MCP_VIEW_TAB_KEY = 'tokenbank.providers.mcpViewTab';
 const MCP_AGENT_TAB_KEY = 'tokenbank.providers.mcpAgentTab';
 
@@ -2304,10 +2303,3 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
   );
 }
 
-export function readSupplyTab() {
-  try { return localStorage.getItem(SUPPLY_TAB_KEY) || 'model'; } catch { return 'model'; }
-}
-
-export function saveSupplyTab(tab) {
-  try { localStorage.setItem(SUPPLY_TAB_KEY, tab); } catch {}
-}
