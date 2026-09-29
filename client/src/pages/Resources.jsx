@@ -468,6 +468,18 @@ export default function Resources() {
   const [mcpCreateSignal, setMcpCreateSignal] = useState(0);
   /** MCP 已纳管数（由 MCP 组件上报；未加载为 null） */
   const [mcpCount, setMcpCount] = useState(null);
+  // 未打开 MCP 页签前先取一次数量，平铺页签上直接显示计数（打开后由 MCP 组件接管上报）
+  useEffect(() => {
+    const api = window.electronAPI?.mcp;
+    if (!api?.listServers) return;
+    let alive = true;
+    api.listServers().then((r) => {
+      if (!alive || !Array.isArray(r?.servers)) return;
+      const n = r.servers.filter(s => !s.builtin && String(s.name || '') !== 'tokenbank-relay').length;
+      setMcpCount(c => (c == null ? n : c));
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
   /** 当前可见行 key（键盘 ↑↓ 导航用，渲染时写入） */
   const visibleKeysRef = useRef([]);
   const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -3254,34 +3266,54 @@ export default function Resources() {
             )}
           </div>
         </div>
-        {/* 视图：下划线 Tab */}
-        <div className="mt-4 flex items-end gap-6 border-b border-zinc-200/80 dark:border-white/[0.08]" role="tablist">
-          {[
-            { id: 'managed', label: t('resources.tab.library'), count: localCount },
-            { id: 'recommend', label: t('resources.tab.recommend') },
-          ].map(tab => (
-            <button
-              key={tab.id}
-              type="button"
-              role="tab"
-              aria-selected={viewTab === tab.id}
-              onClick={() => changeViewTab(tab.id)}
-              className={`-mb-px pb-2.5 text-[13px] border-b-2 transition-colors ${
-                viewTab === tab.id
-                  ? 'border-zinc-900 dark:border-zinc-100 text-zinc-900 dark:text-zinc-50 font-semibold'
-                  : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
-              }`}
-            >
-              {tab.label}
-              {tab.count != null && <span className="ml-1.5 text-[11px] font-normal text-zinc-400 tabular-nums">{tab.count}</span>}
-            </button>
-          ))}
+        {/* 主导航：资产类型直接作为一级 Tab（带数量），「发现」与之以竖线分隔 */}
+        <div className="mt-4 flex flex-wrap items-end gap-x-6 gap-y-1 border-b border-zinc-200/80 dark:border-white/[0.08]" role="tablist">
+          {TYPE_OPTIONS.map(opt => {
+            const active = viewTab === 'managed' && typeFilter === opt.id;
+            const n = typeCounts[opt.id || 'all'];
+            return (
+              <button
+                key={opt.id || 'all'}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => {
+                  if (viewTab !== 'managed') changeViewTab('managed');
+                  changeTypeFilter(opt.id);
+                  if (opt.id !== 'prompt') setPromptKindFilter('');
+                }}
+                className={`-mb-px pb-2.5 text-[13px] border-b-2 transition-colors ${
+                  active
+                    ? 'border-zinc-900 dark:border-zinc-100 text-zinc-900 dark:text-zinc-50 font-semibold'
+                    : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+                }`}
+              >
+                {t(`resources.tabType.${opt.id || 'all'}`)}
+                {n > 0 && <span className="ml-1.5 text-[11px] font-normal text-zinc-400 tabular-nums">{n}</span>}
+              </button>
+            );
+          })}
+          <span className="self-center mb-2.5 w-px h-4 bg-zinc-200 dark:bg-zinc-700" aria-hidden />
+          <button
+            type="button"
+            role="tab"
+            aria-selected={viewTab === 'recommend'}
+            onClick={() => changeViewTab('recommend')}
+            className={`-mb-px pb-2.5 text-[13px] border-b-2 transition-colors ${
+              viewTab === 'recommend'
+                ? 'border-zinc-900 dark:border-zinc-100 text-zinc-900 dark:text-zinc-50 font-semibold'
+                : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+            }`}
+          >
+            <span className="text-violet-500 mr-1" aria-hidden>✦</span>{t('resources.tab.discover')}
+          </button>
         </div>
       </header>
 
       <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-3">
         {/* 筛选栏：类型分段 + 下拉筛选（用途 / 应用 / 状态）+ 排序 */}
         <div className="flex flex-wrap items-center gap-2">
+          {viewTab === 'recommend' && (
           <div className="tb-glass-chip inline-flex rounded-lg p-0.5 gap-0.5">
             {TYPE_OPTIONS.map(opt => (
               <button
@@ -3298,12 +3330,10 @@ export default function Resources() {
                 }`}
               >
                 {t(opt.labelKey)}
-                {viewTab === 'managed' && typeCounts[opt.id || 'all'] > 0 && (
-                  <span className="ml-1 text-[10px] tabular-nums opacity-50">{typeCounts[opt.id || 'all']}</span>
-                )}
               </button>
             ))}
           </div>
+          )}
           {typeFilter === 'prompt' && (
             <FilterMenu
               label={t('resources.filter.promptKind')}

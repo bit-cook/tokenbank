@@ -81,7 +81,7 @@ The system automatically extracts work portraits from real call records and sess
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  Desktop (Electron · Mac / Windows) or CLI / Docker Web UI      │
-│  Gateway · Models · Resources · Playground · Usage · …          │
+│  Gateway · Models · Assets · Playground · Usage · …          │
 └────────────────────────────┬────────────────────────────────────┘
                              │ loopback
                              ▼
@@ -274,7 +274,7 @@ Run multiple logins of the same CLI (Claude Code / Codex). The gateway picks the
 
 ### AI assets in one place: MCP · Skill · Prompt · Agent
 
-Skills in one folder, MCP configs in three, prompts in a text file you can't find — the **Resources** tab gathers community picks and your own assets into one ordered library, and **projects** them to every agent instead of copying them around. Edit once, and every managed agent gets the same version.
+Skills in one folder, MCP configs in three, prompts in a text file you can't find — the **Assets** tab gathers community picks and your own assets into one ordered library, and **projects** them to every agent instead of copying them around. Edit once, and every managed agent gets the same version.
 
 | Type | Capability |
 |---|---|

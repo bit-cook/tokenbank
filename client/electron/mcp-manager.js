@@ -1474,7 +1474,7 @@ class MCPManager {
         success: true,
         server: this.getServer(existing.id),
         alreadyInstalled: true,
-        hint: '该 MCP 已在 Token Bank 纳管；可在「已纳管」页安装到其他 Agent。',
+        hint: '该 MCP 已在 Token Bank 纳管；可在「资产 → MCP 工具」中投射到其他应用。',
       };
     }
 

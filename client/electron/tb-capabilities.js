@@ -100,7 +100,7 @@ function formatRelayedMcpSection(servers) {
   ];
   const list = Array.isArray(servers) ? servers : [];
   if (!list.length) {
-    lines.push('当前应用暂无已中转的第三方 MCP。请用户在 Token Bank「MCP」页对该应用勾选「中转」。');
+    lines.push('当前应用暂无已中转的第三方 MCP。请用户在 Token Bank「资产 → MCP 工具」把该 MCP 投射到此应用。');
     return lines.join('\n');
   }
   for (const s of list) {

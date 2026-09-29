@@ -101,7 +101,7 @@ async function handleToolCall(name, args = {}) {
       '1. 下列仅为本机已雇佣的社区智能体；有匹配则用 tb_dispatch_agent 派发，勿自己做。',
       '2. 任务在对方设备执行，只拿结果，勿尝试拉取正文。',
       '3. 子任务 prompt 写清：目标 + 约束 + 期望产出。',
-      '4. 列表为空：请用户在 Token Bank「贡献 → 社区智能体」雇佣后再派发；或自行完成并告知用户。',
+      '4. 列表为空：请用户在 Token Bank「交易 → 社区智能体」雇佣后再派发；或自行完成并告知用户。',
     ].join('\n');
     return textResult(lines.length
       ? `${hint}\n\n${lines.join('\n')}`
@@ -126,7 +126,7 @@ async function handleToolCall(name, args = {}) {
       return textResult(
         lines.length
           ? `已雇佣社区智能体（仅本机名单，无正文）\n派发：tb_dispatch_agent；新雇佣请到「交易」页。\n\n${lines.join('\n')}`
-          : '尚无已雇佣社区智能体。请到 Token Bank「贡献 → 社区智能体」雇佣后再调用。',
+          : '尚无已雇佣社区智能体。请到 Token Bank「交易 → 社区智能体」雇佣后再调用。',
       );
     } catch (e) {
       return textResult(`列出已雇佣社区智能体失败: ${e.message}`, true);

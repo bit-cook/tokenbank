@@ -50,7 +50,7 @@ function labelsFor(lang) {
     pillCircles: '圈子',
     contributing: '出租中',
     notContributing: '未出租',
-    squadTitle: '资源',
+    squadTitle: '资产',
     squadTag: 'RESOURCES',
     squadEmpty: '启用一个智能体到 Cursor / Claude',
     squadToday: '今日取用 {n}',

@@ -48,7 +48,7 @@
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │  桌面客户端 (Electron · Mac / Windows) 或 CLI / Docker Web UI    │
-│  网关 · 模型 · 资源 · 游乐场 · 盘点 · 圈子 · 交易 · 托盘        │
+│  网关 · 模型 · 资产 · 游乐场 · 盘点 · 圈子 · 交易 · 托盘        │
 └────────────────────────────┬────────────────────────────────────┘
                              │ 本机 loopback
                              ▼
@@ -241,7 +241,7 @@ fallback · round-robin · weighted · latency · direct
 
 ### AI 资产一处纳管：MCP · Skill · Prompt · Agent
 
-Skill 在这个目录，MCP 配置散在三个地方，Prompt 存在找不到的文本里——**资源**页把社区推荐与个人资产收进一个有序的资产库，再**投射**给各个智能体，而不是到处复制。一处修改，所有已纳管智能体拿到的都是同一个版本。
+Skill 在这个目录，MCP 配置散在三个地方，Prompt 存在找不到的文本里——**资产**页把社区推荐与个人资产收进一个有序的资产库，再**投射**给各个智能体，而不是到处复制。一处修改，所有已纳管智能体拿到的都是同一个版本。
 
 | 类型 | 能力 |
 |---|---|
@@ -412,13 +412,13 @@ docker compose up gateway -d
 
 ![模型](server/static/screenshots/providers.webp)
 
-### 资源 · Agent / Skill / Prompt
+### 资产 · Agent / Skill / Prompt / MCP
 
 纳管智能体、投射到运行时 Agent；社区「为你推荐」与工作画像。
 
-![资源 · 智能体](server/static/screenshots/assets-agents.webp)
+![资产 · 智能体](server/static/screenshots/assets-agents.webp)
 
-![资源 · 为你推荐与画像](server/static/screenshots/assets-for-you.webp)
+![资产 · 发现与画像](server/static/screenshots/assets-for-you.webp)
 
 ### 游乐场 · Agent 聚合编排
 
@@ -461,7 +461,7 @@ docker compose up gateway -d
 | **盘点** | 多维统计：应用占比、**本地源 / 社区分享** 分布、模型排行、压缩节省、费用估算；**工作画像分享海报** |
 | **网关** | **一键纳管**（含 WorkBuddy / Trae 等）+ **CLI 多账号**；会话 Trace；场景 / 任务分型路由 |
 | **调试 / 游乐场** | **Agent 聚合编排**（含社区智能体、图片输入）；工具流、停止续接 |
-| **资源** | 社区推荐 **MCP / Skill / Prompt / Agent**；投射门控；**内置 MCP 中转**；画像推荐 |
+| **资产** | 社区推荐 **MCP / Skill / Prompt / Agent**；投射门控；**内置 MCP 中转**；画像推荐 |
 | **模型** | **本地源**与 **社区分享源**；模态（文本/图文/生图/嵌入）；测速与动态目录 |
 | **圈子 / 交易 / 网络** | 圈子共享 · 贡献节点 / **雇佣智能体** · 全球节点地图（网页亦可试用） |
 | **配置** | 网关端口、超时、并发 · 无损压缩 · 云端账号与转发 Key |
