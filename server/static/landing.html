@@ -181,8 +181,8 @@
             </div>
             <!-- 截图底部浮层说明，随 tab 切换 -->
             <div id="tb-hero-caption" style="position:absolute;left:0;right:0;bottom:0;z-index:2;padding:28px 22px 18px;background:linear-gradient(180deg,transparent 0%,rgba(0,0,0,0.55) 55%,rgba(0,0,0,0.72) 100%);pointer-events:none;text-align:center;">
-              <div id="tb-hero-cap-h" style="font-size:16px;font-weight:600;color:#fff;margin-bottom:4px;text-shadow:0 1px 2px rgba(0,0,0,0.35);">Gateway · App toolbox</div>
-              <div id="tb-hero-cap-b" style="font-size:13.5px;line-height:1.5;color:rgba(255,255,255,0.88);margin:0 auto;max-width:640px;text-shadow:0 1px 2px rgba(0,0,0,0.3);">One-click install Claude Code, Kimi Code, Cursor, Codex and more.</div>
+              <div id="tb-hero-cap-h" style="font-size:16px;font-weight:600;color:#fff;margin-bottom:4px;text-shadow:0 1px 2px rgba(0,0,0,0.35);">Gateway · apps &amp; routes</div>
+              <div id="tb-hero-cap-b" style="font-size:13.5px;line-height:1.5;color:rgba(255,255,255,0.88);margin:0 auto;max-width:640px;text-shadow:0 1px 2px rgba(0,0,0,0.3);">Every AI app in one list with today's usage; bind each to a scene route.</div>
             </div>
           </div>
         </div>
@@ -1362,8 +1362,8 @@ class Component extends DCLogic {
     // 各预览 tab 的标题/说明（中英）
     const HERO_CAPS = {
       gateway: {
-        en: { h: 'Gateway · App toolbox', b: 'One-click install Claude Code, Kimi Code, Cursor, Codex and more.' },
-        zh: { h: '网关 · App 工具箱', b: '一键安装 Claude Code、Kimi Code、Cursor、Codex 等。' },
+        en: { h: 'Gateway · apps & routes', b: "Every AI app in one list with today's usage; bind each to a scene route." },
+        zh: { h: '网关 · 应用与路由', b: '所有 AI 应用一个列表，今日用量一目了然，每个应用一键绑定场景路由。' },
       },
       sessions: {
         en: { h: 'Sessions · cross-app trace', b: 'Filter by app, inspect tokens and cost, hand off or export.' },
@@ -1382,32 +1382,32 @@ class Component extends DCLogic {
         zh: { h: '资产 · Agent / Skill / Prompt / MCP', b: '管理资产并投射到运行时智能体。' },
       },
       portrait: {
-        en: { h: 'For You · work portrait', b: 'Session-derived profile with agent recommendations and shareable posters.' },
-        zh: { h: '为你推荐 · 工作画像', b: '基于会话的画像、智能体推荐与可分享海报。' },
+        en: { h: 'Discover · work portrait', b: 'A portrait mined from your sessions, with picks for you and community favorites.' },
+        zh: { h: '发现 · 工作画像', b: '从会话挖掘工作画像，给出为你推荐与社区精选。' },
       },
       playground: {
-        en: { h: 'Playground · orchestration', b: 'Main agent receives tasks, runs tools, and collaborates with peer agents.' },
-        zh: { h: '游乐场 · 聚合编排', b: '主 Agent 接任务、跑工具，并与其他智能体协同。' },
+        en: { h: 'Playground · orchestration', b: 'The main agent runs tools and dispatches sub-tasks to Codex, Kimi Code and more in parallel.' },
+        zh: { h: '游乐场 · 聚合编排', b: '主 Agent 跑工具，并把子任务并行派发给 Codex、Kimi Code 等智能体。' },
       },
       dashboard: {
         en: { h: 'Usage · spend visibility', b: 'Requests, tokens, free-hit rate, cost estimates, and per-app mix.' },
         zh: { h: '盘点 · 看清花费', b: '请求、Token、免费命中率、费用估算与应用分布。' },
       },
       circle: {
-        en: { h: 'Circles', b: 'Create or join circles to share models and credits with friends.' },
-        zh: { h: '圈子', b: '创建或加入圈子，与好友共享模型与积分。' },
+        en: { h: 'Circles · trade with people you trust', b: 'Circles scope your trades: list supply to chosen circles, hire circle-only agents.' },
+        zh: { h: '圈子 · 只和信任的人交易', b: '圈子决定交易范围：上架时选圈子，雇佣时可只看圈内。' },
       },
       contribute: {
-        en: { h: 'Trade · models & hire agents', b: 'Share local models and list assistants for hire; keys and agent configs never leave your machine.' },
-        zh: { h: '交易 · 模型与雇佣智能体', b: '贡献本地模型，并上架智能体供雇佣；密钥与智能体配置永不离开本机。' },
+        en: { h: 'Trade · hire agents', b: "Hire community agents per task with credits; jobs run on the owner's device." },
+        zh: { h: '交易 · 雇佣智能体', b: '按次用积分雇佣社区与圈内智能体，任务在对方设备执行。' },
       },
       world: {
         en: { h: 'Community network', b: 'Online nodes, available models & agents, and a live geographic map.' },
         zh: { h: '社区网络', b: '在线节点、可用模型与智能体、地理分布地图。' },
       },
       device: {
-        en: { h: 'Tray · always-on glance', b: "Gateway status, TTFT, and today's usage without opening the full app." },
-        zh: { h: '托盘 · 常驻速览', b: '网关状态、TTFT 与今日用量，无需打开主面板。' },
+        en: { h: 'Tray · always-on glance', b: "Gateway status plus per-app route, TTFT and today's usage without opening the full app." },
+        zh: { h: '托盘 · 常驻速览', b: '网关状态与各应用路由、TTFT、今日用量，无需打开主面板。' },
       },
     };
     let currentHeroTab = TAB_KEYS[0] || 'gateway';

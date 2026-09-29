@@ -411,11 +411,11 @@ The `gateway-data/` volume is mounted automatically; **`local-config.json` is cr
 
 ## What's in the UI
 
-### Gateway · one-click onboarding & toolbox
+### Gateway · one-click onboarding & scene routes
 
-App list with today's usage, plus the App toolbox to install / remove Claude Code, Kimi Code, Cursor, Codex, and more.
+Every AI app in one list with today's requests, tokens and last use; bind each app to a scene route (Coding / Speed first / Free sources…). The App toolbox installs / removes Claude Code, Kimi Code, Cursor, Codex, and more.
 
-![Gateway · apps & toolbox](server/static/screenshots/gateway-apps.webp)
+![Gateway · apps & routes](server/static/screenshots/gateway-apps.webp)
 
 ### Sessions · unified cross-app trace
 
@@ -437,21 +437,21 @@ Speed-test personal models with status lights; spend credits on community-shared
 
 ### Assets · Agents / Skills / Prompts
 
-Manage agents and project them onto runtime CLIs; community “For You” picks and work portrait.
+Prompts, skills, agents and MCP tools managed in one place and projected onto runtime CLIs in one click; **Discover** mines a work portrait from your sessions for “For you” picks and community favorites.
 
-![Assets · agents](server/static/screenshots/assets-agents.webp)
+![Assets · all](server/static/screenshots/assets-agents.webp)
 
 ![Assets · For You & portrait](server/static/screenshots/assets-for-you.webp)
 
 ### Playground · agent orchestration
 
-Main agent receives tasks with tool streams and terminal collaboration; runtimes include Claude Code / Codex / Cursor / Kimi Code.
+The main agent takes the task, runs tools, and dispatches sub-tasks in parallel to other agents such as Codex / Kimi Code; pick runtimes and managed agents on the left.
 
 ![Playground · Agent mode](server/static/screenshots/playground.webp)
 
 ### Usage · spend visibility
 
-Requests / tokens / free-hit rate / estimated cost; per-app mix and daily trend.
+Requests / tokens / free-hit rate / estimated cost (subscriptions prorated daily + pay-as-you-go); per-app mix and 7-day trend.
 
 ![Usage](server/static/screenshots/usage.webp)
 
@@ -461,23 +461,23 @@ Circles are the scope of trading: create or join one under **Trade → Circles**
 
 ![Circles](server/static/screenshots/circles.webp)
 
-### Trade · earn from idle quota
+### Trade · hire agents & earn from idle quota
 
-Contribute local models to the community network for credits; keys never leave the machine. You can also list assistants for others to **hire**—only the card and bio are public; runs stay on your device.
+Hire community or circle-only agents per task with credits (jobs run on the owner's device). You can also list local models and assistants to earn credits—only the card and bio are public; configs and keys stay on your machine.
 
 ![Trade](server/static/screenshots/contribute.webp)
 
-### Global network · node map
+### Community network · node map
 
-Online nodes, available models, and geographic distribution.
+Under **Trade → Network**: online nodes, available models and agents, geographic distribution, and a supply leaderboard.
 
-![Global community network](server/static/screenshots/network.webp)
+![Community network](server/static/screenshots/network.webp)
 
 ### Tray · always-on glance
 
-Gateway status, per-app TTFT / today’s usage; open the main panel in one click.
+Gateway status, token up/down, per-app route / TTFT / today’s usage; open the main panel in one click.
 
-![Tray panel](server/static/screenshots/tray.webp)
+<img src="server/static/screenshots/tray.webp" alt="Tray panel" width="360">
 
 | Page | What you can do |
 |---|---|
