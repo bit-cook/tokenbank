@@ -358,23 +358,74 @@ function ContributionConfigCard({ onStart, onStop, running, agentError, onAgents
   }
 
   return (
-    <div className={`${LIB_LIST_CLS} p-5 space-y-4`}>
-      {/* 转发地址：供给请求经本机网关转出 */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        <span className="text-[11px] text-zinc-500 dark:text-zinc-400 shrink-0">{t('contribute.forwardUrl')}</span>
-        <TruncTip as="span" title={localGw} className="text-xs font-mono text-zinc-700 dark:text-zinc-300 min-w-0">
-          {localGw}
-        </TruncTip>
-        {savedMsg && <span className="text-xs text-green-600 dark:text-green-400 shrink-0 ml-auto">{savedMsg}</span>}
+    <div className="space-y-3">
+      {/* 状态头：一眼看清是否在线、对谁开放、上架了多少 */}
+      <div className={`relative overflow-hidden rounded-2xl border px-5 py-4 ${
+        running
+          ? 'border-green-200/80 dark:border-green-900/60 bg-gradient-to-br from-green-50/90 via-white/70 to-emerald-50/60 dark:from-green-950/40 dark:via-zinc-900/40 dark:to-emerald-950/20'
+          : 'border-zinc-200/70 dark:border-white/[0.07] bg-gradient-to-br from-zinc-50/90 via-white/70 to-blue-50/40 dark:from-zinc-900/60 dark:via-zinc-900/40 dark:to-blue-950/20'
+      }`}>
+        <div className="flex flex-wrap items-center gap-4">
+          <div className={`w-11 h-11 rounded-2xl flex items-center justify-center text-lg shrink-0 ${
+            running ? 'bg-green-500 text-white shadow-md shadow-green-500/30' : 'bg-white dark:bg-zinc-800 text-zinc-400 ring-1 ring-zinc-200 dark:ring-zinc-700'
+          }`} aria-hidden>
+            {running ? '⚡' : '⏸'}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <span className="text-[15px] font-semibold text-zinc-900 dark:text-zinc-50">
+                {running ? t('contribute.heroOnline') : t('contribute.heroOffline')}
+              </span>
+              {running && <span className="relative flex w-2 h-2"><span className="absolute inline-flex w-full h-full rounded-full bg-green-400 opacity-60 animate-ping" /><span className="relative inline-flex w-2 h-2 rounded-full bg-green-500" /></span>}
+            </div>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+              {t('contribute.heroSummary', {
+                models: selectedNames.size,
+                agents: selectedAssistantIds.size,
+                scope: circleScope === 'public'
+                  ? t('contribute.scope.public')
+                  : t('contribute.heroCircles', { n: selectedCircleIds.size }),
+              })}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {savedMsg && <span className="text-xs text-green-600 dark:text-green-400">{savedMsg}</span>}
+            {running && (
+              <button
+                type="button"
+                onClick={() => {
+                  // 停止会下线算力，二次确认避免误触
+                  if (typeof window !== 'undefined' && !window.confirm(t('contribute.stopConfirm'))) return;
+                  onStop?.();
+                }}
+                className="text-xs px-3.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white/70 dark:bg-zinc-900/40 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30"
+              >
+                {t('contribute.stop')}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={save}
+              disabled={saving || (selectedNames.size === 0 && selectedAssistantIds.size === 0)}
+              className="tb-press text-xs font-medium px-4 py-1.5 rounded-lg bg-blue-600 text-white shadow-sm shadow-blue-600/25 hover:bg-blue-500 disabled:opacity-50"
+            >
+              {saving ? t('contribute.savingAndStarting') : (running ? t('contribute.saveAndApply') : t('contribute.saveAndStart'))}
+            </button>
+          </div>
+        </div>
+        {agentError && <p className="mt-2 text-xs text-red-600 dark:text-red-400">{agentError}</p>}
       </div>
-      {agentError && (
-        <p className="text-xs text-red-600 dark:text-red-400 -mt-1">{agentError}</p>
-      )}
 
+      {/* ① 上架什么 */}
+      <section className={`${LIB_LIST_CLS} p-5 space-y-4`}>
+        <SupplySectionHead n="1" title={t('contribute.secWhat')} hint={t('contribute.secWhatHint')} />
       {/* 贡献模型：默认只展示已选；点 + 从候选里添加，避免占满整页 */}
-      <div className="space-y-1">
+      <div className="space-y-2">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">{t('contribute.models')}</span>
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200">
+            <span className="w-5 h-5 rounded-md bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-300 flex items-center justify-center text-[10px]" aria-hidden>◆</span>
+            {t('contribute.models')}
+          </span>
           {selectedNames.size > 0 && (
             <span className="text-[11px] text-zinc-400">{t('contribute.modelsSelected', { n: selectedNames.size })}</span>
           )}
@@ -418,14 +469,14 @@ function ContributionConfigCard({ onStart, onStop, running, agentError, onAgents
               <button
                 type="button"
                 onClick={() => setShowModelPicker((v) => !v)}
-                className={`tb-tag tb-tag-muted border-dashed justify-center min-w-[2rem] h-7 px-2 text-sm font-medium cursor-pointer ${
+                className={`tb-tag tb-tag-muted border-dashed justify-center h-7 px-2.5 text-xs cursor-pointer ${
                   showModelPicker ? '!border-solid !bg-white/75 dark:!bg-zinc-700/80 !text-zinc-900 dark:!text-zinc-100' : ''
                 }`}
                 title={t('contribute.addModel')}
                 aria-label={t('contribute.addModel')}
                 aria-expanded={showModelPicker}
               >
-                +
+                + {t('contribute.addShort')}
               </button>
             </div>
             {selectedNames.size === 0 && !showModelPicker && (
@@ -471,9 +522,12 @@ function ContributionConfigCard({ onStart, onStop, running, agentError, onAgents
       </div>
 
       {/* 贡献智能体：默认只展示已选；点 + 添加（须已投射） */}
-      <div className="space-y-1">
+      <div className="space-y-2 pt-4 border-t border-zinc-100 dark:border-white/[0.06]">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">{t('contribute.assistants')}</span>
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200">
+            <span className="w-5 h-5 rounded-md bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-300 flex items-center justify-center text-[10px]" aria-hidden>✦</span>
+            {t('contribute.assistants')}
+          </span>
           {selectedAssistantIds.size > 0 && (
             <span className="text-[11px] text-zinc-400">
               {t('contribute.assistantsSelected', { n: selectedAssistantIds.size })}
@@ -522,14 +576,14 @@ function ContributionConfigCard({ onStart, onStop, running, agentError, onAgents
               <button
                 type="button"
                 onClick={() => setShowAssistantPicker((v) => !v)}
-                className={`tb-tag tb-tag-muted border-dashed justify-center min-w-[2rem] h-7 px-2 text-sm font-medium cursor-pointer ${
+                className={`tb-tag tb-tag-muted border-dashed justify-center h-7 px-2.5 text-xs cursor-pointer ${
                   showAssistantPicker ? '!border-solid !bg-white/75 dark:!bg-zinc-700/80 !text-zinc-900 dark:!text-zinc-100' : ''
                 }`}
                 title={t('contribute.addAssistant')}
                 aria-label={t('contribute.addAssistant')}
                 aria-expanded={showAssistantPicker}
               >
-                +
+                + {t('contribute.addShort')}
               </button>
             </div>
             {selectedAssistantIds.size === 0 && !showAssistantPicker && (
@@ -604,99 +658,126 @@ function ContributionConfigCard({ onStart, onStop, running, agentError, onAgents
         )}
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <label className="block text-[11px] font-medium text-zinc-500 dark:text-zinc-400 mb-1.5">{t('contribute.nodeName')}</label>
-          <input value={nodeName} onChange={e => setNodeName(e.target.value)} placeholder={t('contribute.nodeNamePh')}
-            className="tb-soft-field w-full text-xs px-3 py-2 rounded-lg text-zinc-900 dark:text-zinc-100" />
-        </div>
-        {/* 供给范围：分段选择代替原生单选 */}
-        <div>
-          <p className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400 mb-1.5">{t('contribute.scope')}</p>
-          <div role="radiogroup" aria-label={t('contribute.scope')} className="inline-flex p-0.5 rounded-lg bg-zinc-100/90 dark:bg-zinc-800/80">
-            {[['public', t('contribute.scopePublic')], ['circle', t('contribute.scopeCircle')]].map(([v, label]) => (
-              <button key={v} type="button" role="radio" aria-checked={circleScope === v} onClick={() => setCircleScope(v)}
-                className={`text-xs px-3 py-1.5 rounded-md transition-colors ${
-                  circleScope === v
-                    ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-50 shadow-sm font-medium'
-                    : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+      </section>
+
+      {/* ② 给谁用：圈子即交易范围 */}
+      <section className={`${LIB_LIST_CLS} p-5 space-y-3`}>
+        <SupplySectionHead n="2" title={t('contribute.secWho')} hint={t('contribute.secWhoHint')} />
+        <div role="radiogroup" aria-label={t('contribute.scope')} className="grid gap-2.5 sm:grid-cols-2">
+          {[
+            ['public', '🌐', t('contribute.scopePublicTitle'), t('contribute.scopePublicDesc')],
+            ['circle', '◎', t('contribute.scopeCircleTitle'), t('contribute.scopeCircleDesc')],
+          ].map(([v, icon, title, desc]) => {
+            const on = circleScope === v;
+            return (
+              <button key={v} type="button" role="radio" aria-checked={on} onClick={() => setCircleScope(v)}
+                className={`relative text-left flex gap-3 p-3.5 rounded-xl border transition-all ${
+                  on
+                    ? 'border-blue-500 bg-blue-50/70 dark:bg-blue-950/30 ring-2 ring-blue-500/15'
+                    : 'border-zinc-200 dark:border-zinc-700 bg-white/60 dark:bg-zinc-900/30 hover:border-zinc-300 dark:hover:border-zinc-600'
                 }`}>
-                {label}
+                <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm shrink-0 ${
+                  on ? 'bg-blue-600 text-white' : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500'
+                }`} aria-hidden>{icon}</span>
+                <span className="min-w-0">
+                  <span className={`block text-[13px] font-medium ${on ? 'text-blue-700 dark:text-blue-300' : 'text-zinc-800 dark:text-zinc-100'}`}>{title}</span>
+                  <span className="block text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed">{desc}</span>
+                </span>
+                <span className={`absolute top-3 right-3 w-4 h-4 rounded-full border-2 ${
+                  on ? 'border-blue-600 bg-blue-600 shadow-[inset_0_0_0_2px_white] dark:shadow-[inset_0_0_0_2px_rgb(24,24,27)]' : 'border-zinc-300 dark:border-zinc-600'
+                }`} aria-hidden />
               </button>
-            ))}
+            );
+          })}
+        </div>
+
+        {circleScope === 'circle' && (
+          <div className="rounded-xl bg-zinc-50/80 dark:bg-zinc-900/40 px-3.5 py-3 space-y-2">
+            {circles.length === 0
+              ? (
+                <p className="text-xs text-zinc-500">
+                  {t('contribute.noCircle')}
+                  {onManageCircles && (
+                    <button type="button" onClick={onManageCircles} className="ml-1.5 text-blue-600 dark:text-blue-400 hover:underline">
+                      {t('contribute.createCircleLink')}
+                    </button>
+                  )}
+                </p>
+              )
+              : (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {circles.map(c => {
+                    const sel = selectedCircleIds.has(c.id);
+                    return (
+                      <button key={c.id} type="button" onClick={() => toggleCircle(c.id)} aria-pressed={sel}
+                        className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                          sel
+                            ? 'border-blue-500 bg-blue-600 text-white'
+                            : 'border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-600 dark:text-zinc-300 hover:border-zinc-300'
+                        }`}>
+                        <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-semibold ${sel ? 'bg-white/25' : `${avatarColor(c.name)} text-white`}`} aria-hidden>
+                          {sel ? '✓' : (c.name || '?')[0]}
+                        </span>
+                        {c.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            <p className="text-[11px] text-zinc-400">{t('contribute.scopeHint')}</p>
+          </div>
+        )}
+      </section>
+
+      {/* ③ 节点设置 */}
+      <section className={`${LIB_LIST_CLS} p-5 space-y-3`}>
+        <SupplySectionHead n="3" title={t('contribute.secNode')} />
+        <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+          <div>
+            <label className="block text-[11px] font-medium text-zinc-500 dark:text-zinc-400 mb-1.5">{t('contribute.nodeName')}</label>
+            <input value={nodeName} onChange={e => setNodeName(e.target.value)} placeholder={t('contribute.nodeNamePh')}
+              className="tb-soft-field w-full text-xs px-3 py-2 rounded-lg text-zinc-900 dark:text-zinc-100" />
+          </div>
+          <div>
+            <label className="block text-[11px] font-medium text-zinc-500 dark:text-zinc-400 mb-1.5">{t('contribute.forwardUrl')}</label>
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-100 dark:border-white/[0.06]">
+              <TruncTip as="span" title={localGw} className="flex-1 min-w-0 text-xs font-mono text-zinc-600 dark:text-zinc-300">{localGw}</TruncTip>
+            </div>
           </div>
         </div>
-      </div>
-
-      {circleScope === 'circle' && (
-        <div className="space-y-2 -mt-1">
-          {circles.length === 0
-            ? (
-              <p className="text-xs text-zinc-400">
-                {t('contribute.noCircle')}
-                {onManageCircles && (
-                  <button type="button" onClick={onManageCircles} className="ml-1.5 text-blue-600 dark:text-blue-400 hover:underline">
-                    {t('contribute.createCircleLink')}
-                  </button>
-                )}
-              </p>
-            )
-            : (
-              <div className="flex flex-wrap items-center gap-1.5">
-                {circles.map(c => {
-                  const sel = selectedCircleIds.has(c.id);
-                  return (
-                    <button key={c.id} type="button" onClick={() => toggleCircle(c.id)} aria-pressed={sel}
-                      className={`tb-tag px-2.5 py-1 text-xs cursor-pointer ${sel ? 'tb-tag-blue' : 'tb-tag-muted !border-solid'}`}>
-                      {sel ? '✓ ' : ''}{c.name}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          <p className="text-[11px] text-zinc-400">{t('contribute.scopeHint')}</p>
-        </div>
-      )}
-
-      <div className="flex flex-wrap items-center gap-3 pt-3 border-t border-zinc-100 dark:border-white/[0.06]">
-        <button
-          type="button"
-          onClick={save}
-          disabled={saving}
-          className="tb-press text-xs font-medium px-4 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50"
-        >
-          {saving ? t('contribute.savingAndStarting') : (running ? t('contribute.saveAndApply') : t('contribute.saveAndStart'))}
-        </button>
-        {running && (
-          <button
-            type="button"
-            onClick={() => {
-              // 停止会下线算力，二次确认避免误触
-              if (typeof window !== 'undefined' && !window.confirm(t('contribute.stopConfirm'))) return;
-              onStop?.();
-            }}
-            className="text-xs px-3.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30"
-          >
-            {t('contribute.stop')}
-          </button>
-        )}
-        <label className="ml-auto flex items-center gap-2 select-none cursor-pointer">
+        <div className="flex items-center justify-between gap-3 pt-1">
+          <div>
+            <p className="text-xs text-zinc-700 dark:text-zinc-200">{t('contribute.autoStart')}</p>
+            <p className="text-[11px] text-zinc-400 mt-0.5">{t('contribute.autoStartHint')}</p>
+          </div>
           <button
             type="button"
             role="switch"
             aria-checked={autoStart}
             aria-label={t('contribute.autoStart')}
             onClick={() => setAutoStart((v) => !v)}
-            className={`relative w-8 h-[18px] rounded-full transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+            className={`relative shrink-0 w-9 h-5 rounded-full transition-colors duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
               autoStart ? 'bg-blue-600' : 'bg-zinc-300 dark:bg-zinc-600'
             }`}
           >
-            <span className={`absolute top-[2px] left-0 w-[14px] h-[14px] bg-white rounded-full shadow transition-transform duration-200 ${
-              autoStart ? 'translate-x-[16px]' : 'translate-x-[2px]'
+            <span className={`absolute top-[2px] left-0 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ${
+              autoStart ? 'translate-x-[18px]' : 'translate-x-[2px]'
             }`} />
           </button>
-          <span className="text-xs text-zinc-600 dark:text-zinc-300">{t('contribute.autoStart')}</span>
-        </label>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+/** 上架表单分节标题：序号 + 标题 + 说明 */
+function SupplySectionHead({ n, title, hint }) {
+  return (
+    <div className="flex items-start gap-2.5">
+      <span className="mt-px w-5 h-5 rounded-full bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 text-[10px] font-semibold flex items-center justify-center shrink-0">{n}</span>
+      <div className="min-w-0">
+        <h3 className="text-[13px] font-semibold text-zinc-900 dark:text-zinc-50">{title}</h3>
+        {hint && <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">{hint}</p>}
       </div>
     </div>
   );
@@ -1405,7 +1486,6 @@ export default function Contribute() {
         </div>
 
         <div className={tab === 'supply' ? 'space-y-2' : 'hidden'}>
-          <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{t('contribute.sectionSupplyHint')}</p>
           <ContributionConfigCard
             onStart={handleStart}
             onStop={handleStop}
