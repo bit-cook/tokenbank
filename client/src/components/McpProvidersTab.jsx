@@ -5,7 +5,7 @@ import { useLang } from '../store/lang';
 import { ASSET_BTN_GHOST, ASSET_BTN_MANAGED, ASSET_BTN_PRIMARY, AssetMoreMenu } from './ResourceAssetCard';
 import {
   FilterMenu, AppIconStack, LIB_LIST_CLS, libRowCls, LibrarySectionHead, LibraryRowTitle,
-  LibraryInspector, InspectorSection,
+  LibraryInspector, InspectorSection, InspectorPreview,
 } from './LibraryControls';
 
 /** MCP 列表列宽：勾选 | 名称 | 投射到 | 类型 | 状态 | 操作（Tailwind 需字面量） */
@@ -172,6 +172,8 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
   const [builtinCardOpen, setBuiltinCardOpen] = useState(null);
   /** 展开了「启用原生工具」说明的应用 */
   const [nativeOpenIds, setNativeOpenIds] = useState([]);
+  /** 应用接入详情：是否明文显示中转令牌 */
+  const [showRelayToken, setShowRelayToken] = useState(false);
 
   useEffect(() => { if (createSignal) setShowCustom(true); }, [createSignal]);
   // 上报已纳管数量（资源页「资产库」计数）
@@ -1579,7 +1581,16 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
               {rows.map(({ tg, st }) => {
                 const nativeOpen = nativeOpenIds.includes(tg.id);
                 return (
-                <li key={tg.id} className="px-4 py-2 border-b last:border-b-0 border-zinc-100/90 dark:border-white/[0.05]">
+                <li
+                  key={tg.id}
+                  role="option"
+                  aria-selected={selectedKey === `app:${tg.id}`}
+                  onClick={() => setSelectedKey(selectedKey === `app:${tg.id}` ? null : `app:${tg.id}`)}
+                  title={t('resources.mcp.appDetailHint')}
+                  className={`px-4 py-2 border-b last:border-b-0 border-zinc-100/90 dark:border-white/[0.05] cursor-pointer transition-colors ${
+                    selectedKey === `app:${tg.id}` ? 'bg-blue-50/80 dark:bg-blue-950/30' : 'hover:bg-zinc-50/80 dark:hover:bg-white/[0.03]'
+                  }`}
+                >
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
                     <ServiceIcon id={tg.id} name={tg.label} boxClass="w-6 h-6" imgClass="w-3.5 h-3.5" className="!rounded-md" />
                     <span className="text-xs text-zinc-800 dark:text-zinc-100 min-w-[6rem]">{tg.label}</span>
@@ -1593,7 +1604,7 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
                           : pill(false, t('resources.mcp.gateway'))}
                       </>
                     )}
-                    <div className="ml-auto flex items-center gap-2">
+                    <div className="ml-auto flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                       {st.builtinOk === false && (
                         <button type="button" disabled={!!busy} onClick={() => setupBuiltinsFor(tg)}
                           className="tb-press text-[11px] px-2.5 py-1 rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-45">
@@ -1617,7 +1628,7 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
                     </div>
                   </div>
                   {(st.api || nativeOpen) && (
-                    <div className="pl-9 mt-1 space-y-1">
+                    <div className="pl-9 mt-1 space-y-1" onClick={(e) => e.stopPropagation()}>
                       <p className="text-[10px] text-zinc-400">
                         {st.api
                           ? t('resources.mcp.guideApi')
@@ -1642,8 +1653,166 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
     );
   }
 
+  /** 应用接入详情：配置文件、内置工具、中转（地址 / 鉴权 / 可复制配置）、投射的 MCP */
+  function renderAppInspector(tg) {
+    const st = appSetupStatus(tg, relayConnectedIds());
+    const target = (syncStatus?.targets || []).find((x) => x.id === (tg.agent?.syncClientId || tg.id))
+      || (syncStatus?.targets || []).find((x) => x.id === tg.id);
+    const url = relayUrlFor(tg.id);
+    const token = gatewayInfo?.endpoint?.token || '';
+    const shownToken = showRelayToken ? token : (token ? `${token.slice(0, 4)}${'•'.repeat(12)}` : '');
+    const cfg = url ? {
+      mcpServers: { 'tokenbank-relay': { url, headers: { Authorization: `Bearer ${shownToken}` } } },
+    } : null;
+    const cmd = url ? `claude mcp add --transport http tokenbank-relay ${url} --header "Authorization: Bearer ${shownToken}"` : '';
+    const builtins = servers.filter((b) => b.builtin && b.id !== 'tokenbank-agent-bridge');
+    const projected = servers
+      .filter((x) => !x.builtin && !isRelaySelfServer(x))
+      .map((x) => ({ s: x, how: connectionOf(x, tg.id) }))
+      .filter((x) => x.how);
+    const tbKeys = new Set(['tokenbank-relay', ...builtins.flatMap((b) => [b.name, b.id, `tb-${b.name}`, `tb-${b.id}`])]);
+    const otherKeys = (target?.scannedKeys || []).filter((k) => !tbKeys.has(k));
+    const copy = async (text, doneMsg) => {
+      try { await navigator.clipboard.writeText(text); setSyncMsg(doneMsg); } catch { alert(t('providers.mcp.gatewayCopyFailed')); }
+    };
+    const relayLabel = st.api
+      ? t('resources.mcp.apiNeedsSetup')
+      : st.relayVia === 'native' ? t('resources.mcp.relayNative')
+        : st.relayVia === 'builtin' ? t('resources.mcp.relayViaBuiltin') : t('resources.mcp.relayMissing');
+    return (
+      <LibraryInspector
+        logo={<ServiceIcon id={tg.id} name={tg.label} boxClass="w-9 h-9" imgClass="w-5 h-5" className="!rounded-xl" />}
+        title={tg.label}
+        closeLabel={t('resources.collapse')}
+        onClose={() => setSelectedKey(null)}
+        chips={(
+          <span className={`text-[10px] px-1.5 py-px rounded ${
+            st.api ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-500'
+              : st.ready ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300'
+                : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300'
+          }`}>
+            {st.api ? t('resources.mcp.apiApp') : st.ready ? t('resources.mcp.appReady') : t('resources.mcp.appNotReady')}
+          </span>
+        )}
+        stats={st.api ? null : [
+          [t('resources.mcp.configMcpCount'), target?.count ?? '—'],
+          [t('resources.mcp.projectedCount'), projected.length],
+          [t('resources.mcp.lastSync'), target?.lastSync ? new Date(target.lastSync).toLocaleString() : '—'],
+        ]}
+      >
+        {!st.api && target?.path && (
+          <InspectorSection title={t('resources.mcp.configFile')}>
+            <div className="flex items-center gap-2">
+              <code className="flex-1 min-w-0 break-all text-[11px] font-mono text-zinc-600 dark:text-zinc-300 select-all">{target.path}</code>
+              <button type="button" onClick={() => copy(target.path, t('resources.mcp.copied'))}
+                className="shrink-0 text-[10px] text-blue-600 dark:text-blue-400 hover:underline">{t('resources.mcp.copy')}</button>
+            </div>
+            {!target.exists && <p className="text-[10px] text-amber-600 mt-1">{t('resources.mcp.configMissing')}</p>}
+          </InspectorSection>
+        )}
+        {!st.api && (
+          <InspectorSection title={t('resources.mcp.builtinTools')}>
+            <ul className="space-y-1">
+              {builtins.map((b) => {
+                const ok = getInstalledAgentIds(b).includes(tg.id);
+                return (
+                  <li key={b.id} className="flex items-center gap-2 text-xs">
+                    <span className={ok ? 'text-emerald-600' : 'text-zinc-300'}>{ok ? '✓' : '○'}</span>
+                    <span className="flex-1 text-zinc-700 dark:text-zinc-200">{b.display_name || b.name}</span>
+                    <code className="text-[10px] font-mono text-zinc-400">{b.name}</code>
+                  </li>
+                );
+              })}
+            </ul>
+            {renderBuiltinMissingNote(st)}
+            {st.builtinOk === false && (
+              <button type="button" disabled={!!busy} onClick={() => setupBuiltinsFor(tg)} className={`${ASSET_BTN_PRIMARY} w-full mt-2`}>
+                {busy === `setup-${tg.id}` ? t('providers.mcp.processing') : t('resources.mcp.setupBuiltin')}
+              </button>
+            )}
+          </InspectorSection>
+        )}
+        <InspectorSection title={t('resources.mcp.gateway')}>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-zinc-500">{t('resources.mcp.relayMode')}</span>
+              <span className="text-zinc-800 dark:text-zinc-100">{relayLabel}</span>
+            </div>
+            <div className="text-xs">
+              <div className="text-zinc-500 mb-0.5">{t('resources.mcp.relayUrl')}</div>
+              {renderRelayUrl(tg.id, { compact: true, copy: false })}
+            </div>
+            {token && (
+              <div className="text-xs">
+                <div className="flex items-center justify-between text-zinc-500 mb-0.5">
+                  <span>{t('resources.mcp.authHeader')}</span>
+                  <button type="button" onClick={() => setShowRelayToken((v) => !v)} className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline">
+                    {showRelayToken ? t('resources.mcp.hideToken') : t('resources.mcp.showToken')}
+                  </button>
+                </div>
+                <code className="block break-all text-[10px] font-mono text-zinc-600 dark:text-zinc-300">Authorization: Bearer {shownToken}</code>
+              </div>
+            )}
+            {cfg && (
+              <div className="text-xs">
+                <div className="flex items-center justify-between text-zinc-500 mb-0.5">
+                  <span>{t('resources.mcp.configJson')}</span>
+                  <button type="button" onClick={() => copyRelayConfigFor(tg.id)} className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline">{t('resources.mcp.copy')}</button>
+                </div>
+                <InspectorPreview text={JSON.stringify(cfg, null, 2)} />
+              </div>
+            )}
+            {tg.id === 'claude-code' && cmd && (
+              <div className="text-xs">
+                <div className="flex items-center justify-between text-zinc-500 mb-0.5">
+                  <span>{t('resources.mcp.cliCommand')}</span>
+                  <button type="button" onClick={() => copyRelaySetup(tg)} className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline">{t('resources.mcp.copy')}</button>
+                </div>
+                <InspectorPreview text={cmd} />
+              </div>
+            )}
+            <p className="text-[10px] text-zinc-400 leading-relaxed">
+              {st.api ? t('resources.mcp.guideApi') : st.relayVia === 'native' ? t('resources.mcp.nativeActive') : `${t('resources.mcp.viaBuiltinNote')}。${t('resources.mcp.nativeHint')}`}
+            </p>
+          </div>
+        </InspectorSection>
+        <InspectorSection title={t('resources.mcp.projectedHere', { n: projected.length })}>
+          {projected.length === 0 ? (
+            <p className="text-[11px] text-zinc-400">{t('resources.mcp.noneProjected')}</p>
+          ) : (
+            <ul className="space-y-1">
+              {projected.map(({ s: x, how }) => (
+                <li key={x.id} className="flex items-center gap-2 text-xs">
+                  <button type="button" onClick={() => setSelectedKey(`m:${x.id}`)} className="flex-1 text-left truncate text-zinc-700 dark:text-zinc-200 hover:text-blue-600">
+                    {x.display_name || x.name}
+                  </button>
+                  <span className="text-[10px] text-zinc-400">{how === 'project' ? t('resources.mcp.legacyConfig') : t('resources.mcp.viaRelayShort')}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </InspectorSection>
+        {otherKeys.length > 0 && (
+          <InspectorSection title={t('resources.mcp.otherInConfig', { n: otherKeys.length })}>
+            <div className="flex flex-wrap gap-1">
+              {otherKeys.map((k) => (
+                <code key={k} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">{k}</code>
+              ))}
+            </div>
+          </InspectorSection>
+        )}
+      </LibraryInspector>
+    );
+  }
+
+  function renderBuiltinMissingNote(st) {
+    if (st.builtinOk !== false) return null;
+    return <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1.5">{t('resources.mcp.builtinMissingNote')}</p>;
+  }
+
   function renderManagedView() {
     const selected = selectedKey?.startsWith('m:') ? servers.find(x => `m:${x.id}` === selectedKey) : null;
+    const selectedApp = selectedKey?.startsWith('app:') ? addTargets().find((tg) => `app:${tg.id}` === selectedKey) : null;
     const listServers = filteredManagedServers.filter((s) => !s.builtin && !isRelaySelfServer(s));
     return (
       <>
@@ -1699,6 +1868,7 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
             <p className="text-[11px] text-zinc-400 px-1">{t('resources.mcp.accessHint')}</p>
           </div>
           {selected && renderServerInspector(selected)}
+          {selectedApp && renderAppInspector(selectedApp)}
         </div>
       </>
     );
