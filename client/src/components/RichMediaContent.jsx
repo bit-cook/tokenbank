@@ -142,7 +142,8 @@ function renderTextWithPaths(text, keyPrefix, pathClassName) {
 /** 行内 Markdown */
 function renderInline(text, codeClassName = 'bg-gray-100 dark:bg-gray-800') {
   if (!text) return null;
-  const re = /(\*\*[^*]+\*\*|__[^_]+__|\*[^*]+\*|_[^_]+_|`[^`]+`|\[[^\]]+\]\([^)]+\))/g;
+  // `_` 强调要求两侧不是词字符/路径符，避免 `a_b_c.png` 这类文件名被拆成斜体
+  const re = /(\*\*[^*]+\*\*|(?<![\w/.\u4e00-\u9fff])__[^_]+__(?![\w\u4e00-\u9fff])|\*[^*\s][^*]*\*|(?<![\w/.\u4e00-\u9fff])_[^_\s][^_]*_(?![\w\u4e00-\u9fff])|`[^`]+`|\[[^\]]+\]\([^)]+\))/g;
   const parts = [];
   let last = 0;
   let m;
@@ -173,8 +174,9 @@ function renderInline(text, codeClassName = 'bg-gray-100 dark:bg-gray-800') {
     : 'text-zinc-700 dark:text-zinc-300 underline decoration-zinc-300/80 dark:decoration-zinc-600 underline-offset-2 hover:decoration-zinc-500 break-all';
 
   return parts.map((p, i) => {
-    if (p.type === 'bold') return <strong key={i} className="font-semibold">{p.value}</strong>;
-    if (p.type === 'italic') return <em key={i}>{p.value}</em>;
+    // 粗体 / 斜体内部继续解析（如 **文件：`/path/a.png`** 里的路径仍可点）
+    if (p.type === 'bold') return <strong key={i} className="font-semibold">{renderInline(p.value, codeClassName)}</strong>;
+    if (p.type === 'italic') return <em key={i}>{renderInline(p.value, codeClassName)}</em>;
     if (p.type === 'code') {
       const trimmed = p.value.trim();
       // 整段已是合法路径时直接可点；折行后的路径先拼回再识别
