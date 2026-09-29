@@ -1656,6 +1656,7 @@ export default {
   'circles.roleOwner': 'You own this',
   'circles.roleMember': 'Member',
   'circles.networkLink': 'Community network',
+  'circles.detail.statMembersLabel': 'Members',
   'circles.pageTitle': 'Circles',
   'circles.pageSubtitle': 'Share model quota and agents with people you trust — private and under your control',
   'circles.tab.mine': 'My circles',

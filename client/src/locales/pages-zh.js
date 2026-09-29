@@ -1662,6 +1662,7 @@ export default {
   'circles.roleOwner': '你是圈主',
   'circles.roleMember': '你是成员',
   'circles.networkLink': '社区网络',
+  'circles.detail.statMembersLabel': '成员',
   'circles.pageTitle': '圈子',
   'circles.pageSubtitle': '和信任的人共享模型额度与智能体，私密、可控',
   'circles.tab.mine': '我的圈子',
