@@ -3,306 +3,265 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>全球网络 · Token Bank</title>
-<meta name="description" content="在线节点、可用模型与智能体；点模型/智能体试用，点用户查看贡献">
+<title>社区网络 · Token Bank</title>
+<meta name="description" content="Token Bank 社区网络：在线模型、智能体、资源与圈子，点击即可网页试用">
+<link rel="icon" href="/static/logo.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/community.css">
 <script src="/static/vue.global.prod.js"></script>
 <style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --bg:#fff;--bg-muted:#f5f2f0;--bg-subtle:#faf9f5;
-  --text:#000;--text-muted:#7b7b7b;--text-faint:#bcbcbc;
-  --border:#e7e4e1;--accent:#f1ccff;--primary:#000;--primary-fg:#fff;
-  --ok:#16a34a;--link:#2563eb;
-  --radius:10px;--radius-lg:18px;
-  --font:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;
-  --mono:'Space Mono',ui-monospace,monospace;
+.mrow{grid-template-columns:minmax(0,1fr) 90px 110px 96px}
+.lrow{grid-template-columns:44px minmax(0,1fr) 120px 90px}
+@media (max-width:720px){
+  .mrow{grid-template-columns:minmax(0,1fr) 84px}
+  .lrow{grid-template-columns:36px minmax(0,1fr) 90px}
 }
-body{font-family:var(--font);background:var(--bg-subtle);color:var(--text);font-size:14px;min-height:100vh;-webkit-font-smoothing:antialiased}
-a{color:inherit;text-decoration:none}
-.shell{max-width:1100px;margin:0 auto;padding:24px 16px 48px}
-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
-.brand{display:flex;align-items:center;gap:10px;font-weight:600}
-.brand-mark{width:28px;height:28px;border-radius:8px;object-fit:contain;display:block;flex-shrink:0}
-.lang-btn,.ghost-btn{background:transparent;border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer;font-family:inherit;color:var(--text-muted)}
-.lang-btn:hover,.ghost-btn:hover{color:var(--text)}
-.h1{font-size:22px;font-weight:700;letter-spacing:-.02em}
-.sub{color:var(--text-muted);font-size:13px;margin-top:4px}
-.stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;margin:20px 0}
-.stat{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:14px}
-.stat .k{font-size:11px;color:var(--text-muted)}
-.stat .v{font-size:22px;font-weight:700;margin-top:4px}
-.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}
-@media(max-width:800px){.grid{grid-template-columns:1fr}}
-.panel{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;min-height:120px}
-.panel-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
-.panel-h h2{font-size:13px;font-weight:600}
-.panel-h .meta{font-size:11px;color:var(--text-muted)}
-.panel-h .hint{font-size:11px;color:var(--text-muted);margin-top:3px;font-weight:400}
-.list{display:flex;flex-direction:column;gap:8px;max-height:420px;overflow:auto}
-.row{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;background:var(--bg-muted);border:1px solid transparent;cursor:pointer;text-align:left;width:100%;font:inherit;color:inherit}
-.row:hover{border-color:var(--border);background:#fff}
-.row.disabled{cursor:default;opacity:.7}
-.row.disabled:hover{border-color:transparent;background:var(--bg-muted)}
-.dot{width:8px;height:8px;border-radius:50%;background:var(--ok);flex-shrink:0}
-.name{font-size:12px;font-weight:500;font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.desc{font-size:11px;color:var(--text-muted);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.side{margin-left:auto;text-align:right;flex-shrink:0;font-size:11px;color:var(--text-muted)}
-.side b{display:block;color:var(--text);font-weight:600;font-size:12px}
-.avatar{width:28px;height:28px;border-radius:9px;background:#dbeafe;color:#2563eb;font-size:12px;font-weight:600;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
-.tag{font-size:10px;padding:2px 6px;border-radius:6px;background:#eeeae6;color:var(--text-muted);flex-shrink:0;white-space:nowrap}
-.catalog-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:4px}
-@media(max-width:800px){.catalog-grid{grid-template-columns:1fr}}
-.catalog-group{min-width:0;background:var(--bg-muted);border-radius:12px;padding:12px}
-.catalog-group h3{font-size:12px;font-weight:600;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between}
-.catalog-group h3 .n{font-weight:400;color:var(--text-muted);font-size:11px}
-.catalog-group .list{max-height:280px}
-.rank.top{color:#d97706}
-.state{text-align:center;padding:32px;color:var(--text-muted);font-size:13px}
-.footer{margin-top:28px;text-align:center;color:var(--text-faint);font-size:12px}
-.link{color:var(--link);font-size:11px}
+.speed-fast{color:#15803d}.speed-mid{color:#a16207}.speed-slow{color:#b91c1c}
+.rank{font-weight:700;font-size:13px;text-align:center;color:var(--text-faint)}
+.rank.medal{font-size:18px}
 </style>
 </head>
 <body>
-<div id="app" class="shell">
-  <header>
-    <a class="brand" href="/">
-      <img class="brand-mark" src="/static/logo.svg" alt="Token Bank" width="28" height="28">
-      <span>Token Bank</span>
-    </a>
-    <div style="display:flex;gap:8px;align-items:center">
-      <button class="lang-btn" type="button" @click="toggleLang">{{ lang === 'zh' ? 'EN' : '中文' }}</button>
-      <a class="ghost-btn" href="/circles">{{ T.circlesNav }}</a>
-      <a class="ghost-btn" href="/app">{{ T.app }}</a>
+<div id="app" v-cloak>
+  <nav class="topnav">
+    <div class="topnav-in">
+      <a class="brand" href="/"><img src="/static/logo.svg" alt=""><span class="bt">Token Bank</span></a>
+      <div class="navlinks">
+        <a class="on" href="/network">{{ T.navNetwork }}</a>
+        <a href="/circles">{{ T.navCircles }}</a>
+      </div>
+      <div class="nav-right">
+        <button class="btn ghost sm" type="button" @click="toggleLang">{{ lang === 'zh' ? 'EN' : '中文' }}</button>
+        <a class="btn sm" href="/app">{{ loggedIn ? T.account : T.signIn }}</a>
+        <a class="btn primary sm hide-sm" href="/#download">{{ T.download }}</a>
+      </div>
     </div>
-  </header>
+  </nav>
 
-  <div class="h1">{{ T.title }}</div>
-  <p class="sub">{{ T.subtitle }}</p>
-
-  <div v-if="loading" class="state">{{ T.loading }}</div>
-  <div v-else-if="fatal" class="state">{{ fatal }}</div>
-  <template v-else>
-    <div class="stats">
-      <div class="stat"><div class="k">{{ T.nodes }}</div><div class="v">{{ summary.online_workers ?? 0 }}</div></div>
-      <div class="stat"><div class="k">{{ T.models }}</div><div class="v">{{ models.length }}</div></div>
-      <div class="stat"><div class="k">{{ T.agents }}</div><div class="v">{{ agents.length }}</div></div>
-      <div class="stat"><div class="k">{{ T.resources }}</div><div class="v">{{ catalogResources.length + studioScenes.length + studioMods.length }}</div></div>
-      <div class="stat"><div class="k">{{ T.circles }}</div><div class="v">{{ summary.circle_count ?? circles.length }}</div></div>
-      <div class="stat"><div class="k">{{ T.tokens }}</div><div class="v">{{ fmtTok(summary.contrib_tokens) }}</div></div>
-      <div class="stat"><div class="k">{{ T.users }}</div><div class="v">{{ summary.active_users ?? 0 }}</div></div>
+  <main class="page">
+    <div class="hero">
+      <div>
+        <h1>{{ T.title }} <span class="live"><i></i>{{ T.live.replace('{n}', String(summary.online_workers ?? 0)) }}</span></h1>
+        <p>{{ T.subtitle }}</p>
+      </div>
     </div>
 
-    <div class="grid">
-      <div class="panel">
-        <div class="panel-h">
-          <h2>{{ T.modelsTitle }}</h2>
-          <span class="meta">{{ T.tryHint }}</span>
+    <div class="statbar">
+      <div class="s" v-for="s in stats" :key="s.k">
+        <div class="k">{{ s.label }}</div>
+        <div class="v">
+          <span v-if="loading" class="skel" style="display:inline-block;width:48px;height:22px"></span>
+          <template v-else>{{ s.value }}</template>
         </div>
-        <div class="list" v-if="models.length">
-          <a v-for="m in models" :key="m.name" class="row" :href="m.mtype === 'embedding' ? undefined : ('/m/' + encodeURIComponent(m.name))" :style="m.mtype === 'embedding' ? {cursor:'default',opacity:0.85} : undefined" @click="m.mtype === 'embedding' && $event.preventDefault()">
-            <span class="dot"></span>
-            <div style="min-width:0;flex:1">
-              <div class="name">{{ m.name }}</div>
-              <div class="desc">{{ T.nodesN.replace('{n}', String(m.nodes)) }} · {{ typeLabel(m.mtype) }}</div>
-            </div>
-            <div class="side"><b>{{ m.avgMs ? m.avgMs + ' ms' : '—' }}</b>{{ tryLabel(m.mtype) }}</div>
-          </a>
-        </div>
-        <div v-else class="state">{{ T.emptyModels }}</div>
+      </div>
+    </div>
+
+    <p v-if="fatal" class="empty">{{ fatal }}</p>
+
+    <template v-else>
+      <div class="tabs" role="tablist">
+        <button v-for="tb in TABS" :key="tb.id" type="button" role="tab" :class="{ on: tab === tb.id }" @click="setTab(tb.id)">
+          {{ tb.label }}<span class="n" v-if="tb.n != null">{{ tb.n }}</span>
+        </button>
       </div>
 
-      <div class="panel">
-        <div class="panel-h">
-          <h2>{{ T.agentsTitle }}</h2>
-          <span class="meta">{{ T.tryHint }}</span>
-        </div>
-        <div class="list" v-if="agents.length">
-          <a v-for="a in agents" :key="a.id + '@' + (a.worker_id||'')" class="row" :href="'/a/' + encodeURIComponent(a.id)">
-            <span class="dot"></span>
-            <div style="min-width:0;flex:1">
-              <div class="name">{{ a.display_name || a.name || a.id }}</div>
-              <div class="desc">{{ a.description || T.noDesc }}</div>
-            </div>
-            <div class="side"><b>{{ a.owner_nickname || '—' }}</b>{{ T.tryAgent }}</div>
-          </a>
-        </div>
-        <div v-else class="state">{{ T.emptyAgents }}</div>
-      </div>
-
-      <!-- 可用资源：按类型分栏，一行两列 -->
-      <div class="panel" style="grid-column:1 / -1">
-        <div class="panel-h">
-          <div>
-            <h2>{{ T.catalogTitle }}</h2>
-            <div class="hint">{{ T.catalogHint.replace('{n}', String(catalogResources.length)) }}</div>
-          </div>
-          <span class="meta">{{ T.catalogUseHint }}</span>
-        </div>
-        <div v-if="catalogByType.length || studioScenes.length || studioMods.length" class="catalog-grid">
-          <div v-for="g in catalogByType" :key="g.type" class="catalog-group">
-            <h3>
-              <span>{{ g.label }}</span>
-              <span class="n">{{ g.items.length }}</span>
-            </h3>
-            <div class="list">
-              <div
-                v-for="r in g.items"
-                :key="r.catalog_id"
-                class="row disabled"
-              >
-                <div style="min-width:0;flex:1">
-                  <div class="name" style="font-family:inherit">{{ r.display_name || r.name }}</div>
-                  <div class="desc">{{ r.description || T.noDesc }}</div>
-                </div>
-                <div class="side">
-                  <b>{{ T.sharedBy.replace('{handle}', r.sharer || '—') }}</b>
-                  {{ r.user_recommended ? T.catalogUser : '' }}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- 社区圈：场景 / 玩法 -->
-          <div v-if="studioScenes.length" class="catalog-group">
-            <h3><span>{{ lang==='zh'?'场景 / 玩法':'Scenes' }}</span><span class="n">{{ studioScenes.length }}</span></h3>
-            <div class="list">
-              <a v-for="s in studioScenes" :key="'sc'+s.id" class="row" :href="'/studio/chat?id='+s.id" style="text-decoration:none;color:inherit">
-                <div style="min-width:0;flex:1">
-                  <div class="name" style="font-family:inherit">{{ s.icon }} {{ s.name }} <span style="font-size:10px;background:#f1ccff;color:#000;border-radius:5px;padding:1px 6px">{{lang==='zh'?'官方':'Official'}}</span></div>
-                  <div class="desc">{{ s.intro || T.noDesc }}</div>
-                </div>
-                <div class="side"><b>{{ s.default_model || '—' }}</b></div>
-              </a>
-            </div>
-          </div>
-
-          <!-- 社区圈：插件 / 设定 -->
-          <div v-if="studioMods.length" class="catalog-group">
-            <h3><span>{{ lang==='zh'?'插件 / 设定':'Plugins' }}</span><span class="n">{{ studioMods.length }}</span></h3>
-            <div class="list">
-              <div v-for="m in studioMods" :key="'md'+m.id" class="row disabled">
-                <div style="min-width:0;flex:1">
-                  <div class="name" style="font-family:inherit">{{ m.name }} <span style="font-size:10px;color:#9a9a9a">🔒</span></div>
-                  <div class="desc">{{ m.intro || T.noDesc }}</div>
-                </div>
-                <div class="side"><b class="mono">{{ m.price }}⚡</b></div>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div v-else class="state">{{ T.emptyCatalog }}</div>
-      </div>
-
-      <div class="panel" style="grid-column:1 / -1">
-        <div class="panel-h">
-          <h2>{{ T.circlesTitle }}</h2>
-          <a class="meta link" href="/circles">{{ T.circlesMore }}</a>
-        </div>
-        <div class="list" v-if="circles.length">
-          <button
-            v-for="c in circles"
-            :key="c.id"
-            type="button"
-            class="row"
-            :disabled="circleBusyId === c.id"
-            @click="onCircleClick(c)"
-          >
-            <span class="avatar">{{ (c.name || '?').slice(0, 1) }}</span>
-            <div style="min-width:0;flex:1">
-              <div class="name" style="font-family:inherit">{{ c.name }}</div>
-              <div class="desc">{{ c.description || T.noDesc }}</div>
-            </div>
-            <div class="side">
-              <b>{{ T.membersN.replace('{n}', String(c.member_count ?? 0)) }}</b>
-              {{ circleStatus(c) }}
-            </div>
+      <!-- 工具栏：搜索 + 类型筛选（排行无搜索） -->
+      <div class="toolbar" v-if="tab !== 'rank'">
+        <label class="search">
+          <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="9" r="5.5"/><path d="M13.5 13.5 17 17" stroke-linecap="round"/></svg>
+          <input v-model="q" :placeholder="T.searchPh[tab] || T.search" @keydown.esc="q=''">
+        </label>
+        <div class="chips" v-if="tab === 'models'">
+          <button v-for="f in modelFilters" :key="f.id" type="button" class="chip" :class="{ on: mtype === f.id }" @click="mtype = f.id">
+            {{ f.label }}<span class="n">{{ f.n }}</span>
           </button>
         </div>
-        <div v-else class="state">{{ T.emptyCircles }}</div>
+        <div class="chips" v-if="tab === 'resources'">
+          <button v-for="f in resFilters" :key="f.id" type="button" class="chip" :class="{ on: rtype === f.id }" @click="rtype = f.id">
+            {{ f.label }}<span class="n">{{ f.n }}</span>
+          </button>
+        </div>
+        <span class="right">{{ T.tryTip }}</span>
       </div>
 
-      <div class="panel" style="grid-column:1 / -1">
-        <div class="panel-h">
-          <h2>{{ T.leaderboard }}</h2>
-          <span class="meta">{{ T.leaderboardHint }}</span>
+      <!-- 加载骨架 -->
+      <div v-if="loading" class="table">
+        <div v-for="i in 6" :key="i" class="trow" style="grid-template-columns:1fr 120px">
+          <span class="skel" style="height:14px;width:40%"></span><span class="skel" style="height:14px"></span>
         </div>
-        <div class="list" v-if="topWorkers.length">
-          <component
-            :is="w.sharer ? 'a' : 'div'"
-            v-for="(w, i) in topWorkers"
-            :key="w.sharer || w.worker_id || w.name"
-            class="row"
-            :class="{ disabled: !w.sharer }"
-            :href="w.sharer ? '/u/' + encodeURIComponent(w.sharer) : undefined"
-          >
-            <span class="rank" :class="{ top: i < 3 }">#{{ i + 1 }}</span>
-            <div style="min-width:0;flex:1">
-              <div class="name" style="font-family:inherit">{{ w.name }}</div>
-              <div class="desc">{{ offerText(w) }}</div>
+      </div>
+
+      <!-- 模型：密集表格 -->
+      <template v-else-if="tab === 'models'">
+        <div class="table" v-if="shownModels.length">
+          <div class="thead mrow">
+            <span>{{ T.colModel }}</span><span class="num hide-sm">{{ T.colNodes }}</span><span class="num hide-sm">{{ T.colLatency }}</span><span></span>
+          </div>
+          <a v-for="m in shownModels" :key="m.name" class="trow mrow"
+             :href="m.mtype === 'embedding' ? undefined : ('/m/' + encodeURIComponent(m.name))"
+             @click="m.mtype === 'embedding' && $event.preventDefault()">
+            <div style="display:flex;align-items:center;gap:10px;min-width:0">
+              <span class="dot ok"></span>
+              <span class="mono ell">{{ m.name }}</span>
+              <span class="badge" :class="typeBadge(m.mtype)">{{ typeLabel(m.mtype) }}</span>
             </div>
-            <div class="side">
-              <b>{{ fmtTok(w.period_tokens) }} tok</b>
-              {{ w.avg_latency_ms || 0 }} ms
+            <span class="num small muted hide-sm">{{ T.nodesN.replace('{n}', String(m.nodes)) }}</span>
+            <span class="num small hide-sm" :class="speedCls(m.avgMs)">{{ m.avgMs ? fmtMs(m.avgMs) : '—' }}</span>
+            <span style="text-align:right">
+              <span v-if="m.mtype !== 'embedding'" class="btn sm cta">{{ m.mtype === 'image' ? T.tryImage : T.tryChat }}</span>
+              <span v-else class="xs faint">{{ T.noWeb }}</span>
+            </span>
+          </a>
+        </div>
+        <div v-else class="empty"><div class="e">🔍</div>{{ q ? T.noMatch : T.emptyModels }}</div>
+      </template>
+
+      <!-- 智能体：卡片网格 -->
+      <template v-else-if="tab === 'agents'">
+        <div class="grid" v-if="shownAgents.length">
+          <a v-for="a in shownAgents" :key="a.id + '@' + (a.worker_id || '')" class="card" :href="'/a/' + encodeURIComponent(a.id)">
+            <div class="card-h">
+              <span class="av" :style="{ background: color(agentName(a)) }">{{ agentName(a).slice(0, 1) }}</span>
+              <div style="min-width:0;flex:1">
+                <div class="card-t ell">{{ agentName(a) }}</div>
+                <div class="xs muted ell">@{{ a.owner_nickname || '—' }}<template v-if="a.runtime"> · {{ a.runtime }}</template></div>
+              </div>
+            </div>
+            <div class="card-d">{{ a.description || T.noDesc }}</div>
+            <div class="card-f">
+              <span class="dot ok"></span><span class="xs muted">{{ T.online }}</span>
+              <span class="btn sm primary" style="margin-left:auto">{{ T.tryAgent }}</span>
+            </div>
+          </a>
+        </div>
+        <div v-else class="empty"><div class="e">🤖</div>{{ q ? T.noMatch : T.emptyAgents }}</div>
+      </template>
+
+      <!-- 资源：卡片网格（技能 / 提示词 / 智能体 / 场景 / 插件） -->
+      <template v-else-if="tab === 'resources'">
+        <div class="grid" v-if="shownResources.length">
+          <component :is="r.href ? 'a' : 'div'" v-for="r in shownResources" :key="r.key" class="card" :href="r.href || undefined">
+            <div class="card-h">
+              <span class="av sm" :style="{ background: color(r.name) }">{{ r.icon || r.name.slice(0, 1) }}</span>
+              <div style="min-width:0;flex:1">
+                <div class="card-t ell" style="font-size:13px">{{ r.name }}</div>
+              </div>
+              <span class="badge" :class="r.badgeCls">{{ r.typeLabel }}</span>
+            </div>
+            <div class="card-d">{{ r.desc || T.noDesc }}</div>
+            <div class="card-f">
+              <span class="xs muted ell">{{ r.meta }}</span>
+              <span v-if="r.href" class="xs link" style="margin-left:auto">{{ T.use }} →</span>
+              <span v-else class="xs faint" style="margin-left:auto">{{ r.side }}</span>
             </div>
           </component>
         </div>
-        <div v-else class="state">{{ T.emptyRank }}</div>
-      </div>
-    </div>
-  </template>
+        <div v-else class="empty"><div class="e">📦</div>{{ q ? T.noMatch : T.emptyResources }}</div>
+      </template>
 
-  <div class="footer">Token Bank · {{ T.footer }} · <a class="link" href="/">{{ T.home }}</a></div>
+      <!-- 圈子：卡片网格，申请统一在圈子页完成 -->
+      <template v-else-if="tab === 'circles'">
+        <div class="grid" v-if="shownCircles.length">
+          <a v-for="c in shownCircles" :key="c.id" class="card" :href="c.join_status === 'member' ? '/c/' + c.id : '/circles/browse?q=' + encodeURIComponent(c.name || '')">
+            <div class="card-h">
+              <span class="av" :style="{ background: color(c.name) }">{{ (c.name || '?').slice(0, 1) }}</span>
+              <div style="min-width:0;flex:1">
+                <div class="card-t ell">{{ c.name }}</div>
+                <div class="xs muted">{{ T.membersN.replace('{n}', String(c.member_count ?? 0)) }}<template v-if="c.max_members"> / {{ c.max_members }}</template></div>
+              </div>
+            </div>
+            <div class="card-d">{{ c.description || T.noDesc }}</div>
+            <div class="bar" v-if="c.max_members"><i :class="{ hot: pct(c) >= 90 }" :style="{ width: Math.max(pct(c), 3) + '%' }"></i></div>
+            <div class="card-f">
+              <span class="badge" :class="circleBadge(c)">{{ circleStatus(c) }}</span>
+              <span class="xs link" style="margin-left:auto">{{ c.join_status === 'member' ? T.enter : T.view }} →</span>
+            </div>
+          </a>
+        </div>
+        <div v-else class="empty"><div class="e">👥</div>{{ q ? T.noMatch : T.emptyCircles }}</div>
+      </template>
+
+      <!-- 供给排行 -->
+      <template v-else-if="tab === 'rank'">
+        <div class="table" v-if="topWorkers.length">
+          <div class="thead lrow">
+            <span style="text-align:center">#</span><span>{{ T.colSharer }}</span><span class="num">{{ T.colTokens }}</span><span class="num hide-sm">{{ T.colLatency }}</span>
+          </div>
+          <component :is="w.sharer ? 'a' : 'div'" v-for="(w, i) in topWorkers" :key="w.sharer || w.worker_id || w.name"
+                     class="trow lrow" :class="{ hover: !!w.sharer }" :href="w.sharer ? '/u/' + encodeURIComponent(w.sharer) : undefined"
+                     :style="i < 3 ? 'background:#fffcf2' : ''">
+            <span class="rank" :class="{ medal: i < 3 }">{{ ['🥇','🥈','🥉'][i] || (i + 1) }}</span>
+            <div style="min-width:0">
+              <div class="ell" style="font-weight:550">{{ w.name }}</div>
+              <div class="xs muted ell">{{ offerText(w) }}</div>
+            </div>
+            <span class="num" style="font-weight:600">{{ fmtTok(w.period_tokens) }}<span class="xs muted"> tok</span></span>
+            <span class="num small muted hide-sm">{{ w.avg_latency_ms ? fmtMs(w.avg_latency_ms) : '—' }}</span>
+          </component>
+        </div>
+        <div v-else class="empty"><div class="e">🏆</div>{{ T.emptyRank }}</div>
+      </template>
+    </template>
+  </main>
+
+  <footer class="footer">
+    <span>Token Bank · {{ T.footer }}</span><a href="/">{{ T.home }}</a><a href="/circles">{{ T.navCircles }}</a>
+  </footer>
 </div>
 
 <script>
 const { createApp, ref, computed, onMounted } = Vue
 
+const AV_COLORS = ['#2563eb', '#7c3aed', '#059669', '#d97706', '#db2777', '#0d9488', '#4f46e5']
+function color(name) {
+  let h = 0; const s = String(name || '')
+  for (let i = 0; i < s.length; i++) h = s.charCodeAt(i) + ((h << 5) - h)
+  return AV_COLORS[Math.abs(h) % AV_COLORS.length]
+}
+
 createApp({
   setup() {
-    const lang = ref((localStorage.getItem('tb_lang') || ((navigator.language || '').startsWith('zh') ? 'zh' : 'en')))
+    const lang = ref(localStorage.getItem('tb_lang') || ((navigator.language || '').startsWith('zh') ? 'zh' : 'en'))
     const i18n = {
       zh: {
-        title: '全球网络', subtitle: '点模型或智能体试用；点用户查看贡献者主页与其分享的模型',
-        loading: '加载中…', app: '账户', home: '首页', footer: '实时公开供给',
-        nodes: '在线节点', models: '可用模型', agents: '智能体', resources: '资源', circles: '圈子', tokens: '贡献 Token', users: '活跃用户',
-        modelsTitle: '可用模型', agentsTitle: '可用智能体', circlesTitle: '圈子列表', leaderboard: '供给排行',
-        leaderboardHint: '按 Token / 接单量 · 点用户进主页', tryHint: '点击试用',
-        tryModel: '对话 →', tryImage: '生图 →', tryEmbed: '嵌入', tryAgent: '试用 →', nodesN: '{n} 节点', noDesc: '暂无简介',
+        navNetwork: '社区网络', navCircles: '圈子', account: '我的账户', signIn: '登录', download: '下载客户端',
+        title: '社区网络', live: '{n} 个节点在线',
+        subtitle: '由社区节点共同构成的模型与智能体网络。点击任意模型或智能体，直接在网页里试用。',
+        nodes: '在线节点', models: '模型', agents: '智能体', resources: '资源', circles: '圈子', tokens: '本周期 Token', users: '活跃贡献者',
+        tabModels: '模型', tabAgents: '智能体', tabResources: '资源', tabCircles: '圈子', tabRank: '供给排行',
+        search: '搜索', searchPh: { models: '搜索模型…', agents: '搜索智能体、作者或用途…', resources: '搜索技能、提示词、场景…', circles: '搜索圈子…' },
+        tryTip: '点击即可试用', all: '全部',
+        colModel: '模型', colNodes: '节点', colLatency: '首字延迟', colSharer: '贡献者', colTokens: '本周期',
+        nodesN: '{n} 节点', membersN: '{n} 人', noDesc: '暂无简介', online: '在线',
+        tryChat: '对话', tryImage: '生图', tryAgent: '试用', noWeb: '仅 API', use: '使用', enter: '进入', view: '查看',
         typeChat: '文本', typeVision: '图文', typeImage: '生图', typeEmbedding: '嵌入',
-        membersN: '{n} 人', circleOpen: '可申请', circleFull: '已满', circleJoined: '已加入', circlePending: '已申请',
-        circlesNav: '圈子', circlesMore: '管理圈子 →', emptyCircles: '暂无公开圈子',
-        catalogTitle: '可用资源', catalogCount: '{n} 项上架', emptyCatalog: '暂无上架的社区资源',
-        catalogHint: '{n} 项上架', catalogUseHint: '可以在客户端中纳管使用',
-        catalogTypePrompt: '提示词', catalogTypeSkill: '技能', catalogTypeAssistant: '智能体',
-        catalogUser: '用户分享', sharedBy: '分享人 @{handle}',
-        circleApplyConfirm: '是否申请加入「{name}」？',
-        circleApplySent: '已向「{name}」发送入圈申请',
-        circlePendingHint: '已申请，等待圈主通过',
-        circleNeedLogin: '请先登录后再申请加入圈子，是否前往登录？',
-        emptyModels: '暂无在线模型', emptyAgents: '暂无在线智能体', emptyRank: '暂无供给数据',
+        rtSkill: '技能', rtPrompt: '提示词', rtAssistant: '智能体', rtScene: '场景', rtPlugin: '插件',
+        official: '官方', userShare: '用户分享', sharedBy: '@{handle}', useInApp: '在客户端纳管',
+        circleOpen: '可申请', circleFull: '已满', circleJoined: '已加入', circlePending: '已申请',
+        noMatch: '没有匹配的结果', emptyModels: '暂无在线模型', emptyAgents: '暂无在线智能体', emptyResources: '暂无上架资源',
+        emptyCircles: '暂无公开圈子', emptyRank: '暂无供给数据',
+        footer: '实时公开供给', home: '首页', fatal: '无法连接服务器，请稍后再试',
       },
       en: {
-        title: 'Global network', subtitle: 'Try models or agents; open a contributor profile for shared offers',
-        loading: 'Loading…', app: 'Account', home: 'Home', footer: 'Live public supply',
-        nodes: 'Online nodes', models: 'Models', agents: 'Agents', resources: 'Resources', circles: 'Circles', tokens: 'Tokens', users: 'Active users',
-        modelsTitle: 'Available models', agentsTitle: 'Available agents', circlesTitle: 'Circles', leaderboard: 'Offer leaderboard',
-        leaderboardHint: 'By tokens / jobs · tap user for profile', tryHint: 'Click to try',
-        tryModel: 'Chat →', tryImage: 'Image →', tryEmbed: 'Embed', tryAgent: 'Try →', nodesN: '{n} nodes', noDesc: 'No description',
+        navNetwork: 'Network', navCircles: 'Circles', account: 'My account', signIn: 'Sign in', download: 'Download',
+        title: 'Community network', live: '{n} nodes online',
+        subtitle: 'Models and agents shared by community nodes. Click any of them to try it right in your browser.',
+        nodes: 'Online nodes', models: 'Models', agents: 'Agents', resources: 'Resources', circles: 'Circles', tokens: 'Tokens this period', users: 'Active sharers',
+        tabModels: 'Models', tabAgents: 'Agents', tabResources: 'Resources', tabCircles: 'Circles', tabRank: 'Leaderboard',
+        search: 'Search', searchPh: { models: 'Search models…', agents: 'Search agents, owners or use cases…', resources: 'Search skills, prompts, scenes…', circles: 'Search circles…' },
+        tryTip: 'Click to try', all: 'All',
+        colModel: 'Model', colNodes: 'Nodes', colLatency: 'First token', colSharer: 'Sharer', colTokens: 'This period',
+        nodesN: '{n} nodes', membersN: '{n} members', noDesc: 'No description', online: 'Online',
+        tryChat: 'Chat', tryImage: 'Image', tryAgent: 'Try', noWeb: 'API only', use: 'Use', enter: 'Open', view: 'View',
         typeChat: 'Text', typeVision: 'Vision', typeImage: 'Image', typeEmbedding: 'Embedding',
-        membersN: '{n} members', circleOpen: 'Open', circleFull: 'Full', circleJoined: 'Joined', circlePending: 'Pending',
-        circlesNav: 'Circles', circlesMore: 'Manage circles →', emptyCircles: 'No public circles yet',
-        catalogTitle: 'Available resources', catalogCount: '{n} listed', emptyCatalog: 'No listed community resources yet',
-        catalogHint: '{n} listed', catalogUseHint: 'Adopt and use in the client app',
-        catalogTypePrompt: 'Prompt', catalogTypeSkill: 'Skill', catalogTypeAssistant: 'Assistant',
-        catalogUser: 'User share', sharedBy: 'Shared by @{handle}',
-        circleApplyConfirm: 'Apply to join “{name}”?',
-        circleApplySent: 'Join request sent to “{name}”',
-        circlePendingHint: 'Request pending owner approval',
-        circleNeedLogin: 'Sign in to apply for circles. Go to login?',
-        emptyModels: 'No online models', emptyAgents: 'No online agents', emptyRank: 'No data yet',
+        rtSkill: 'Skill', rtPrompt: 'Prompt', rtAssistant: 'Agent', rtScene: 'Scene', rtPlugin: 'Plugin',
+        official: 'Official', userShare: 'User share', sharedBy: '@{handle}', useInApp: 'Adopt in the app',
+        circleOpen: 'Open', circleFull: 'Full', circleJoined: 'Joined', circlePending: 'Pending',
+        noMatch: 'No matches', emptyModels: 'No online models', emptyAgents: 'No online agents', emptyResources: 'No listed resources',
+        emptyCircles: 'No public circles yet', emptyRank: 'No data yet',
+        footer: 'Live public supply', home: 'Home', fatal: 'Cannot reach the server, try again later',
       },
     }
     const T = computed(() => i18n[lang.value] || i18n.zh)
@@ -312,6 +271,7 @@ createApp({
       document.documentElement.lang = lang.value === 'zh' ? 'zh-CN' : 'en'
     }
 
+    const loggedIn = !!(localStorage.getItem('user_token') || '')
     const loading = ref(true)
     const fatal = ref('')
     const summary = ref({})
@@ -320,149 +280,115 @@ createApp({
     const availableModelTypes = ref({})
     const agents = ref([])
     const circles = ref([])
-    const catalogResources = ref([])
-    const studioScenes = ref([])   // 社区圈官方场景
-    const studioMods = ref([])     // 社区圈官方插件
-    const circleBusyId = ref(null)
+    const catalog = ref([])
+    const scenes = ref([])
+    const mods = ref([])
 
-    function getToken() {
-      try { return localStorage.getItem('user_token') || '' } catch { return '' }
-    }
-
-    function catalogTypeShort(type) {
-      if (type === 'prompt') return T.value.catalogTypePrompt
-      if (type === 'assistant') return T.value.catalogTypeAssistant
-      return T.value.catalogTypeSkill
-    }
-
-    // 按资源类型分组，供两列分栏展示
-    const catalogByType = computed(() => {
-      const order = ['skill', 'prompt', 'assistant']
-      const map = { skill: [], prompt: [], assistant: [] }
-      for (const r of catalogResources.value) {
-        const t = r.type === 'agent' ? 'assistant' : r.type
-        if (map[t]) map[t].push(r)
-        else map.skill.push(r)
-      }
-      return order
-        .filter((k) => map[k].length)
-        .map((k) => ({ type: k, label: catalogTypeShort(k), items: map[k].slice(0, 24) }))
-    })
-
-    function circleStatus(c) {
-      if (circleBusyId.value === c.id) return lang.value === 'zh' ? '申请中…' : 'Applying…'
-      if (c.join_status === 'member') return T.value.circleJoined
-      if (c.join_status === 'pending') return T.value.circlePending
-      if (c.full) return T.value.circleFull
-      return T.value.circleOpen
-    }
-
-    async function onCircleClick(c) {
-      const tok = getToken()
-      if (!tok) {
-        if (confirm(T.value.circleNeedLogin)) location.href = '/circles'
-        return
-      }
-      if (c.join_status === 'member') {
-        location.href = '/c/' + encodeURIComponent(c.id)
-        return
-      }
-      if (c.join_status === 'pending') {
-        alert(T.value.circlePendingHint)
-        return
-      }
-      if (c.full) {
-        alert(T.value.circleFull)
-        return
-      }
-      if (!confirm(T.value.circleApplyConfirm.replace('{name}', c.name || ''))) return
-      circleBusyId.value = c.id
-      try {
-        const r = await fetch('/user/circles/' + encodeURIComponent(c.id) + '/apply', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: 'Bearer ' + tok,
-          },
-          body: JSON.stringify({ message: '' }),
-        })
-        let data = null
-        try { data = await r.json() } catch { data = null }
-        if (r.status === 401) {
-          alert(T.value.circleNeedLogin)
-          location.href = '/circles'
-          return
-        }
-        if (!r.ok) {
-          const msg = typeof data?.detail === 'string' ? data.detail : (lang.value === 'zh' ? '申请失败' : 'Apply failed')
-          alert(msg)
-          return
-        }
-        if (data?.already_member) {
-          c.join_status = 'member'
-          location.href = '/c/' + encodeURIComponent(c.id)
-          return
-        }
-        if (data?.full) {
-          c.full = true
-          alert(T.value.circleFull)
-          return
-        }
-        c.join_status = 'pending'
-        alert(T.value.circleApplySent.replace('{name}', c.name || ''))
-      } catch {
-        alert(lang.value === 'zh' ? '网络错误' : 'Network error')
-      } finally {
-        circleBusyId.value = null
-      }
+    // 页签 + 筛选（页签写入 URL hash，可分享 / 刷新保持）
+    const VALID = ['models', 'agents', 'resources', 'circles', 'rank']
+    const tab = ref(VALID.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'models')
+    const q = ref('')
+    const mtype = ref('all')
+    const rtype = ref('all')
+    function setTab(id) {
+      tab.value = id; q.value = ''
+      try { history.replaceState(null, '', '#' + id) } catch {}
     }
 
     function fmtTok(n) {
       const v = Number(n) || 0
+      if (v >= 1e9) return (v / 1e9).toFixed(1).replace(/\.0$/, '') + 'B'
       if (v >= 1e6) return (v / 1e6).toFixed(1).replace(/\.0$/, '') + 'M'
       if (v >= 1e3) return (v / 1e3).toFixed(1).replace(/\.0$/, '') + 'K'
       return String(v)
     }
-
-    function offerText(w) {
-      const models = (w.models || []).map(m => typeof m === 'string' ? m : m?.name).filter(Boolean)
-      const ag = Array.isArray(w.agents) ? w.agents.map(a => typeof a === 'string' ? a : a?.display_name || a?.name).filter(Boolean) : []
-      const parts = [...models.slice(0, 3), ...ag.slice(0, 2)]
-      return parts.join(' · ') || '—'
-    }
+    function fmtMs(ms) { return ms >= 1000 ? (ms / 1000).toFixed(1) + 's' : Math.round(ms) + 'ms' }
+    function speedCls(ms) { if (!ms) return 'muted'; return ms < 1200 ? 'speed-fast' : ms < 2500 ? 'speed-mid' : 'speed-slow' }
+    const match = (...vals) => { const k = q.value.trim().toLowerCase(); return !k || vals.some(v => String(v || '').toLowerCase().includes(k)) }
 
     const models = computed(() => {
       const typeMap = availableModelTypes.value || {}
-      const ids = availableModels.value.length
-        ? availableModels.value
-        : [...new Set(workers.value.flatMap(w => (w.models || []).map(m => typeof m === 'string' ? m : m?.name).filter(Boolean)))]
+      const names = w => (w.models || []).map(m => typeof m === 'string' ? m : m?.name).filter(Boolean)
+      const ids = availableModels.value.length ? availableModels.value : [...new Set(workers.value.flatMap(names))]
       return ids.map(name => {
-        const nodes = workers.value.filter(w => (w.models || []).some(m => (typeof m === 'string' ? m : m?.name) === name)).length
+        const nodes = workers.value.filter(w => names(w).includes(name)).length
         let sum = 0, n = 0
         for (const w of workers.value) {
           const ml = w.model_latency && w.model_latency[name]
           if (ml && ml.avg_ttft_ms != null) { sum += ml.avg_ttft_ms; n++ }
         }
-        const rawType = typeMap[name]
-        // 四类：chat / vision / image / embedding（名称启发式纠偏）
-        let mtype = ['chat', 'vision', 'image', 'embedding'].includes(rawType) ? rawType : 'chat'
+        let t = ['chat', 'vision', 'image', 'embedding'].includes(typeMap[name]) ? typeMap[name] : 'chat'
         const low = String(name).toLowerCase()
-        if (/(?:^|[\-_/])image(?:[\-_/]|$|\d)|gpt-image|dall-e|dalle|stable-diffusion|flux-|midjourney|sdxl/.test(low)) mtype = 'image'
-        else if (/embed|text-embedding|bge-|e5-/.test(low)) mtype = 'embedding'
-        return { name, nodes, avgMs: n ? Math.round(sum / n) : (null), mtype }
+        if (/(?:^|[\-_/])image(?:[\-_/]|$|\d)|gpt-image|dall-e|dalle|stable-diffusion|flux-|midjourney|sdxl|seedream/.test(low)) t = 'image'
+        else if (/embed|text-embedding|bge-|e5-/.test(low)) t = 'embedding'
+        return { name, nodes, avgMs: n ? Math.round(sum / n) : null, mtype: t }
       }).sort((a, b) => b.nodes - a.nodes || a.name.localeCompare(b.name))
     })
+    const modelFilters = computed(() => {
+      const c = t => models.value.filter(m => m.mtype === t).length
+      return [
+        { id: 'all', label: T.value.all, n: models.value.length },
+        ...['chat', 'vision', 'image', 'embedding'].map(id => ({ id, label: typeLabel(id), n: c(id) })).filter(f => f.n > 0),
+      ]
+    })
+    const shownModels = computed(() => models.value.filter(m => (mtype.value === 'all' || m.mtype === mtype.value) && match(m.name)))
 
-    function typeLabel(t) {
-      if (t === 'image') return T.value.typeImage
-      if (t === 'vision') return T.value.typeVision
-      if (t === 'embedding') return T.value.typeEmbedding
-      return T.value.typeChat
+    function agentName(a) {
+      const owner = String(a.owner_nickname || '').trim()
+      let n = String(a.display_name || a.name || a.id || '').trim()
+      if (owner && n.startsWith(owner + '的')) n = n.slice(owner.length + 1)
+      return n || '—'
     }
-    function tryLabel(t) {
-      if (t === 'image') return T.value.tryImage
-      if (t === 'embedding') return T.value.tryEmbed
-      return T.value.tryModel
+    const shownAgents = computed(() => agents.value.filter(a => match(agentName(a), a.owner_nickname, a.description, a.runtime)))
+
+    // 资源统一成卡片数据：社区目录 + 官方场景 / 插件
+    const resources = computed(() => {
+      const t = T.value
+      const typeOf = r => (r.type === 'agent' ? 'assistant' : (['prompt', 'assistant'].includes(r.type) ? r.type : 'skill'))
+      const lbl = { skill: t.rtSkill, prompt: t.rtPrompt, assistant: t.rtAssistant }
+      const cls = { skill: 'blue', prompt: 'amber', assistant: 'purple' }
+      return [
+        ...catalog.value.map(r => {
+          const ty = typeOf(r)
+          return {
+            key: 'c' + r.catalog_id, type: ty, name: r.display_name || r.name || '—', desc: r.description,
+            typeLabel: lbl[ty], badgeCls: cls[ty],
+            meta: r.sharer ? t.sharedBy.replace('{handle}', r.sharer) : (r.user_recommended ? t.userShare : t.official),
+            side: t.useInApp,
+          }
+        }),
+        ...scenes.value.map(s => ({ key: 's' + s.id, type: 'scene', name: s.name || '—', icon: s.icon, desc: s.intro, typeLabel: t.rtScene, badgeCls: 'green', meta: s.default_model || t.official, href: '/studio/chat?id=' + s.id })),
+        ...mods.value.map(m => ({ key: 'm' + m.id, type: 'plugin', name: m.name || '—', desc: m.intro, typeLabel: t.rtPlugin, badgeCls: '', meta: t.official, side: (m.price ?? 0) + ' ⚡' })),
+      ]
+    })
+    const resFilters = computed(() => {
+      const t = T.value
+      const c = ty => resources.value.filter(r => r.type === ty).length
+      return [
+        { id: 'all', label: t.all, n: resources.value.length },
+        { id: 'skill', label: t.rtSkill, n: c('skill') },
+        { id: 'prompt', label: t.rtPrompt, n: c('prompt') },
+        { id: 'assistant', label: t.rtAssistant, n: c('assistant') },
+        { id: 'scene', label: t.rtScene, n: c('scene') },
+        { id: 'plugin', label: t.rtPlugin, n: c('plugin') },
+      ].filter(f => f.id === 'all' || f.n > 0)
+    })
+    const shownResources = computed(() => resources.value.filter(r => (rtype.value === 'all' || r.type === rtype.value) && match(r.name, r.desc, r.meta)))
+
+    const shownCircles = computed(() => circles.value.filter(c => match(c.name, c.description)))
+    function pct(c) { return c.max_members ? Math.min(100, Math.round((c.member_count || 0) / c.max_members * 100)) : 0 }
+    function circleStatus(c) {
+      const t = T.value
+      if (c.join_status === 'member') return t.circleJoined
+      if (c.join_status === 'pending') return t.circlePending
+      if (c.full) return t.circleFull
+      return t.circleOpen
+    }
+    function circleBadge(c) {
+      if (c.join_status === 'member') return 'green'
+      if (c.join_status === 'pending') return 'amber'
+      if (c.full) return ''
+      return 'blue'
     }
 
     const topWorkers = computed(() => {
@@ -470,85 +396,101 @@ createApp({
       for (const w of workers.value) {
         const key = w.sharer || w.worker_id || w.name
         if (!key) continue
-        const prev = map.get(key)
         const toks = Number(w.period_tokens) || 0
-        const jobs = Number(w.period_agent_jobs) || 0
-        if (!prev) {
-          map.set(key, {
-            ...w,
-            period_tokens: toks,
-            period_agent_jobs: jobs,
-            models: [...(w.models || [])],
-            agents: [...(w.agents || [])],
-          })
-          continue
-        }
+        const prev = map.get(key)
+        if (!prev) { map.set(key, { ...w, period_tokens: toks, _nameToks: toks, models: [...(w.models || [])], agents: [...(w.agents || [])] }); continue }
         prev.period_tokens += toks
-        prev.period_agent_jobs += jobs
-        if (toks > (Number(prev._nameToks) || 0)) {
-          prev.name = w.name
-          prev._nameToks = toks
-        }
+        if (toks > prev._nameToks) { prev.name = w.name; prev._nameToks = toks }
       }
-      return [...map.values()]
-        .sort((a, b) => (b.period_tokens - a.period_tokens) || (b.period_agent_jobs - a.period_agent_jobs))
-        .slice(0, 20)
+      return [...map.values()].sort((a, b) => b.period_tokens - a.period_tokens).slice(0, 20)
+    })
+    function offerText(w) {
+      const ms = (w.models || []).map(m => typeof m === 'string' ? m : m?.name).filter(Boolean)
+      const as = (w.agents || []).map(a => typeof a === 'string' ? a : a?.display_name || a?.name).filter(Boolean)
+      const parts = [...ms.slice(0, 3), ...as.slice(0, 2)]
+      const more = ms.length + as.length - parts.length
+      return (parts.join(' · ') || '—') + (more > 0 ? ` · +${more}` : '')
+    }
+
+    function typeLabel(t) {
+      const x = T.value
+      return t === 'image' ? x.typeImage : t === 'vision' ? x.typeVision : t === 'embedding' ? x.typeEmbedding : x.typeChat
+    }
+    function typeBadge(t) { return t === 'image' ? 'purple' : t === 'vision' ? 'blue' : t === 'embedding' ? '' : 'green' }
+
+    const stats = computed(() => {
+      const t = T.value
+      const s = summary.value
+      return [
+        { k: 'nodes', label: t.nodes, value: s.online_workers ?? 0 },
+        { k: 'models', label: t.models, value: models.value.length },
+        { k: 'agents', label: t.agents, value: agents.value.length },
+        { k: 'res', label: t.resources, value: resources.value.length },
+        { k: 'circles', label: t.circles, value: s.circle_count ?? circles.value.length },
+        { k: 'tokens', label: t.tokens, value: fmtTok(s.contrib_tokens) },
+        { k: 'users', label: t.users, value: s.active_users ?? 0 },
+      ]
+    })
+    const TABS = computed(() => {
+      const t = T.value
+      return [
+        { id: 'models', label: t.tabModels, n: models.value.length },
+        { id: 'agents', label: t.tabAgents, n: agents.value.length },
+        { id: 'resources', label: t.tabResources, n: resources.value.length },
+        { id: 'circles', label: t.tabCircles, n: circles.value.length },
+        { id: 'rank', label: t.tabRank },
+      ]
     })
 
     async function load() {
       try {
         const headers = {}
-        const tok = getToken()
+        const tok = localStorage.getItem('user_token') || ''
         if (tok) headers.Authorization = 'Bearer ' + tok
-        const [netRes, catalogRes, studioRes] = await Promise.all([
+        const [netRes, catRes, stuRes] = await Promise.all([
           fetch('/public/network', { headers }),
-          fetch('/api/community-catalog'),
-          fetch('/public/studio'),
+          fetch('/api/community-catalog').catch(() => null),
+          fetch('/public/studio').catch(() => null),
         ])
         const data = await netRes.json()
         if (!netRes.ok) throw new Error('fail')
         summary.value = data.summary || {}
         workers.value = Array.isArray(data.workers) ? data.workers : []
         availableModels.value = Array.isArray(data.available_models) ? data.available_models : []
-        availableModelTypes.value = (data.available_model_types && typeof data.available_model_types === 'object')
-          ? data.available_model_types : {}
+        availableModelTypes.value = data.available_model_types && typeof data.available_model_types === 'object' ? data.available_model_types : {}
         agents.value = Array.isArray(data.available_agents) ? data.available_agents : []
         circles.value = Array.isArray(data.available_circles) ? data.available_circles : []
-        // 社区推荐：公开接口仅返回上架资源
         try {
-          const catalogData = await catalogRes.json()
-          const rows = Array.isArray(catalogData?.resources)
-            ? catalogData.resources
-            : (Array.isArray(catalogData?.data?.resources) ? catalogData.data.resources : [])
-          catalogResources.value = catalogRes.ok ? rows : []
-        } catch {
-          catalogResources.value = []
-        }
-        // 社区圈：官方场景 / 插件（无 content）
+          const cd = catRes ? await catRes.json() : null
+          const rows = Array.isArray(cd?.resources) ? cd.resources : (Array.isArray(cd?.data?.resources) ? cd.data.resources : [])
+          catalog.value = catRes && catRes.ok ? rows : []
+        } catch { catalog.value = [] }
         try {
-          const sd = await studioRes.json()
-          studioScenes.value = studioRes.ok && Array.isArray(sd.scenes) ? sd.scenes : []
-          studioMods.value = studioRes.ok && Array.isArray(sd.mods) ? sd.mods : []
-        } catch { studioScenes.value = []; studioMods.value = [] }
+          const sd = stuRes ? await stuRes.json() : null
+          scenes.value = stuRes && stuRes.ok && Array.isArray(sd?.scenes) ? sd.scenes : []
+          mods.value = stuRes && stuRes.ok && Array.isArray(sd?.mods) ? sd.mods : []
+        } catch { scenes.value = []; mods.value = [] }
         fatal.value = ''
       } catch {
-        fatal.value = lang.value === 'zh' ? '无法连接服务器' : 'Cannot reach server'
+        if (!workers.value.length) fatal.value = T.value.fatal
       } finally {
         loading.value = false
       }
     }
 
     onMounted(() => {
+      document.documentElement.lang = lang.value === 'zh' ? 'zh-CN' : 'en'
+      document.title = T.value.title + ' · Token Bank'
       load()
       setInterval(load, 20000)
     })
 
     return {
-      lang, T, toggleLang, loading, fatal, summary, models, agents, circles, catalogResources, catalogByType, circleBusyId,
-      topWorkers, fmtTok, offerText, typeLabel, tryLabel, catalogTypeShort, circleStatus, onCircleClick,
-      studioScenes, studioMods,
+      lang, T, toggleLang, loggedIn, loading, fatal, summary, stats, TABS, tab, setTab, q, mtype, rtype,
+      modelFilters, shownModels, shownAgents, resFilters, shownResources, shownCircles, topWorkers,
+      agentName, typeLabel, typeBadge, speedCls, fmtMs, fmtTok, offerText, circleStatus, circleBadge, pct, color,
     }
-  }
+  },
 }).mount('#app')
 </script>
 </body>
