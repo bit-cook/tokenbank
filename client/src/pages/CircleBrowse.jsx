@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLang } from '../store/lang';
+import { useAuth } from '../store/index';
 import { browseCircles, applyJoinCircle } from '../api/client';
 import { LIB_LIST_CLS, libRowCls, LibraryRowTitle } from '../components/LibraryControls';
 
@@ -18,6 +19,8 @@ function circleColor(name = '') {
 /** 发现公开圈子（嵌在「交易 → 圈子」里） */
 export default function CircleBrowse({ onJoined }) {
   const { t } = useLang();
+  const { user } = useAuth();
+  const myId = user?.id;
   const navigate = useNavigate();
   const [query, setQuery]       = useState('');
   const [circles, setCircles]   = useState([]);
@@ -29,13 +32,14 @@ export default function CircleBrowse({ onJoined }) {
     setLoading(true);
     try {
       const r = await browseCircles(q);
-      setCircles(r.data?.circles || []);
+      // 已加入的圈子在上方「我的圈子」里，这里只列可加入的
+      setCircles((r.data?.circles || []).filter(c => c.join_status !== 'member' && (myId == null || c.owner_id !== myId)));
     } catch {
       setCircles([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [myId]);
 
   function handleSearch(e) {
     e.preventDefault();

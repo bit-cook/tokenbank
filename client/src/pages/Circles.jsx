@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { useLang } from '../store/lang';
@@ -39,9 +39,13 @@ export default function Circles({ view: viewProp = 'mine', circleResult = null, 
   const [joinPreview, setJoinPreview] = useState(null);  // { circle, already_member, full }
   const [joinLoading, setJoinLoading] = useState(false);
   const [joinError, setJoinError]   = useState('');
-  const [view, setView] = useState(viewProp);
+  const discoverRef = useRef(null);
+  const scrollToDiscover = () => discoverRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   const [joinBanner, setJoinBanner] = useState(null);
-  useEffect(() => { setView(viewProp); }, [viewProp]);
+  // 从社区网络 / 旧 /circles/browse 跳来：定位到「发现公开圈子」
+  useEffect(() => {
+    if (viewProp === 'discover') setTimeout(scrollToDiscover, 150);
+  }, [viewProp]);
   // 邀请链接登录后自动入圈的结果
   useEffect(() => {
     const r = circleResult;
@@ -243,32 +247,21 @@ export default function Circles({ view: viewProp = 'mine', circleResult = null, 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
-        <div role="tablist" className="inline-flex p-0.5 rounded-lg bg-zinc-100/90 dark:bg-zinc-800/80">
-          {[['mine', t('circles.tab.mine'), all.length], ['discover', t('circles.tab.discover'), null]].map(([v, label, n]) => (
-            <button key={v} type="button" role="tab" aria-selected={view === v} onClick={() => setView(v)}
-              className={`text-xs px-3 py-1.5 rounded-md transition-colors ${
-                view === v
-                  ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-50 shadow-sm font-medium'
-                  : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
-              }`}>
-              {label}
-              {n > 0 && <span className="ml-1 text-[11px] font-normal text-zinc-400 tabular-nums">{n}</span>}
-            </button>
-          ))}
-        </div>
         <p className="flex-1 min-w-[12rem] text-[11px] text-zinc-500 dark:text-zinc-400">{t('circles.scopeHint')}</p>
+        <button type="button" onClick={scrollToDiscover}
+          className="tb-press inline-flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg border border-violet-200 dark:border-violet-900 bg-violet-50/80 dark:bg-violet-950/30 text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-900/40">
+          <span aria-hidden>✦</span>{t('circles.menu.discover')}
+        </button>
         <SplitButton
           label={t('circles.createBtn')}
-          onClick={() => { setView('mine'); openCreate(); }}
+          onClick={openCreate}
           menuLabel={t('circles.moreActions')}
           items={[
-            { key: 'join', label: t('circles.menu.join'), hint: t('circles.menu.joinHint'), onClick: () => { setView('mine'); openJoin(); } },
+            { key: 'join', label: t('circles.menu.join'), hint: t('circles.menu.joinHint'), onClick: openJoin },
           ]}
         />
       </div>
 
-      {view === 'discover' ? <CircleBrowse embedded onJoined={load} /> : (
-      <>
       {/* 入圈结果横幅 */}
       {joinBanner && (
         <div className={`flex items-center justify-between rounded-xl px-4 py-2.5 text-xs
@@ -345,7 +338,7 @@ export default function Circles({ view: viewProp = 'mine', circleResult = null, 
               className="tb-press text-xs font-medium px-3.5 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-500">
               {t('circles.createBtn')}
             </button>
-            <button type="button" onClick={() => setView('discover')}
+            <button type="button" onClick={scrollToDiscover}
               className="text-xs px-3.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-white/70 dark:hover:bg-zinc-800">
               {t('circles.menu.discover')}
             </button>
@@ -372,7 +365,7 @@ export default function Circles({ view: viewProp = 'mine', circleResult = null, 
             {joined.length === 0 ? (
               <div className={`${LIB_LIST_CLS} px-4 py-5 text-xs text-zinc-500 dark:text-zinc-400`}>
                 {t('circles.noJoined')}，
-                <button type="button" onClick={() => setView('discover')} className="text-blue-600 dark:text-blue-400 hover:underline">
+                <button type="button" onClick={scrollToDiscover} className="text-blue-600 dark:text-blue-400 hover:underline">
                   {t('circles.menu.discover')}
                 </button>
               </div>
@@ -382,8 +375,12 @@ export default function Circles({ view: viewProp = 'mine', circleResult = null, 
           </section>
         </>
       )}
-      </>
-      )}
+
+      {/* 发现公开圈子：常驻在「我的圈子」下方，不用切换 */}
+      <section ref={discoverRef} className="scroll-mt-4">
+        <LibrarySectionHead title={t('circles.menu.discover')} />
+        <CircleBrowse onJoined={load} />
+      </section>
 
       {/* 邀请同好弹框：挂 body，避开主栏 backdrop-filter 裁切 fixed */}
       {inviteModal && createPortal(
