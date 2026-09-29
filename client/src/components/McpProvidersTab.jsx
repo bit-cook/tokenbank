@@ -426,7 +426,7 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
     setSyncSelectedIds(selectedAgentIds);
     if (anchorEl) {
       const r = anchorEl.getBoundingClientRect();
-      const menuW = 256;
+      const menuW = 320;
       const spaceBelow = window.innerHeight - r.bottom - 8;
       const spaceAbove = r.top - 8;
       // 下方空间不足时向上展开，避免被视口裁切
@@ -490,6 +490,33 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
     // 不支持中转的内置 MCP：回退写入应用配置
     if (target.kind !== 'api-app' && target.agent?.projectable && server.builtin) return 'project';
     return null;
+  }
+
+  /** 网关中转根地址（…/mcp）与某应用的专属中转地址（…/mcp/<appId>） */
+  function relayBase() {
+    return gatewayInfo?.endpoint?.url ? String(gatewayInfo.endpoint.url).replace(/\/mcp\/?$/, '') : '';
+  }
+  function relayUrlFor(appId) {
+    const profile = (gatewayInfo?.profiles || []).find((p) => p.id === appId);
+    if (profile?.url) return profile.url;
+    const base = relayBase();
+    return base ? `${base}/mcp/${appId}` : '';
+  }
+
+  /** 中转地址行：等宽显示 + 复制接入配置（含鉴权头） */
+  function renderRelayUrl(appId, { compact = false } = {}) {
+    const url = relayUrlFor(appId);
+    if (!url) return <span className="text-[10px] text-zinc-400">{t('providers.mcp.gatewayNotReady')}</span>;
+    return (
+      <div className={`flex items-center gap-1.5 min-w-0 ${compact ? '' : 'mt-0.5'}`}>
+        <code className={`flex-1 min-w-0 text-[10px] font-mono text-zinc-500 dark:text-zinc-400 select-all ${compact ? 'break-all' : 'truncate'}`} title={url}>{url}</code>
+        <button type="button" onClick={() => copyRelayConfigFor(appId)}
+          title={t('resources.mcp.relayOnce')}
+          className="shrink-0 text-[10px] text-blue-600 dark:text-blue-400 hover:underline">
+          {t('resources.mcp.copyRelay')}
+        </button>
+      </div>
+    );
   }
 
   /** 复制某应用的一次性中转接入配置（tokenbank-relay → /mcp/<appId>） */
@@ -630,7 +657,7 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
           ...(syncMenuPos.top != null ? { top: syncMenuPos.top } : { bottom: syncMenuPos.bottom }),
           maxHeight: syncMenuPos.maxH,
         }}
-        className="electron-no-drag fixed z-[9999] w-72 flex flex-col rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 shadow-lg overflow-hidden"
+        className="electron-no-drag fixed z-[9999] w-80 flex flex-col rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 shadow-lg overflow-hidden"
       >
         <div className="px-3 py-2 border-b border-zinc-100 dark:border-zinc-700 shrink-0">
           <p className="text-xs font-medium text-zinc-700 dark:text-zinc-200">
@@ -666,13 +693,7 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
                   )}
                 </label>
                 {checked && how === 'relay' && (
-                  <div className="flex items-center gap-2 pl-10 pr-2 pb-1.5 -mt-0.5">
-                    <span className="text-[10px] text-zinc-400 flex-1">{t('resources.mcp.relayOnce')}</span>
-                    <button type="button" onClick={() => copyRelayConfigFor(tg.id)}
-                      className="shrink-0 text-[10px] text-blue-600 dark:text-blue-400 hover:underline">
-                      {t('resources.mcp.copyRelay')}
-                    </button>
-                  </div>
+                  <div className="pl-10 pr-2 pb-1.5 -mt-0.5">{renderRelayUrl(tg.id, { compact: true })}</div>
                 )}
               </div>
             );
@@ -1342,21 +1363,17 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
               ) : (
                 <ul className="space-y-1">
                   {apps.map((a) => (
-                    <li key={a.id} className="flex items-center gap-2 text-xs">
-                      <ServiceIcon id={a.id} name={a.label} boxClass="w-5 h-5" imgClass="w-3 h-3" className="!rounded-md" />
-                      <span className="flex-1 truncate text-zinc-700 dark:text-zinc-200">{a.label}</span>
-                      {a.how === 'project' && (
-                        <span className="text-[10px] text-zinc-400" title={t('resources.mcp.legacyConfigHint')}>
-                          {t('resources.mcp.legacyConfig')}
-                        </span>
-                      )}
-                      {a.how === 'relay' && (
-                        <button type="button" onClick={() => copyRelayConfigFor(a.id)}
-                          title={t('resources.mcp.relayOnce')}
-                          className="text-[10px] text-blue-600 dark:text-blue-400 hover:underline">
-                          {t('resources.mcp.copyRelayShort')}
-                        </button>
-                      )}
+                    <li key={a.id} className="text-xs">
+                      <div className="flex items-center gap-2">
+                        <ServiceIcon id={a.id} name={a.label} boxClass="w-5 h-5" imgClass="w-3 h-3" className="!rounded-md" />
+                        <span className="flex-1 truncate text-zinc-700 dark:text-zinc-200">{a.label}</span>
+                        {a.how === 'project' && (
+                          <span className="text-[10px] text-zinc-400" title={t('resources.mcp.legacyConfigHint')}>
+                            {t('resources.mcp.legacyConfig')}
+                          </span>
+                        )}
+                      </div>
+                      {a.how === 'relay' && <div className="pl-7">{renderRelayUrl(a.id)}</div>}
                     </li>
                   ))}
                 </ul>
@@ -1390,6 +1407,22 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
     const selected = selectedKey?.startsWith('m:') ? servers.find(x => `m:${x.id}` === selectedKey) : null;
     return (
       <>
+        {/* 中转网关：投射的实现方式，直接展示地址 */}
+        <div className={`${LIB_LIST_CLS} px-4 py-2.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs`}>
+          <span className="font-medium text-zinc-700 dark:text-zinc-200">{t('resources.mcp.gateway')}</span>
+          <span className="inline-flex items-center gap-1 text-[11px] text-zinc-500">
+            <span className={`w-1.5 h-1.5 rounded-full ${gatewayInfo?.running ? 'bg-emerald-500' : 'bg-zinc-300'}`} aria-hidden />
+            {gatewayInfo?.running ? t('providers.mcp.gatewayRunning') : t('providers.mcp.gatewayStopped')}
+          </span>
+          {relayBase() ? (
+            <code className="font-mono text-[11px] text-zinc-600 dark:text-zinc-300 select-all" title={t('resources.mcp.gatewayUrlHint')}>
+              {relayBase()}/mcp/<span className="text-blue-600 dark:text-blue-400">{t('resources.mcp.appIdPlaceholder')}</span>
+            </code>
+          ) : (
+            <span className="text-[11px] text-zinc-400">{t('providers.mcp.gatewayNotReady')}</span>
+          )}
+          <span className="text-[10px] text-zinc-400 basis-full">{t('resources.mcp.gatewayUrlHint')}</span>
+        </div>
         {syncMsg && (
           <p className="text-xs text-zinc-600 dark:text-zinc-300 whitespace-pre-line rounded-lg bg-blue-50/70 dark:bg-blue-950/30 px-3 py-2">{syncMsg}</p>
         )}
