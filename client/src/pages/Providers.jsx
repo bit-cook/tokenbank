@@ -4859,7 +4859,7 @@ export default function Providers() {
           <PersonalTypeIcon tag={sm.tag} />
           <span className="truncate">{t(`providers.filter.${(PERSONAL_TYPE_BADGE[sm.tag] || PERSONAL_TYPE_BADGE.payg).filterKey}`)}</span>
         </div>
-        <span className="hidden md:block text-right text-xs tabular-nums text-zinc-600 dark:text-zinc-300">{sm.models || '—'}</span>
+        <span className="hidden md:block text-right text-[11px] tabular-nums text-zinc-600 dark:text-zinc-300">{sm.models || '—'}</span>
         <span className="flex items-center gap-1.5 text-[11px] text-zinc-600 dark:text-zinc-300">
           <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} aria-hidden />
           {st.label}
