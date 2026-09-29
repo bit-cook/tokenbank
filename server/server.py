@@ -628,6 +628,24 @@ def _client_ip(request: Request) -> str:
     return "unknown"
 
 
+async def _ensure_web_model_access(model: str, uid: Optional[int]) -> None:
+    """网页试用前确认模型对当前用户可用；否则给出可读错误（type 供前端区分）。"""
+    circles = set(await db.get_user_circle_ids(uid)) if uid is not None else set()
+    access = pool.model_access(model, owner_user_id=uid, user_circle_ids=circles)
+    if access == "offline":
+        raise HTTPException(503, detail={
+            "error": f"模型「{model}」当前没有在线节点，请换一个模型试试 / Model '{model}' is offline right now",
+            "type": "model_offline",
+        })
+    if access == "circle":
+        raise HTTPException(403, detail={
+            "error": (f"模型「{model}」仅圈子成员可用，请登录并加入对应圈子"
+                      if uid is None else f"模型「{model}」仅圈子成员可用，请先加入对应圈子")
+                     + f" / Model '{model}' is only shared inside a circle",
+            "type": "circle_only",
+        })
+
+
 class WebChatBody(BaseModel):
     model: str
     messages: list
@@ -658,6 +676,7 @@ async def web_chat(
         raise HTTPException(400, "embedding model not supported on web chat")
 
     guest = uid is None
+    await _ensure_web_model_access(cleaned["model"], uid)
     if guest:
         try:
             validate_guest_web_chat_messages(cleaned["messages"])
@@ -818,6 +837,7 @@ async def web_image(body: WebImageBody, uid: int = Depends(auth_api_key_or_jwt))
     sh = str(body.sharer or "").strip() or None
     if sh and not (sh.startswith("s_") and len(sh) >= 4):
         raise HTTPException(400, "invalid sharer")
+    await _ensure_web_model_access(cleaned["model"], uid)
 
     img_body = {
         "model": cleaned["model"],

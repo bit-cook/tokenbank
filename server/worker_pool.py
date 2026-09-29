@@ -488,7 +488,7 @@ class WorkerPool:
         def _virtual_visible(v) -> bool:
             owner = getattr(v, "owner_user_id", None)
             cid = getattr(v, "circle_id", None)
-            if owner == owner_user_id:
+            if owner is not None and owner == owner_user_id:
                 return True   # private to self
             if owner is not None:
                 return False  # someone else's private
@@ -504,8 +504,10 @@ class WorkerPool:
         shared_list = (
             [w for w in self._workers if _matches(w) and _real_visible(w)]
             + [v for v in self._virtual
-               if _matches(v) and getattr(v, "owner_user_id", None) != owner_user_id
-               and _virtual_visible(v)]
+               if _matches(v) and _virtual_visible(v)
+               # 本人私有源已在 owned 中；访客(owner_user_id=None)不能把 owner=None 的全局公开源当成「本人」排除掉
+               and not (owner_user_id is not None
+                        and getattr(v, "owner_user_id", None) == owner_user_id)]
         )
         if strategy == "auto":
             # auto = 按 star（reward_multiplier）降序；同分再按负载升序（稳定次序）
@@ -527,6 +529,16 @@ class WorkerPool:
                         break
         # 冷却中的节点下沉：可用节点优先，不可用节点仍作兜底
         return self._sink_cooled(ordered, model)
+
+    def model_access(self, model: str, owner_user_id: Optional[int] = None,
+                     user_circle_ids: Optional[set] = None) -> str:
+        """该用户能否用某模型：ok | circle（在线但仅圈内/他人私有）| offline（无任何节点提供）。"""
+        if model in self.models_for_user(owner_user_id, user_circle_ids):
+            return "ok"
+        for w in self._workers + self._virtual:
+            if worker_has_model(w, model):
+                return "circle"
+        return "offline"
 
     def has_owned_worker(self, models: list, owner_user_id: Optional[int]) -> bool:
         """该用户是否拥有可服务 models 中任一模型的个人供给源（用于计费预检豁免）。"""
@@ -551,7 +563,7 @@ class WorkerPool:
         for v in self._virtual:
             owner = getattr(v, "owner_user_id", None)
             cid = getattr(v, "circle_id", None)
-            if owner == owner_user_id:
+            if owner is not None and owner == owner_user_id:
                 visible = True
             elif owner is not None:
                 visible = False
