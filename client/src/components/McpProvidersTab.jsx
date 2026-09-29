@@ -482,15 +482,14 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
   }
 
   /**
-   * 新接入时自动选择方式：
-   * - API 应用只能经网关中转；
-   * - 桌面 / CLI：内置 MCP 直接写入应用配置，立即可用；第三方 MCP 经网关中转
-   *   （沿用原策略：第三方不新写入应用配置；已写入的保留，可在此取消）。
+   * 投射的实现方式：统一经 TokenBank 网关中转（应用只需配置一次中转地址，增减 MCP 不再改应用配置，
+   * 密钥只存在 TokenBank）。仅不支持中转的内置 MCP 回退为写入应用配置；已写入配置的老条目保留，可在此撤销。
    */
   function autoTransport(server, target) {
-    if (target.kind === 'api-app') return canRelay(server) ? 'relay' : null;
-    if (target.agent?.projectable && server.builtin) return 'project';
-    return canRelay(server) ? 'relay' : null;
+    if (canRelay(server)) return 'relay';
+    // 不支持中转的内置 MCP：回退写入应用配置
+    if (target.kind !== 'api-app' && target.agent?.projectable && server.builtin) return 'project';
+    return null;
   }
 
   /** 复制某应用的一次性中转接入配置（tokenbank-relay → /mcp/<appId>） */
@@ -660,9 +659,9 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
                   />
                   <ServiceIcon id={tg.id} name={tg.label} boxClass="w-6 h-6" imgClass="w-3.5 h-3.5" />
                   <span className="flex-1 truncate text-zinc-700 dark:text-zinc-200" title={tg.label}>{tg.label}</span>
-                  {how && (
-                    <span className={`shrink-0 text-[10px] ${how === 'relay' ? 'text-sky-600 dark:text-sky-300' : 'text-zinc-400'}`}>
-                      {how === 'relay' ? t('resources.mcp.viaGateway') : t('resources.mcp.viaConfig')}
+                  {cur === 'project' && (
+                    <span className="shrink-0 text-[10px] text-zinc-400" title={t('resources.mcp.legacyConfigHint')}>
+                      {t('resources.mcp.legacyConfig')}
                     </span>
                   )}
                 </label>
@@ -709,7 +708,7 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
         disabled={!!busy || addTargets().length === 0}
         className="tb-press text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-40 inline-flex items-center gap-1"
       >
-        {busy === 'sync' ? t('providers.mcp.processing') : t('resources.mcp.addToAppN', { n: selectedSyncableIds.length })}
+        {busy === 'sync' ? t('providers.mcp.processing') : t('resources.mcp.projectN', { n: selectedSyncableIds.length })}
         <span className="text-[10px] opacity-70">▾</span>
       </button>
     );
@@ -1219,7 +1218,7 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
         onClick={(e) => openAddMenu(s, e.currentTarget)}
         className={`${ASSET_BTN_PRIMARY} ${block ? 'w-full' : '!px-2.5 !py-1 !text-[11px] !rounded-lg'}`}
       >
-        {busy === s.id ? t('providers.mcp.processing') : t('resources.mcp.addToApp')}
+        {busy === s.id ? t('providers.mcp.processing') : (block ? t('resources.project') : t('resources.projectShort'))}
       </button>
     );
   }
@@ -1321,7 +1320,7 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
         desc={s.id === 'tokenbank-agent-bridge' ? t('providers.mcp.playgroundOnly') : serverDesc(s)}
         stats={[
           [t('resources.mcp.toolCount'), tools.length],
-          [t('resources.mcp.availableIn'), apps.length],
+          [t('resources.col.apps'), apps.length],
         ]}
         footer={menu.length > 0 ? (
           <>
@@ -1336,7 +1335,7 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
         ) : null}
       >
         {s.id !== 'tokenbank-agent-bridge' && (
-          <InspectorSection title={t('resources.mcp.availableIn')}>
+          <InspectorSection title={t('resources.col.apps')}>
             <div className="space-y-2">
               {apps.length === 0 ? (
                 <p className="text-[11px] text-zinc-400">{t('resources.mcp.notAdded')}</p>
@@ -1346,9 +1345,11 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
                     <li key={a.id} className="flex items-center gap-2 text-xs">
                       <ServiceIcon id={a.id} name={a.label} boxClass="w-5 h-5" imgClass="w-3 h-3" className="!rounded-md" />
                       <span className="flex-1 truncate text-zinc-700 dark:text-zinc-200">{a.label}</span>
-                      <span className={`text-[10px] ${a.how === 'relay' ? 'text-sky-600 dark:text-sky-300' : 'text-zinc-400'}`}>
-                        {a.how === 'relay' ? t('resources.mcp.viaGateway') : t('resources.mcp.viaConfig')}
-                      </span>
+                      {a.how === 'project' && (
+                        <span className="text-[10px] text-zinc-400" title={t('resources.mcp.legacyConfigHint')}>
+                          {t('resources.mcp.legacyConfig')}
+                        </span>
+                      )}
                       {a.how === 'relay' && (
                         <button type="button" onClick={() => copyRelayConfigFor(a.id)}
                           title={t('resources.mcp.relayOnce')}
@@ -1426,7 +1427,7 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
                     )}
                   </span>
                   <span>{t('resources.col.name')}</span>
-                  <span>{t('resources.mcp.availableIn')}</span>
+                  <span>{t('resources.col.apps')}</span>
                   <span>{t('resources.mcp.kind')}</span>
                   <span>{t('resources.col.status')}</span>
                   <span />
