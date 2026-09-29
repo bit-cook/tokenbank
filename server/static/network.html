@@ -21,6 +21,26 @@
 .speed-fast{color:#15803d}.speed-mid{color:#a16207}.speed-slow{color:#b91c1c}
 .rank{font-weight:700;font-size:13px;text-align:center;color:var(--text-faint)}
 .rank.medal{font-size:18px}
+/* 左：浏览页签；右：常驻供给排行（突出交易价值） */
+.split{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:24px;align-items:start}
+.split .grid{grid-template-columns:repeat(auto-fill,minmax(240px,1fr))}
+.rank-card{position:sticky;top:72px;border:1px solid var(--border);border-radius:16px;background:var(--bg);overflow:hidden}
+.rank-hd{padding:14px 16px 12px;border-bottom:1px solid var(--border);background:linear-gradient(180deg,#fffaf0,#fff)}
+.rank-hd h3{font-size:15px;font-weight:650;display:flex;align-items:center;gap:6px;margin:0}
+.rank-hd p{font-size:12px;color:var(--text-muted);margin:3px 0 0}
+.rank-list{max-height:calc(100vh - 200px);overflow-y:auto}
+.rk{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px 16px;border-bottom:1px solid var(--border);color:inherit;text-decoration:none}
+.rk:last-child{border-bottom:0}
+a.rk:hover{background:var(--bg-soft,#fafafa)}
+.rk.top{background:#fffcf2}
+.rk .tok{text-align:right;font-weight:650;font-size:13px;white-space:nowrap}
+.rk .tok small{display:block;font-weight:400;font-size:11px;color:var(--text-faint)}
+.rank-ft{padding:10px 16px;font-size:12px;color:var(--text-muted);border-top:1px solid var(--border);background:#fafafa}
+@media (max-width:960px){
+  .split{grid-template-columns:minmax(0,1fr)}
+  .rank-card{position:static}
+  .rank-list{max-height:none}
+}
 </style>
 </head>
 <body>
@@ -60,7 +80,8 @@
 
     <p v-if="fatal" class="empty">{{ fatal }}</p>
 
-    <template v-else>
+    <div v-else class="split">
+     <section style="min-width:0">
       <div class="tabs" role="tablist">
         <button v-for="tb in TABS" :key="tb.id" type="button" role="tab" :class="{ on: tab === tb.id }" @click="setTab(tb.id)">
           {{ tb.label }}<span class="n" v-if="tb.n != null">{{ tb.n }}</span>
@@ -68,7 +89,7 @@
       </div>
 
       <!-- 工具栏：搜索 + 类型筛选（排行无搜索） -->
-      <div class="toolbar" v-if="tab !== 'rank'">
+      <div class="toolbar">
         <label class="search">
           <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="9" r="5.5"/><path d="M13.5 13.5 17 17" stroke-linecap="round"/></svg>
           <input v-model="q" :placeholder="T.searchPh[tab] || T.search" @keydown.esc="q=''">
@@ -183,27 +204,32 @@
         <div v-else class="empty"><div class="e">👥</div>{{ q ? T.noMatch : T.emptyCircles }}</div>
       </template>
 
-      <!-- 供给排行 -->
-      <template v-else-if="tab === 'rank'">
-        <div class="table" v-if="topWorkers.length">
-          <div class="thead lrow">
-            <span style="text-align:center">#</span><span>{{ T.colSharer }}</span><span class="num">{{ T.colTokens }}</span><span class="num hide-sm">{{ T.colLatency }}</span>
-          </div>
-          <component :is="w.sharer ? 'a' : 'div'" v-for="(w, i) in topWorkers" :key="w.sharer || w.worker_id || w.name"
-                     class="trow lrow" :class="{ hover: !!w.sharer }" :href="w.sharer ? '/u/' + encodeURIComponent(w.sharer) : undefined"
-                     :style="i < 3 ? 'background:#fffcf2' : ''">
+     </section>
+
+      <!-- 供给排行：右侧常驻 -->
+      <aside class="rank-card" id="rank">
+        <div class="rank-hd">
+          <h3>🏆 {{ T.tabRank }}</h3>
+          <p>{{ T.rankSub }}</p>
+        </div>
+        <div v-if="loading" class="rank-list">
+          <div v-for="i in 6" :key="i" class="rk"><span class="skel" style="height:14px"></span><span class="skel" style="height:14px;width:70%"></span><span class="skel" style="height:14px;width:48px"></span></div>
+        </div>
+        <div v-else-if="topWorkers.length" class="rank-list">
+          <component :is="w.sharer ? 'a' : 'div'" v-for="(w, i) in topWorkers.slice(0, 10)" :key="w.sharer || w.worker_id || w.name"
+                     class="rk" :class="{ top: i < 3 }" :href="w.sharer ? '/u/' + encodeURIComponent(w.sharer) : undefined">
             <span class="rank" :class="{ medal: i < 3 }">{{ ['🥇','🥈','🥉'][i] || (i + 1) }}</span>
             <div style="min-width:0">
-              <div class="ell" style="font-weight:550">{{ w.name }}</div>
+              <div class="ell" style="font-weight:550;font-size:13px">{{ w.name }}</div>
               <div class="xs muted ell">{{ offerText(w) }}</div>
             </div>
-            <span class="num" style="font-weight:600">{{ fmtTok(w.period_tokens) }}<span class="xs muted"> tok</span></span>
-            <span class="num small muted hide-sm">{{ w.avg_latency_ms ? fmtMs(w.avg_latency_ms) : '—' }}</span>
+            <span class="tok">{{ fmtTok(w.period_tokens) }}<span class="xs muted"> tok</span><small v-if="w.avg_latency_ms" :class="speedCls(w.avg_latency_ms)">{{ fmtMs(w.avg_latency_ms) }}</small></span>
           </component>
         </div>
-        <div v-else class="empty"><div class="e">🏆</div>{{ T.emptyRank }}</div>
-      </template>
-    </template>
+        <div v-else class="empty" style="padding:28px 16px"><div class="e">🏆</div>{{ T.emptyRank }}</div>
+        <div class="rank-ft">{{ T.rankFoot }}</div>
+      </aside>
+    </div>
   </main>
 
   <footer class="footer">
@@ -234,6 +260,7 @@ createApp({
         search: '搜索', searchPh: { models: '搜索模型…', agents: '搜索智能体、作者或用途…', resources: '搜索技能、提示词、场景…', circles: '搜索圈子…' },
         tryTip: '点击即可试用', all: '全部',
         colModel: '模型', colNodes: '节点', colLatency: '首字延迟', colSharer: '贡献者', colTokens: '本周期',
+        rankSub: '本周期贡献 Token 最多的供给者', rankFoot: '上架闲置模型或智能体，被调用即赚积分并进入排行',
         nodesN: '{n} 节点', membersN: '{n} 人', noDesc: '暂无简介', online: '在线',
         tryChat: '对话', tryImage: '生图', tryAgent: '试用', noWeb: '仅 API', use: '使用', enter: '进入', view: '查看',
         typeChat: '文本', typeVision: '图文', typeImage: '生图', typeEmbedding: '嵌入',
@@ -253,6 +280,7 @@ createApp({
         search: 'Search', searchPh: { models: 'Search models…', agents: 'Search agents, owners or use cases…', resources: 'Search skills, prompts, scenes…', circles: 'Search circles…' },
         tryTip: 'Click to try', all: 'All',
         colModel: 'Model', colNodes: 'Nodes', colLatency: 'First token', colSharer: 'Sharer', colTokens: 'This period',
+        rankSub: 'Top suppliers by tokens served this period', rankFoot: 'List idle models or agents — every call earns credits and a spot here',
         nodesN: '{n} nodes', membersN: '{n} members', noDesc: 'No description', online: 'Online',
         tryChat: 'Chat', tryImage: 'Image', tryAgent: 'Try', noWeb: 'API only', use: 'Use', enter: 'Open', view: 'View',
         typeChat: 'Text', typeVision: 'Vision', typeImage: 'Image', typeEmbedding: 'Embedding',
@@ -285,8 +313,9 @@ createApp({
     const mods = ref([])
 
     // 页签 + 筛选（页签写入 URL hash，可分享 / 刷新保持）
-    const VALID = ['models', 'agents', 'resources', 'circles', 'rank']
+    const VALID = ['models', 'agents', 'resources', 'circles']
     const tab = ref(VALID.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'models')
+    // 旧链接 #rank：排行已常驻右侧，滚动过去即可
     const q = ref('')
     const mtype = ref('all')
     const rtype = ref('all')
@@ -438,7 +467,6 @@ createApp({
         { id: 'agents', label: t.tabAgents, n: agents.value.length },
         { id: 'resources', label: t.tabResources, n: resources.value.length },
         { id: 'circles', label: t.tabCircles, n: circles.value.length },
-        { id: 'rank', label: t.tabRank },
       ]
     })
 
@@ -481,7 +509,9 @@ createApp({
     onMounted(() => {
       document.documentElement.lang = lang.value === 'zh' ? 'zh-CN' : 'en'
       document.title = T.value.title + ' · Token Bank'
-      load()
+      load().then(() => {
+        if (location.hash === '#rank') setTimeout(() => document.getElementById('rank')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+      })
       setInterval(load, 20000)
     })
 
