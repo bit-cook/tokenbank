@@ -10,7 +10,6 @@ import {
   getAgentStatus, startAgent, stopAgent, getAgentLogs,
   subscribeAgentEvents, useAgentPolling,
 } from '../api/agentControl';
-import RateChart from '../components/RateChart';
 import Circles from './Circles';
 import TruncTip from '../components/TruncTip';
 import { useLang } from '../store/lang';
@@ -771,6 +770,157 @@ function ContributionConfigCard({ onStart, onStop, running, agentError, onAgents
   );
 }
 
+/** 结算时间：今天 / 昨天 / 月-日 + 时:分 */
+function settlementWhen(iso, t) {
+  const full = formatSettlementTime(iso);
+  const m = full.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}:\d{2})$/);
+  if (!m) return { day: full, time: '' };
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const diff = Math.round((today - d) / 86400000);
+  const day = diff === 0 ? t('contribute.today') : diff === 1 ? t('contribute.yesterday') : `${m[2]}-${m[3]}`;
+  return { day, time: m[4] };
+}
+
+/** 收益记录：概览 + 每次结算积分柱图 + 结算明细 + 运行日志 */
+function EarningsView({ settlements, summary, stats, logs, logRef }) {
+  const { t } = useLang();
+  const [hover, setHover] = useState(null);
+  const rows = settlements || [];
+  const chron = [...rows].reverse(); // 左旧右新
+  const total = rows.reduce((n, r) => n + (Number(r.credits_awarded) || 0), 0);
+  const avgMult = rows.length ? rows.reduce((n, r) => n + (Number(r.multiplier) || 1), 0) / rows.length : null;
+  const last = rows[0];
+  const max = Math.max(1, ...chron.map(r => Number(r.credits_awarded) || 0));
+  const lastWhen = last ? settlementWhen(last.period_end, t) : null;
+
+  const tiles = [
+    { k: 'sum', label: t('contribute.earnRecent', { n: rows.length }), value: rows.length ? `+${total.toFixed(1)}` : '—', sub: rows.length ? `≈ ${fmtCreditCny(creditsToCny(total))}` : t('contribute.noSettlements'), tone: 'text-green-600 dark:text-green-400' },
+    { k: 'last', label: t('contribute.earnLast'), value: last ? `+${(Number(last.credits_awarded) || 0).toFixed(1)}` : '—', sub: lastWhen ? `${lastWhen.day} ${lastWhen.time}` : '' },
+    { k: 'q', label: t('contribute.earnQuality'), value: avgMult != null ? `${avgMult.toFixed(2)}×` : '—', sub: avgMult != null ? multiplierToStars(avgMult) : '', subTone: 'text-yellow-600 dark:text-yellow-400' },
+    { k: 'pending', label: t('contribute.earnPending'), value: summary?.period_tokens > 0 ? fmtContribTokens(summary.period_tokens) : '0', sub: stats ? t('contribute.earnLive', { n: stats.contribute_req_per_min ?? 0 }) : '' },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2.5">
+        {tiles.map(m => (
+          <div key={m.k} className={`${LIB_LIST_CLS} px-4 py-3`}>
+            <div className="text-[11px] text-zinc-500 dark:text-zinc-400">{m.label}</div>
+            <div className={`mt-1 text-lg font-semibold tabular-nums tracking-tight ${m.tone || 'text-zinc-900 dark:text-zinc-50'}`}>{m.value}</div>
+            <div className={`text-[11px] truncate mt-0.5 ${m.subTone || 'text-zinc-400'}`}>{m.sub || ' '}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* 每次结算积分：单序列柱图（无需图例），悬停看明细 */}
+      <section className="rounded-2xl border border-zinc-200/70 dark:border-white/[0.07] bg-white/55 dark:bg-zinc-900/40 px-4 pt-3.5 pb-3">
+        <div className="flex items-baseline justify-between gap-2 mb-5">
+          <h3 className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-100">{t('contribute.earnChartTitle')}</h3>
+          <span className="text-[11px] text-zinc-400">{t('contribute.earnChartHint')}</span>
+        </div>
+        {chron.length === 0 ? (
+          <div className="h-32 flex items-center justify-center text-xs text-zinc-400">{t('contribute.noSettlements')}</div>
+        ) : (
+          <div className="relative">
+            <div className="absolute inset-x-0 top-0 border-t border-dashed border-zinc-200/80 dark:border-white/[0.06]" aria-hidden />
+            <div className="absolute left-0 -top-2 text-[10px] text-zinc-400 tabular-nums bg-white/0">{max.toFixed(0)}</div>
+            <div className="h-32 flex items-end gap-[2px] border-b border-zinc-200 dark:border-zinc-700" role="img" aria-label={t('contribute.earnChartTitle')}>
+              {chron.map((r, i) => {
+                const v = Number(r.credits_awarded) || 0;
+                const on = hover === i;
+                return (
+                  <div key={r.id ?? r.period_end} className="relative flex-1 h-full flex items-end justify-center"
+                    onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
+                    <div className={`w-full max-w-[28px] rounded-t-[4px] transition-colors ${on ? 'bg-green-600 dark:bg-green-400' : 'bg-green-500/80 dark:bg-green-500/70'}`}
+                      style={{ height: `${Math.max(2, (v / max) * 100)}%` }} />
+                    {on && (
+                      <div className="absolute bottom-full mb-1.5 left-1/2 -translate-x-1/2 z-10 whitespace-nowrap rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-lg px-2.5 py-1.5 text-[11px] pointer-events-none">
+                        <div className="text-zinc-500">{formatSettlementTime(r.period_end)}</div>
+                        <div className="font-semibold text-zinc-900 dark:text-zinc-50 tabular-nums">+{v.toFixed(1)} {t('contribute.creditsUnit')}</div>
+                        <div className="text-zinc-500 tabular-nums">{fmtContribTokens(r.output_tokens ?? 0)} tok · {(Number(r.multiplier) || 1).toFixed(2)}×</div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex justify-between mt-1 text-[10px] text-zinc-400 tabular-nums">
+              <span>{formatSettlementTime(chron[0].period_end).slice(5)}</span>
+              <span>{formatSettlementTime(chron[chron.length - 1].period_end).slice(5)}</span>
+            </div>
+          </div>
+        )}
+      </section>
+
+      <section>
+        <LibrarySectionHead title={t('contribute.settlements')} count={rows.length || null} />
+        {rows.length === 0 ? (
+          <div className={`${LIB_LIST_CLS} px-6 py-10 text-center`}>
+            <div className="text-2xl" aria-hidden>🪙</div>
+            <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">{t('contribute.noSettlementsHint')}</p>
+          </div>
+        ) : (
+          <ul className={LIB_LIST_CLS}>
+            {rows.map(st => {
+              const resources = normalizeSettlementResources(st.resources);
+              const mult = Number(st.multiplier) || 1;
+              const w = settlementWhen(st.period_end, t);
+              const qualityLabel = t('contribute.qualityMult', { n: mult.toFixed(2) });
+              return (
+                <li key={st.id ?? st.period_end}
+                  className="grid grid-cols-[4.5rem_minmax(0,1fr)_auto] items-center gap-3 px-4 py-2.5 border-b last:border-b-0 border-zinc-100/90 dark:border-white/[0.05] hover:bg-zinc-50/70 dark:hover:bg-white/[0.02]">
+                  <div className="leading-tight">
+                    <div className="text-xs font-medium text-zinc-700 dark:text-zinc-200">{w.day}</div>
+                    <div className="text-[11px] text-zinc-400 tabular-nums">{w.time}</div>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 text-[11px] text-zinc-500 dark:text-zinc-400">
+                      <span className="tabular-nums text-zinc-700 dark:text-zinc-300">{fmtContribTokens(st.output_tokens ?? 0)} tok</span>
+                      <span className="text-yellow-600 dark:text-yellow-400" title={qualityLabel} aria-label={qualityLabel}>{multiplierToStars(mult)}</span>
+                      <span className="tabular-nums">{mult.toFixed(2)}×</span>
+                    </div>
+                    {resources.length > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {resources.map(r => {
+                          const isAgent = String(r).startsWith('agent:');
+                          return (
+                            <span key={r} className={`text-[10px] px-1.5 py-px rounded ${isAgent
+                              ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300'
+                              : 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-300 font-mono'}`}>
+                              {isAgent ? '✦ ' : ''}{formatSettlementResource(r)}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-right leading-tight">
+                    <div className="text-[13px] font-semibold tabular-nums text-green-600 dark:text-green-400">+{(Number(st.credits_awarded) || 0).toFixed(1)}</div>
+                    <div className="text-[11px] tabular-nums text-zinc-400">≈{fmtCreditCny(creditsToCny(st.credits_awarded))}</div>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
+      {/* 运行日志：排障用，默认收起 */}
+      <details className="group">
+        <summary className="cursor-pointer select-none text-[11px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 list-none">
+          <span className="inline-block transition-transform group-open:rotate-90 mr-1">›</span>
+          {t('contribute.agentLog')}
+          {logs.length > 0 && <span className="ml-1.5 text-zinc-400 tabular-nums">{logs.length}</span>}
+        </summary>
+        <div ref={logRef} className="mt-2 bg-zinc-950 border border-zinc-800 rounded-xl p-3 h-44 overflow-y-auto font-mono text-[11px] text-zinc-300 space-y-0.5">
+          {logs.length === 0 ? <span className="text-zinc-500">{t('contribute.logEmpty')}</span> : logs.map((line, i) => <div key={i}>{line}</div>)}
+        </div>
+      </details>
+    </div>
+  );
+}
+
 /** 上架表单分节标题：序号 + 标题 + 说明 */
 function SupplySectionHead({ n, title, hint }) {
   return (
@@ -1315,7 +1465,6 @@ export default function Contribute() {
   const navigate = useNavigate();
   const [running,     setRunning]     = useState(false);
   const [stats,       setStats]       = useState(null);
-  const [chartData,   setChartData]   = useState([]);
   const [settlements, setSettlements] = useState([]);
   const [summary,     setSummary]     = useState(null);
   const [logs,        setLogs]        = useState([]);
@@ -1400,9 +1549,6 @@ export default function Contribute() {
     function poll() {
       getStats().then(r => {
         setStats(r.data);
-        const locale = lang === 'en' ? 'en-US' : 'zh-CN';
-        const time = new Date().toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        setChartData(prev => [...prev.slice(-29), { time, value: r.data.contribute_req_per_min ?? 0 }]);
       }).catch(() => {});
     }
     poll();
@@ -1427,7 +1573,7 @@ export default function Contribute() {
       getSettlements()
         .then((r) => {
           if (cancelled) return;
-          setSettlements((r.data?.settlements || []).slice(0, 10));
+          setSettlements((r.data?.settlements || []).slice(0, 30));
         })
         .catch((e) => {
           console.warn('[contribute] settlements load failed', e?.message || e);
@@ -1590,61 +1736,8 @@ export default function Contribute() {
           <Circles view={circlesView} circleResult={circleResult} onChanged={setMyCircles} />
         </div>
 
-        <div className={tab === 'earnings' ? 'space-y-4' : 'hidden'}>
-          <div className={`${LIB_LIST_CLS} p-4`}>
-            <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mb-3">{t('contribute.chartTitle')}</p>
-            <RateChart data={chartData} />
-          </div>
-
-          <section>
-            <LibrarySectionHead title={t('contribute.settlements')} count={settlements.length || null} />
-            {settlements.length === 0 ? (
-              <div className={`${LIB_LIST_CLS} px-4 py-8 text-center text-xs text-zinc-500 dark:text-zinc-400`}>{t('contribute.noSettlements')}</div>
-            ) : (
-              <ul className={LIB_LIST_CLS}>
-                <li className="hidden md:grid grid-cols-[8.5rem_6rem_minmax(0,1fr)_6rem_5rem] gap-3 px-4 py-2 text-[11px] text-zinc-400 border-b border-zinc-100/90 dark:border-white/[0.05]">
-                  <span>{t('contribute.col.period')}</span>
-                  <span className="text-right">{t('contribute.col.tokens')}</span>
-                  <span>{t('contribute.col.resources')}</span>
-                  <span className="text-right">{t('contribute.col.credits')}</span>
-                  <span className="text-right">{t('contribute.col.cny')}</span>
-                </li>
-                {settlements.map(st => {
-                  const resources = normalizeSettlementResources(st.resources);
-                  const resHint = resources.map((r) => formatSettlementResource(r)).join('、');
-                  const mult = st.multiplier ?? 1;
-                  const qualityLabel = t('contribute.qualityMult', { n: mult.toFixed(2) });
-                  return (
-                    <li key={st.id ?? st.period_end}
-                      className="grid grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[8.5rem_6rem_minmax(0,1fr)_6rem_5rem] items-center gap-x-3 gap-y-0.5 px-4 py-2.5 text-xs border-b last:border-b-0 border-zinc-100/90 dark:border-white/[0.05]">
-                      <span className="text-zinc-500 dark:text-zinc-400 tabular-nums">{formatSettlementTime(st.period_end)}</span>
-                      <span className="text-right tabular-nums text-zinc-700 dark:text-zinc-300">{fmtContribTokens(st.output_tokens ?? 0)} tok</span>
-                      <span className="col-span-2 md:col-span-1 min-w-0 truncate text-zinc-500 dark:text-zinc-400" title={resHint}>
-                        <span className="text-yellow-600 dark:text-yellow-400 mr-1.5" title={qualityLabel} aria-label={qualityLabel}>
-                          {multiplierToStars(mult)}<span className="ml-1 text-zinc-400 tabular-nums">{mult.toFixed(2)}×</span>
-                        </span>
-                        {resHint}
-                      </span>
-                      <span className="text-right tabular-nums font-medium text-green-600 dark:text-green-400">+{(st.credits_awarded ?? 0).toFixed(1)}</span>
-                      <span className="text-right tabular-nums text-zinc-400">≈{fmtCreditCny(creditsToCny(st.credits_awarded))}</span>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </section>
-
-          {/* 运行日志：排障用，默认收起 */}
-          <details className="group">
-            <summary className="cursor-pointer select-none text-[11px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 list-none">
-              <span className="inline-block transition-transform group-open:rotate-90 mr-1">›</span>
-              {t('contribute.agentLog')}
-              {logs.length > 0 && <span className="ml-1.5 text-zinc-400 tabular-nums">{logs.length}</span>}
-            </summary>
-            <div ref={logRef} className="mt-2 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl p-3 h-40 overflow-y-auto font-mono text-[11px] text-zinc-600 dark:text-zinc-400 space-y-0.5">
-              {logs.length === 0 ? <span className="text-zinc-500 dark:text-zinc-400">{t('contribute.logEmpty')}</span> : logs.map((line, i) => <div key={i}>{line}</div>)}
-            </div>
-          </details>
+        <div className={tab === 'earnings' ? '' : 'hidden'}>
+          <EarningsView settlements={settlements} summary={summary} stats={stats} logs={logs} logRef={logRef} />
         </div>
       </div>
     </div>
