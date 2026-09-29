@@ -795,11 +795,28 @@ function EarningsView({ settlements, summary, stats, logs, logRef }) {
   const max = Math.max(1, ...chron.map(r => Number(r.credits_awarded) || 0));
   const lastWhen = last ? settlementWhen(last.period_end, t) : null;
 
+  // 累计收益（原交易页头部数据带）作为收益页的首行
   const tiles = [
-    { k: 'sum', label: t('contribute.earnRecent', { n: rows.length }), value: rows.length ? `+${total.toFixed(1)}` : '—', sub: rows.length ? `≈ ${fmtCreditCny(creditsToCny(total))}` : t('contribute.noSettlements'), tone: 'text-green-600 dark:text-green-400' },
-    { k: 'last', label: t('contribute.earnLast'), value: last ? `+${(Number(last.credits_awarded) || 0).toFixed(1)}` : '—', sub: lastWhen ? `${lastWhen.day} ${lastWhen.time}` : '' },
-    { k: 'q', label: t('contribute.earnQuality'), value: avgMult != null ? `${avgMult.toFixed(2)}×` : '—', sub: avgMult != null ? multiplierToStars(avgMult) : '', subTone: 'text-yellow-600 dark:text-yellow-400' },
-    { k: 'pending', label: t('contribute.earnPending'), value: summary?.period_tokens > 0 ? fmtContribTokens(summary.period_tokens) : '0', sub: stats ? t('contribute.earnLive', { n: stats.contribute_req_per_min ?? 0 }) : '' },
+    {
+      k: 'credits', label: t('contribute.earnedCredits'), tone: 'text-green-600 dark:text-green-400',
+      value: summary ? `+${(summary.contrib_credits ?? 0).toLocaleString(undefined, { maximumFractionDigits: 1 })}` : '—',
+      sub: summary ? t('contribute.approxCny', { amount: fmtCreditCny(summary.contrib_cny) }) : '',
+    },
+    {
+      k: 'tokens', label: t('contribute.totalTokens'),
+      value: summary ? fmtContribTokens(summary.contrib_tokens) : '—',
+      sub: summary?.period_tokens > 0 ? t('contribute.periodTokens', { n: fmtContribTokens(summary.period_tokens) }) : t('contribute.totalTokensHint'),
+    },
+    {
+      k: 'saved', label: t('contribute.savedMoney'), tone: 'text-emerald-600 dark:text-emerald-400',
+      value: summary ? fmtCreditCny(summary.saved_cny) : '—',
+      sub: summary?.p2p_tokens > 0 ? t('contribute.p2pTokensUsed', { n: fmtContribTokens(summary.p2p_tokens) }) : t('contribute.savedHint'),
+    },
+    {
+      k: 'rate', label: t('contribute.rate'), unit: 'req/min',
+      value: stats ? `${stats.contribute_req_per_min ?? 0}` : '—',
+      sub: stats ? t('contribute.liveSub', { active: stats.active_requests ?? 0, nodes: stats.active_workers ?? 0 }) : '',
+    },
   ];
 
   return (
@@ -808,17 +825,28 @@ function EarningsView({ settlements, summary, stats, logs, logRef }) {
         {tiles.map(m => (
           <div key={m.k} className={`${LIB_LIST_CLS} px-4 py-3`}>
             <div className="text-[11px] text-zinc-500 dark:text-zinc-400">{m.label}</div>
-            <div className={`mt-1 text-lg font-semibold tabular-nums tracking-tight ${m.tone || 'text-zinc-900 dark:text-zinc-50'}`}>{m.value}</div>
-            <div className={`text-[11px] truncate mt-0.5 ${m.subTone || 'text-zinc-400'}`}>{m.sub || ' '}</div>
+            <div className={`mt-1 text-lg font-semibold tabular-nums tracking-tight ${m.tone || 'text-zinc-900 dark:text-zinc-50'}`}>
+              {m.value}{m.unit && <span className="ml-1 text-[11px] font-normal text-zinc-400">{m.unit}</span>}
+            </div>
+            <div className="text-[11px] truncate mt-0.5 text-zinc-400">{m.sub || ' '}</div>
           </div>
         ))}
       </div>
 
       {/* 每次结算积分：单序列柱图（无需图例），悬停看明细 */}
       <section className="rounded-2xl border border-zinc-200/70 dark:border-white/[0.07] bg-white/55 dark:bg-zinc-900/40 px-4 pt-3.5 pb-3">
-        <div className="flex items-baseline justify-between gap-2 mb-5">
+        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mb-5">
           <h3 className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-100">{t('contribute.earnChartTitle')}</h3>
-          <span className="text-[11px] text-zinc-400">{t('contribute.earnChartHint')}</span>
+          {rows.length > 0 && (
+            <span className="text-[11px] text-zinc-500 dark:text-zinc-400 flex flex-wrap items-baseline gap-x-2">
+              <span>{t('contribute.earnRecent', { n: rows.length })} <b className="font-semibold tabular-nums text-green-600 dark:text-green-400">+{total.toFixed(1)}</b></span>
+              <span className="text-zinc-300 dark:text-zinc-600">·</span>
+              <span>{t('contribute.earnLast')} <b className="font-semibold tabular-nums text-zinc-700 dark:text-zinc-200">+{(Number(last.credits_awarded) || 0).toFixed(1)}</b>{lastWhen ? ` · ${lastWhen.day} ${lastWhen.time}` : ''}</span>
+              <span className="text-zinc-300 dark:text-zinc-600">·</span>
+              <span>{t('contribute.earnQuality')} <b className="font-semibold tabular-nums text-zinc-700 dark:text-zinc-200">{avgMult.toFixed(2)}×</b> <span className="text-yellow-600 dark:text-yellow-400">{multiplierToStars(avgMult)}</span></span>
+            </span>
+          )}
+          <span className="ml-auto text-[11px] text-zinc-400">{t('contribute.earnChartHint')}</span>
         </div>
         {chron.length === 0 ? (
           <div className="h-32 flex items-center justify-center text-xs text-zinc-400">{t('contribute.noSettlements')}</div>
@@ -1614,28 +1642,6 @@ export default function Contribute() {
     }
   }
 
-  const kpis = [
-    {
-      k: 'tokens', label: t('contribute.totalTokens'),
-      value: summary ? fmtContribTokens(summary.contrib_tokens) : '—',
-      sub: summary?.period_tokens > 0 ? t('contribute.periodTokens', { n: fmtContribTokens(summary.period_tokens) }) : t('contribute.totalTokensHint'),
-    },
-    {
-      k: 'credits', label: t('contribute.earnedCredits'), tone: 'text-green-600 dark:text-green-400',
-      value: summary ? `+${(summary.contrib_credits ?? 0).toLocaleString(undefined, { maximumFractionDigits: 1 })}` : '—',
-      sub: summary ? t('contribute.approxCny', { amount: fmtCreditCny(summary.contrib_cny) }) : '',
-    },
-    {
-      k: 'saved', label: t('contribute.savedMoney'), tone: 'text-emerald-600 dark:text-emerald-400',
-      value: summary ? fmtCreditCny(summary.saved_cny) : '—',
-      sub: summary?.p2p_tokens > 0 ? t('contribute.p2pTokensUsed', { n: fmtContribTokens(summary.p2p_tokens) }) : t('contribute.savedHint'),
-    },
-    {
-      k: 'rate', label: t('contribute.rate'),
-      value: stats ? `${stats.contribute_req_per_min ?? 0}` : '—', unit: 'req/min',
-      sub: stats ? t('contribute.liveSub', { active: stats.active_requests ?? 0, nodes: stats.active_workers ?? 0 }) : '',
-    },
-  ];
 
   const TABS = [
     { id: 'hire', label: t('contribute.tab.hire') },
@@ -1654,6 +1660,14 @@ export default function Contribute() {
             <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">{t('contribute.subtitle')}</p>
           </div>
           <div className="electron-no-drag relative z-50 flex items-center gap-2">
+            {/* 累计积分：点击看收益记录（明细数据都在该页签） */}
+            {summary && (
+              <button type="button" onClick={() => changeTab('earnings')}
+                className="inline-flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white/60 dark:bg-zinc-900/40 text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100">
+                <span className="font-semibold tabular-nums text-green-600 dark:text-green-400">+{(summary.contrib_credits ?? 0).toLocaleString(undefined, { maximumFractionDigits: 1 })}</span>
+                {t('contribute.creditsUnit')}
+              </button>
+            )}
             {/* 供给状态：一眼可见，点击直达上架配置 */}
             <button
               type="button"
@@ -1671,20 +1685,6 @@ export default function Contribute() {
               {running ? t('contribute.statusSupplying') : t('contribute.statusIdle')}
             </button>
           </div>
-        </div>
-
-        {/* 收益概览：一条 KPI 带，取代三张大卡 + 三张小卡 */}
-        <div className={`${LIB_LIST_CLS} mt-4 grid grid-cols-2 md:grid-cols-4`}>
-          {kpis.map((m, i) => (
-            <div key={m.k} className={`px-4 py-3 min-w-0 ${i ? 'md:border-l' : ''} ${i % 2 ? 'border-l md:border-l' : ''} ${i >= 2 ? 'border-t md:border-t-0' : ''} border-zinc-100 dark:border-white/[0.06]`}>
-              <div className="text-[11px] text-zinc-500 dark:text-zinc-400">{m.label}</div>
-              <div className={`mt-1 text-lg font-semibold tabular-nums tracking-tight ${m.tone || 'text-zinc-900 dark:text-zinc-50'}`}>
-                {m.value}
-                {m.unit && <span className="ml-1 text-[11px] font-normal text-zinc-400">{m.unit}</span>}
-              </div>
-              {m.sub && <div className="text-[11px] text-zinc-400 truncate mt-0.5">{m.sub}</div>}
-            </div>
-          ))}
         </div>
 
         <div role="tablist" className="mt-4 flex items-end gap-6 border-b border-zinc-200/80 dark:border-white/[0.08]">
