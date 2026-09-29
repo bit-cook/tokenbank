@@ -1030,7 +1030,7 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
     return createPortal(
       <div
         ref={syncMenuRef}
-        className="fixed z-[9999] w-64 flex flex-col rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 shadow-lg overflow-hidden"
+        className="fixed z-[9999] w-64 flex flex-col rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 shadow-lg overflow-hidden"
         style={{
           ...(syncMenuPos.top != null ? { top: syncMenuPos.top } : {}),
           ...(syncMenuPos.bottom != null ? { bottom: syncMenuPos.bottom } : {}),
@@ -1098,7 +1098,7 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
                 className={`flex items-center gap-2 px-3 py-2 text-xs ${
                   blocked
                     ? 'opacity-45 cursor-not-allowed'
-                    : `cursor-pointer ${checked ? 'bg-violet-50 dark:bg-violet-900/20' : 'hover:bg-zinc-50 dark:hover:bg-zinc-700/40'}`
+                    : `cursor-pointer ${checked ? 'bg-blue-50 dark:bg-blue-950/30' : 'hover:bg-zinc-50 dark:hover:bg-zinc-700/40'}`
                 }`}
                 title={blocked ? t('providers.mcp.projectUnsupported') : undefined}
               >
@@ -1138,11 +1138,7 @@ export default function McpProvidersTab({ viewTab: controlledView = null, search
             type="button"
             disabled={!!busy || (!installMenuServerId && syncSelectedIds.length === 0)}
             onClick={() => handleSyncClients(syncSelectedIds)}
-            className={`text-xs px-2.5 py-1 rounded-lg text-white disabled:opacity-40 ${
-              isRelay
-                ? 'bg-sky-600 hover:bg-sky-500'
-                : 'bg-violet-600 hover:bg-violet-500'
-            }`}
+            className="tb-press text-xs px-3 py-1.5 rounded-lg text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-40"
           >
             {busy
               ? t('providers.mcp.processing')

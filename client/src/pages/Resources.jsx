@@ -320,6 +320,16 @@ function depsFromAssistantContent(content) {
   }
 }
 
+/** 智能体绑定的模型（content.model 或 content.parameters.model，与 resource-assistant 一致） */
+function assistantModelOf(content) {
+  try {
+    const obj = typeof content === 'string' ? JSON.parse(content || '{}') : (content || {});
+    return String(obj.model || obj.parameters?.model || '').trim();
+  } catch {
+    return '';
+  }
+}
+
 /** Skill 权威目录（用户安装位置） */
 function getSkillLocation(resource) {
   if (!resource) return null;
@@ -966,8 +976,11 @@ export default function Resources() {
   // 其它页跳转带类型（如供给源「MCP 工具已移到资源」）：navigate('/resources', { state: { resourceType } })
   useEffect(() => {
     const want = location.state?.resourceType;
-    if (!want || !TYPE_OPTIONS.some(o => o.id === want)) return;
-    changeTypeFilter(want);
+    const selectKey = location.state?.selectKey;
+    if (!want && !selectKey) return;
+    if (want && TYPE_OPTIONS.some(o => o.id === want)) changeTypeFilter(want);
+    // 从供给源「谁在用它」跳来：打开资产库并选中该条
+    if (selectKey) { changeViewTab('managed'); setSelectedKey(selectKey); }
     navigate(location.pathname, { replace: true, state: null });
   }, [location.state]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -2941,6 +2954,24 @@ export default function Resources() {
             )}
           </div>
         </InspectorSection>
+        {li.type === 'assistant' && (() => {
+          const model = assistantModelOf(it.content);
+          return (
+            <InspectorSection title={t('resources.link.model')}>
+              {model ? (
+                <div className="flex items-center gap-2">
+                  <code className="text-[11px] font-mono text-zinc-700 dark:text-zinc-200 truncate">{model}</code>
+                  <button type="button" onClick={() => navigate('/providers', { state: { focusModel: model } })}
+                    className="ml-auto shrink-0 text-[11px] text-blue-600 dark:text-blue-400 hover:underline">
+                    {t('resources.link.viewSource')} →
+                  </button>
+                </div>
+              ) : (
+                <p className="text-[11px] text-zinc-400">{t('resources.link.modelDefault')}</p>
+              )}
+            </InspectorSection>
+          );
+        })()}
         {li.purposes.length > 0 && (
           <InspectorSection title={t('resources.filter.purpose')}>
             <div className="flex flex-wrap gap-1.5">
@@ -3068,7 +3099,7 @@ export default function Resources() {
     return createPortal(
       <div
         ref={projectMenuRef}
-        className="fixed z-[9999] w-56 flex flex-col rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 shadow-lg overflow-hidden"
+        className="fixed z-[9999] w-64 flex flex-col rounded-2xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 shadow-lg overflow-hidden"
         style={{
           left: projectMenu.x,
           top: projectMenu.y,
@@ -3091,15 +3122,19 @@ export default function Resources() {
                 : t('resources.noProjectAgents')}
             </p>
           ) : targetList.map(a => (
-            <label key={a.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-zinc-50 dark:hover:bg-zinc-700/50 cursor-pointer text-xs">
+            <label key={a.id} className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer text-xs ${
+              projectSelected.includes(a.id) ? 'bg-blue-50 dark:bg-blue-950/30' : 'hover:bg-zinc-50 dark:hover:bg-zinc-700/50'
+            }`}>
               <input
                 type="checkbox"
                 checked={projectSelected.includes(a.id)}
                 onChange={() => setProjectSelected(prev =>
                   prev.includes(a.id) ? prev.filter(x => x !== a.id) : [...prev, a.id],
                 )}
+                className="rounded border-zinc-300 dark:border-zinc-600"
               />
-              <span>{a.label}</span>
+              <ServiceIcon id={a.id} name={a.label} boxClass="w-6 h-6" imgClass="w-3.5 h-3.5" />
+              <span className="flex-1 truncate text-zinc-700 dark:text-zinc-200">{a.label}</span>
             </label>
           ))}
         </div>

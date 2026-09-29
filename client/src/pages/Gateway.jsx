@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { loadGatewayAvailableModels, resolveLocalGatewayBase, inferModelTypeFromName } from '../api/gatewayModels';
 import { getSyncServerBase } from '../config';
 import { getGateway, getLocalConfig, getConfig, getApps, getOauth } from '../api/adapter';
@@ -4923,6 +4923,16 @@ export default function Gateway() {
   const [selectedLog, setSelectedLog] = useState(null);
   const [restarting, setRestarting] = useState(false);
   const [mainTab, setMainTab]   = useState(0);   // 0=应用列表 1=场景路由 2=会话
+  // 其它页跳转到场景路由：navigate('/gateway', { state: { gatewayTab: 'routes' } })
+  const gwLocation = useLocation();
+  const gwNavigate = useNavigate();
+  useEffect(() => {
+    const want = gwLocation.state?.gatewayTab;
+    if (!want) return;
+    if (want === 'routes') setMainTab(1);
+    else if (want === 'apps') setMainTab(0);
+    gwNavigate(gwLocation.pathname, { replace: true, state: null });
+  }, [gwLocation.state]); // eslint-disable-line react-hooks/exhaustive-deps
   const [sessionsMounted, setSessionsMounted] = useState(false); // 首次进入会话 Tab 后保持挂载
 
   // Scene routing

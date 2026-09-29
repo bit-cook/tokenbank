@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import ServiceIcon from '../components/ServiceIcon';
 import { LIB_LIST_CLS, libRowCls, LibraryRowTitle, LibraryPanel } from '../components/LibraryControls';
 import { getNetwork, getProfile, listKeys, createKey, deleteKey } from '../api/client';
@@ -4240,6 +4240,9 @@ export default function Providers() {
   const [personalFilter, setPersonalFilter] = useState('all');
   /** 个人源列表选中行（右侧详情放原配置卡） */
   const [selectedSourceKey, setSelectedSourceKey] = useState(null);
+  /** 「谁在用它」：场景路由 + 绑定了模型的智能体（打开详情时加载） */
+  const [dependents, setDependents] = useState({ routes: [], assistants: [] });
+  const provLocation = useLocation();
   const [personalLatencyMap, setPersonalLatencyMap] = useState({});
 
   const loadPersonalLatency = useCallback(async () => {
@@ -4553,6 +4556,43 @@ export default function Providers() {
     }
     return null;
   }, [cooldownMaps]);
+
+  // 打开详情时加载「谁在用它」：场景路由（本地配置）+ 绑定模型的智能体（桌面版资源库）
+  useEffect(() => {
+    if (!selectedSourceKey) return undefined;
+    let alive = true;
+    (async () => {
+      let routes = [];
+      let assistants = [];
+      try { routes = (await getLocalConfig().get())?.scene_routes || []; } catch { /* ignore */ }
+      try {
+        const res = await window.electronAPI?.resource?.listResources?.({ type: 'assistant' });
+        assistants = (res?.resources || []).map(a => {
+          let model = '';
+          try {
+            const obj = typeof a.content === 'string' ? JSON.parse(a.content || '{}') : (a.content || {});
+            model = String(obj.model || obj.parameters?.model || '').trim();
+          } catch { /* ignore */ }
+          return { id: a.id, name: a.display_name || a.name, model };
+        });
+      } catch { /* 网页版无资源库 */ }
+      if (alive) setDependents({ routes, assistants });
+    })();
+    return () => { alive = false; };
+  }, [selectedSourceKey]);
+
+  // 从资源页「查看供给源」跳来：切到账户列表并选中提供该模型的来源
+  useEffect(() => {
+    const model = provLocation.state?.focusModel;
+    if (!model) return;
+    const hit = personalSourceRows.map(sourceSummary).find(sm => (sm.modelNames || []).includes(model));
+    // 账户尚未加载完：保留跳转请求，等数据到了再定位
+    if (!hit && !accountsData) return;
+    setSupplyTab('model');
+    setSourcesView('list');
+    if (hit) setSelectedSourceKey(hit.key);
+    navigate(provLocation.pathname, { replace: true, state: null });
+  }, [provLocation.state, personalSourceRows, accountsData]); // eslint-disable-line react-hooks/exhaustive-deps
   const handleRetryCooldown = useCallback(async (key) => {
     try { await window.electronAPI?.gateway?.clearCooldown?.(key); } catch { /* ignore */ }
     loadCooldowns();
@@ -4701,6 +4741,7 @@ export default function Providers() {
       return {
         key: `cw:${p.id}`, row, name: p.label || p.id, iconProps: { id: p.id, icon: '🌐' },
         tag: 'free', enabled: p.enabled !== false, models: (p.models || []).length, cooldown: null, verified: false,
+        gwIds: [p.id], modelNames: modelNameList(p.models),
       };
     }
     if (row.type === 'extra') {
@@ -4713,6 +4754,7 @@ export default function Providers() {
         tag: getPersonalSourceTag(p, meta, userPayg, userSubscriptions),
         enabled: p.enabled !== false, models: (p.models || []).length,
         cooldown: cooldownFor(p.id, inst?.gateway_id, inst?.source_id), verified: p.test_verified === true,
+        gwIds: [p.id], modelNames: modelNameList(p.models),
       };
     }
     const inst = row.inst;
@@ -4729,7 +4771,59 @@ export default function Providers() {
       models: models.length,
       cooldown: direct ? cooldownFor(direct.agent_id, direct.source_id, direct.id) : cooldownFor(gw, prov?.id, inst.source_id),
       verified: prov?.test_verified === true,
+      gwIds: [gw, prov?.id, direct?.agent_id].filter(Boolean), modelNames: modelNameList(models),
     };
+  }
+
+  function modelNameList(list) {
+    return (list || [])
+      .map(m => (typeof m === 'string' ? m : (m?.name || m?.id || '')))
+      .map(n => String(n).trim())
+      .filter(Boolean);
+  }
+
+  /** 依赖本源的场景路由 / 智能体（按供给源 id 钉选或按模型名匹配） */
+  function dependentsOf(sm) {
+    const ids = new Set(sm.gwIds || []);
+    const names = new Set(sm.modelNames || []);
+    const routes = (dependents.routes || []).filter(r => (r.steps || []).some(st => (
+      (st.provider && ids.has(st.provider)) || names.has(st.model || st.label || '')
+    )));
+    const assistants = (dependents.assistants || []).filter(a => a.model && names.has(a.model));
+    return { routes, assistants };
+  }
+
+  function renderDependents(sm) {
+    const { routes, assistants } = dependentsOf(sm);
+    return (
+      <section className="mb-3 rounded-xl border border-zinc-100 dark:border-white/[0.06] px-3 py-2.5">
+        <h3 className="text-[11px] font-medium text-zinc-400 mb-2">{t('providers.link.usedBy')}</h3>
+        {routes.length === 0 && assistants.length === 0 ? (
+          <p className="text-[11px] text-zinc-400">{t('providers.link.unused')}</p>
+        ) : (
+          <div className="flex flex-wrap gap-1.5">
+            {routes.map(r => (
+              <button key={`r-${r.id || r.model_key}`} type="button"
+                onClick={() => navigate('/gateway', { state: { gatewayTab: 'routes' } })}
+                title={t('providers.link.routeHint')}
+                className="text-[11px] px-2 py-0.5 rounded-md bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 hover:underline">
+                {t('providers.link.route')} · {r.scene_name || r.model_key || r.id}
+              </button>
+            ))}
+            {assistants.map(a => (
+              <button key={`a-${a.id}`} type="button"
+                onClick={() => navigate('/resources', { state: { resourceType: 'assistant', selectKey: `r-${a.id}` } })}
+                className="text-[11px] px-2 py-0.5 rounded-md bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 hover:underline">
+                {t('providers.link.assistant')} · {a.name}
+              </button>
+            ))}
+          </div>
+        )}
+        {!sm.enabled || routes.length + assistants.length === 0 ? null : (
+          <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-2">{t('providers.link.disableWarn')}</p>
+        )}
+      </section>
+    );
   }
 
   function sourceStatus(sm) {
@@ -4939,6 +5033,7 @@ export default function Providers() {
               </div>
               {sel && (
                 <LibraryPanel title={t('providers.list.detail')} closeLabel={t('providers.list.close')} onClose={() => setSelectedSourceKey(null)}>
+                  {renderDependents(sel)}
                   {renderSourceCard(sel.row)}
                 </LibraryPanel>
               )}
