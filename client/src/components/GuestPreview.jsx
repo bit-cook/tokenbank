@@ -16,6 +16,12 @@ export default function GuestPreview({ kind, from }) {
   const [circles, setCircles] = useState(null);
   const [loadingCircles, setLoadingCircles] = useState(false);
   const listRef = useRef(null);
+  // 交易预览：公开的社区网络实时概况，未登录也能看
+  const [net, setNet] = useState(null);
+  useEffect(() => {
+    if (isCircles) return;
+    getNetwork().then(r => setNet(r?.data || null)).catch(() => {});
+  }, [isCircles]);
   const signIn = () => navigate('/login', { state: { from } });
 
   async function showCircles() {
@@ -56,6 +62,23 @@ export default function GuestPreview({ kind, from }) {
             </li>
           ))}
         </ul>
+        {!isCircles && net?.summary && (
+          <button type="button" onClick={() => navigate('/network')}
+            className="w-full grid grid-cols-3 rounded-xl border border-zinc-200/80 dark:border-white/[0.07] bg-gradient-to-br from-violet-50/70 to-blue-50/50 dark:from-violet-950/20 dark:to-blue-950/10 hover:border-violet-300 dark:hover:border-violet-800 transition-colors">
+            {[
+              [t('network.globalNodes'), net.summary.online_workers ?? 0],
+              [t('network.availableAgents'), (net.available_agents || []).length],
+              [t('network.circlesStat'), net.summary.circle_count ?? (net.available_circles || []).length],
+            ].map(([k, v], i) => (
+              <div key={k} className={`px-3 py-2.5 text-center ${i ? 'border-l border-zinc-200/70 dark:border-white/[0.06]' : ''}`}>
+                <div className="text-base font-semibold tabular-nums text-zinc-900 dark:text-zinc-50">{v}</div>
+                <div className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-0.5 inline-flex items-center gap-1">
+                  {i === 0 && <span className="w-1.5 h-1.5 rounded-full bg-green-500" aria-hidden />}{k}
+                </div>
+              </div>
+            ))}
+          </button>
+        )}
         <div className="flex flex-wrap justify-center gap-2 pt-1">
           <button type="button" onClick={signIn}
             className="px-4 py-2 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 transition-colors">
@@ -63,7 +86,7 @@ export default function GuestPreview({ kind, from }) {
           </button>
           <button type="button" onClick={isCircles ? showCircles : () => navigate('/network')}
             className="px-4 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors">
-            {isCircles ? t('guestPreview.browseCircles') : t('guestPreview.browseNetwork')}
+            {isCircles ? t('guestPreview.browseCircles') : <><span className="mr-1" aria-hidden>🌐</span>{t('guestPreview.browseNetwork')} →</>}
           </button>
         </div>
       </div>

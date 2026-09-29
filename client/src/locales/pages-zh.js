@@ -1233,6 +1233,7 @@ export default {
   'contribute.earnChartHint': '悬停查看明细',
   'contribute.creditsUnit': '积分',
   'contribute.noSettlementsHint': '上架供给并被调用后，这里会按周期显示结算的积分',
+  'contribute.tab.network': '社区网络',
   'contribute.title': '交易',
   'contribute.subtitle': '雇佣社区智能体按次使用，或上架本机模型与智能体赚积分；配置与 API Key 始终不离机',
   'contribute.sectionSupply': '我上架',

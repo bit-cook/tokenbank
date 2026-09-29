@@ -1230,6 +1230,7 @@ export default {
   'contribute.earnChartHint': 'Hover for details',
   'contribute.creditsUnit': 'credits',
   'contribute.noSettlementsHint': 'Once your listings are used, settled credits show up here each period',
+  'contribute.tab.network': 'Network',
   'contribute.title': 'Trade',
   'contribute.subtitle': 'Hire community agents per task, or list your own models and agents to earn credits — configs and API keys never leave your machine',
   'contribute.sectionSupply': 'I supply',

@@ -198,7 +198,7 @@ function aggregateAgentsByName(list) {
     .sort((a, b) => b.providers - a.providers || a.name.localeCompare(b.name, 'zh'));
 }
 
-export default function Network() {
+export default function Network({ embedded = false }) {
   const { t } = useLang();
   const navigate  = useNavigate();
   const [network,        setNetwork]        = useState(null);
@@ -304,8 +304,9 @@ export default function Network() {
   const rowCls = 'flex items-center gap-3 px-4 py-2.5 border-b last:border-b-0 border-zinc-100/90 dark:border-white/[0.05]';
 
   return (
-    <div className="px-5 py-5 space-y-4">
-      {/* 页头 */}
+    <div className={embedded ? 'space-y-4' : 'px-5 py-5 space-y-4'}>
+      {!embedded && (
+      /* 页头（嵌入交易页时由页签承担） */
       <div>
         <button onClick={() => navigate(-1)}
           className="electron-no-drag relative z-50 mb-2 text-xs text-zinc-400 hover:text-zinc-600 dark:text-zinc-400 transition-colors">
@@ -334,6 +335,7 @@ export default function Network() {
           </div>
         </div>
       </div>
+      )}
 
       {/* 全网概况：一条 KPI 带 */}
       <div className={`${card} overflow-hidden grid grid-cols-3 lg:grid-cols-6`}>

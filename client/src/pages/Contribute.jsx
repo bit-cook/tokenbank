@@ -11,6 +11,7 @@ import {
   subscribeAgentEvents, useAgentPolling,
 } from '../api/agentControl';
 import Circles from './Circles';
+import Network from './Network';
 import TruncTip from '../components/TruncTip';
 import { useLang } from '../store/lang';
 import { useAuth } from '../store/index';
@@ -1641,6 +1642,7 @@ export default function Contribute() {
     { id: 'supply', label: t('contribute.tab.supply') },
     { id: 'circles', label: t('contribute.tab.circles'), count: myCircles?.length || null },
     { id: 'earnings', label: t('contribute.tab.earnings'), count: settlements.length || null },
+    { id: 'network', label: t('contribute.tab.network'), icon: '🌐' },
   ];
 
   return (
@@ -1693,6 +1695,7 @@ export default function Contribute() {
                   ? 'border-zinc-900 dark:border-zinc-100 text-zinc-900 dark:text-zinc-50 font-semibold'
                   : 'border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
               }`}>
+              {tb.icon && <span className="mr-1" aria-hidden>{tb.icon}</span>}
               {tb.label}
               {tb.count > 0 && <span className="ml-1.5 text-[11px] font-normal text-zinc-400 tabular-nums">{tb.count}</span>}
             </button>
@@ -1727,6 +1730,9 @@ export default function Contribute() {
         <div className={tab === 'circles' ? '' : 'hidden'}>
           <Circles view={circlesView} circleResult={circleResult} onChanged={setMyCircles} />
         </div>
+
+        {/* 社区网络：全网概览，仅在打开时挂载（避免后台轮询） */}
+        {tab === 'network' && <Network embedded />}
 
         <div className={tab === 'earnings' ? '' : 'hidden'}>
           <EarningsView settlements={settlements} summary={summary} stats={stats} logs={logs} logRef={logRef} />
