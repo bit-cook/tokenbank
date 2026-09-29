@@ -18,8 +18,9 @@ import { useAuth } from '../store/index';
 import { fmtContribTokens, fmtCreditCny, creditsToCny } from '../lib/credit-pricing';
 import { avatarColor } from '../components/UserAvatar';
 import {
-  LIB_LIST_CLS, libRowCls, LibraryRowTitle, LibraryInspector, InspectorSection, LibrarySectionHead,
+  LIB_LIST_CLS, libRowCls, LibraryRowTitle, LibraryInspector, InspectorSection, LibrarySectionHead, FilterMenu,
 } from '../components/LibraryControls';
+import ServiceIcon from '../components/ServiceIcon';
 import { getServerUrl } from '../config';
 import { copyText } from '../lib/resource-enable';
 function multiplierToStars(m) {
@@ -842,6 +843,8 @@ function CommunityAgentsCard({ refreshKey = 0, circles = [], scope = 'all', onSc
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(''); // '' | 'hire' | 'unhire'
   const [query, setQuery] = useState('');
+  const [onlyHired, setOnlyHired] = useState(false);
+  const [sortBy, setSortBy] = useState('popular');
   // 行内「雇佣」：先选中再在下一帧执行（hireSelected 读取 selected）
   const [pendingHire, setPendingHire] = useState(null);
   // KeepAlive 下用 pathname 判断是否在交易页（再次进入需立刻刷新）
@@ -1009,80 +1012,108 @@ function CommunityAgentsCard({ refreshKey = 0, circles = [], scope = 'all', onSc
   };
   const q = query.trim().toLowerCase();
   const scoped = agents.filter(inScope);
-  const shown = !q ? scoped : scoped.filter((a) => {
+  const filtered = scoped.filter((a) => {
+    if (onlyHired && !hiredIds.has(a.id)) return false;
+    if (!q) return true;
     const { name, owner } = parseCommunityAgent(a);
     return [name, owner, a.runtime, a.description].some(v => String(v || '').toLowerCase().includes(q));
   });
+  const shown = sortBy === 'name'
+    ? [...filtered].sort((x, y) => parseCommunityAgent(x).name.localeCompare(parseCommunityAgent(y).name))
+    : [...filtered].sort((x, y) => (Number(y.hire_count) || 0) - (Number(x.hire_count) || 0));
   const selectedFull = selected
     ? (selected.owner_nickname ? `${selected.owner_nickname}/${selected.display_name || selected.id}` : (selected.display_name || selected.id))
     : '';
+  const selectedRow = selected ? agents.find(a => a.id === selected.id && a.worker_id === selected.worker_id) : null;
+  const hiredCount = agents.filter(a => hiredIds.has(a.id)).length;
+  const idleCount = agents.filter(a => !(Number(a.active_requests) > 0)).length;
 
   const scopeOptions = [
     { id: 'all', label: t('contribute.scope.all') },
     { id: 'public', label: t('contribute.scope.public') },
     ...circles.map(c => ({ id: c.id, label: c.name, circle: true })),
   ];
+  const countIn = (id) => agents.filter(a => {
+    if (id === 'all') return true;
+    const isCircle = (a.visibility || 'public') !== 'public';
+    if (id === 'public') return !isCircle;
+    return Array.isArray(a.circle_ids) ? a.circle_ids.includes(id) : isCircle;
+  }).length;
+
+  const chip = (on) => `inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border transition-colors ${
+    on
+      ? 'border-zinc-900 dark:border-zinc-100 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900'
+      : 'border-zinc-200 dark:border-zinc-700 bg-white/60 dark:bg-zinc-900/30 text-zinc-600 dark:text-zinc-300 hover:bg-white dark:hover:bg-zinc-800'
+  }`;
 
   return (
     <div className="space-y-3">
-      {/* 交易范围：公开市场 / 我的圈子（圈子即交易范围） */}
-      {circles.length > 0 && (
-        <div role="radiogroup" aria-label={t('contribute.scope.label')} className="flex flex-wrap items-center gap-1.5">
-          <span className="text-[11px] text-zinc-400 mr-1">{t('contribute.scope.label')}</span>
-          {scopeOptions.map(o => {
-            const on = scope === o.id;
-            const n = agents.filter(a => {
-              if (o.id === 'all') return true;
-              const isCircle = (a.visibility || 'public') !== 'public';
-              if (o.id === 'public') return !isCircle;
-              return Array.isArray(a.circle_ids) ? a.circle_ids.includes(o.id) : isCircle;
-            }).length;
-            return (
-              <button key={o.id} type="button" role="radio" aria-checked={on} onClick={() => onScopeChange?.(o.id)}
-                className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
-                  on
-                    ? 'border-zinc-900 dark:border-zinc-100 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900'
-                    : 'border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-white/70 dark:hover:bg-zinc-800'
-                }`}>
-                {o.circle && <span className="mr-1 opacity-60" aria-hidden>◎</span>}
-                {o.label}
-                <span className={`ml-1 tabular-nums ${on ? 'opacity-70' : 'text-zinc-400'}`}>{n}</span>
-              </button>
-            );
-          })}
+      {/* 市场头：在线概况 + 搜索 */}
+      <div className="relative overflow-hidden rounded-2xl border border-zinc-200/70 dark:border-white/[0.07] bg-gradient-to-br from-violet-50/80 via-white/70 to-blue-50/60 dark:from-violet-950/30 dark:via-zinc-900/40 dark:to-blue-950/20 px-5 py-4">
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-violet-500 to-blue-500 text-white flex items-center justify-center text-lg shadow-md shadow-violet-500/25 shrink-0" aria-hidden>✦</div>
+          <div className="min-w-0 flex-1">
+            <div className="text-[15px] font-semibold text-zinc-900 dark:text-zinc-50">{t('contribute.marketTitle')}</div>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 flex flex-wrap items-center gap-x-2">
+              <span className="inline-flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-green-500" aria-hidden />{t('contribute.marketOnline', { n: agents.length, idle: idleCount })}</span>
+              <span className="text-zinc-300 dark:text-zinc-600">·</span>
+              <span>{t('contribute.marketHired', { n: hiredCount })}</span>
+              {credits != null && (<><span className="text-zinc-300 dark:text-zinc-600">·</span><span>{t('contribute.agentTaskCost', { n: credits })}</span></>)}
+            </p>
+          </div>
+          <div className="relative w-72 max-w-full">
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" aria-hidden>
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-3.5 h-3.5"><circle cx="9" cy="9" r="5.5" /><path d="M13.5 13.5 17 17" strokeLinecap="round" /></svg>
+            </span>
+            <input
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              placeholder={t('contribute.searchAgents')}
+              className="w-full text-xs pl-8 pr-3 py-2 rounded-xl bg-white/90 dark:bg-zinc-900/70 border border-zinc-200/80 dark:border-zinc-700 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-500/15"
+            />
+          </div>
         </div>
-      )}
-      <div className="flex flex-wrap items-center gap-2">
-        <div className="relative w-64 max-w-full">
-          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" aria-hidden>
-            <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-3.5 h-3.5"><circle cx="9" cy="9" r="5.5" /><path d="M13.5 13.5 17 17" strokeLinecap="round" /></svg>
-          </span>
-          <input
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-            placeholder={t('contribute.searchAgents')}
-            className="tb-soft-field w-full text-xs pl-8 pr-3 py-1.5 rounded-lg text-zinc-900 dark:text-zinc-100"
-          />
-        </div>
-        <p className="text-[11px] text-zinc-500 dark:text-zinc-400 flex-1 min-w-[12rem]">
-          {t('contribute.communityAgentsHint')}
-          {credits != null && <span className="ml-1.5 text-zinc-400">· {t('contribute.agentTaskCost', { n: credits })}</span>}
-        </p>
-        <button
-          type="button"
-          onClick={() => refresh()}
-          disabled={loading}
-          className="text-xs text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 px-2 py-1 rounded-md hover:bg-white/70 dark:hover:bg-zinc-800 disabled:opacity-50"
-        >
-          {t('contribute.refreshAgents')}
-        </button>
       </div>
+
+      {/* 筛选：范围（圈子即交易范围）· 已雇佣 · 排序 */}
+      <div className="flex flex-wrap items-center gap-1.5">
+        {(circles.length > 0 ? scopeOptions : scopeOptions.slice(0, 1)).map(o => (
+          <button key={o.id} type="button" role="radio" aria-checked={scope === o.id && !onlyHired}
+            onClick={() => { setOnlyHired(false); onScopeChange?.(o.id); }}
+            className={chip(scope === o.id && !onlyHired)}>
+            {o.circle && <span className="opacity-60" aria-hidden>◎</span>}
+            {o.label}
+            <span className="tabular-nums opacity-60">{countIn(o.id)}</span>
+          </button>
+        ))}
+        <span className="mx-1 w-px h-4 bg-zinc-200 dark:bg-zinc-700" aria-hidden />
+        <button type="button" aria-pressed={onlyHired} onClick={() => setOnlyHired(v => !v)} className={chip(onlyHired)}>
+          <span aria-hidden>✓</span>{t('contribute.filterHired')}<span className="tabular-nums opacity-60">{hiredCount}</span>
+        </button>
+        <div className="ml-auto flex items-center gap-1">
+          <FilterMenu
+            label={t('contribute.sortLabel')}
+            value={sortBy}
+            onChange={v => setSortBy(v || 'popular')}
+            clearable={false}
+            neutral
+            align="right"
+            options={[
+              { value: 'popular', label: t('contribute.sortPopular') },
+              { value: 'name', label: t('contribute.sortName') },
+            ]}
+          />
+          <button type="button" onClick={() => refresh()} disabled={loading} title={t('contribute.refreshAgents')} aria-label={t('contribute.refreshAgents')}
+            className="w-7 h-7 rounded-lg text-sm text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-white/70 dark:hover:bg-zinc-800 disabled:opacity-40">
+            <span className={`inline-block ${loading ? 'animate-spin' : ''}`} aria-hidden>↻</span>
+          </button>
+        </div>
+      </div>
+
       {hireMsg && (
-        <div
-          ref={hireBannerRef}
-          role="status"
-          className="flex items-start gap-2 rounded-xl border border-green-200 dark:border-green-800/60 bg-green-50 dark:bg-green-950/40 px-3 py-2"
-        >
+        <div ref={hireBannerRef} role="status"
+          className="flex items-start gap-2 rounded-xl border border-green-200 dark:border-green-800/60 bg-green-50 dark:bg-green-950/40 px-3 py-2">
+          <span className="text-green-600" aria-hidden>✓</span>
           <p className="flex-1 text-xs text-green-800 dark:text-green-300 leading-snug">{hireMsg}</p>
           <button type="button" onClick={() => setHireMsg('')}
             className="shrink-0 text-xs text-green-700/70 dark:text-green-400/70 hover:text-green-900 dark:hover:text-green-200"
@@ -1106,15 +1137,31 @@ function CommunityAgentsCard({ refreshKey = 0, circles = [], scope = 'all', onSc
               ))}
             </div>
           ) : shown.length === 0 ? (
-            <div className={`${LIB_LIST_CLS} px-4 py-10 text-center text-xs text-zinc-500 dark:text-zinc-400`}>
-              {q ? t('contribute.noAgentsMatch') : t('contribute.noCommunityAgents')}
+            <div className={`${LIB_LIST_CLS} px-6 py-12 text-center`}>
+              <div className="text-2xl" aria-hidden>{q || onlyHired ? '🔍' : '🌙'}</div>
+              <p className="mt-2 text-[13px] font-medium text-zinc-700 dark:text-zinc-200">
+                {q ? t('contribute.noAgentsMatch') : onlyHired ? t('contribute.noHiredYet') : t('contribute.noCommunityAgents')}
+              </p>
+              {(q || onlyHired || scope !== 'all') && (
+                <button type="button" onClick={() => { setQuery(''); setOnlyHired(false); onScopeChange?.('all'); }}
+                  className="mt-3 text-xs text-blue-600 dark:text-blue-400 hover:underline">{t('contribute.clearFilters')}</button>
+              )}
             </div>
           ) : (
             <ul className={LIB_LIST_CLS} role="listbox" aria-label={t('contribute.communityAgents')}>
+              <li className="hidden md:grid grid-cols-[minmax(0,1fr)_8rem_6.5rem_4.5rem_4rem] gap-3 px-4 py-2 text-[11px] text-zinc-400 border-b border-zinc-100/90 dark:border-white/[0.05]">
+                <span>{t('contribute.col.agent')}</span>
+                <span>{t('contribute.col.runtime')}</span>
+                <span>{t('contribute.col.popularity')}</span>
+                <span>{t('contribute.col.status')}</span>
+                <span />
+              </li>
               {shown.map((a) => {
                 const key = `${a.worker_id}:${a.id}`;
                 const sel = !!selected && selected.id === a.id && selected.worker_id === a.worker_id;
                 const hired = hiredIds.has(a.id);
+                const busyNow = Number(a.active_requests) > 0;
+                const hires = Number(a.hire_count) || 0;
                 const { name: title, owner } = parseCommunityAgent(a);
                 const blurb = String(a.description || '').trim();
                 return (
@@ -1125,7 +1172,7 @@ function CommunityAgentsCard({ refreshKey = 0, circles = [], scope = 'all', onSc
                     tabIndex={0}
                     onClick={() => selectAgent(a)}
                     onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectAgent(a); } }}
-                    className={`${libRowCls(sel)} grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[minmax(0,1fr)_7rem_5rem]`}
+                    className={`${libRowCls(sel)} grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[minmax(0,1fr)_8rem_6.5rem_4.5rem_4rem]`}
                   >
                     <LibraryRowTitle
                       logo={<CommunityAgentIcon name={title} small />}
@@ -1146,7 +1193,7 @@ function CommunityAgentsCard({ refreshKey = 0, circles = [], scope = 'all', onSc
                           )}
                           {hired && (
                             <span className="shrink-0 text-[10px] px-1.5 py-px rounded font-medium bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300">
-                              {t('contribute.hiredBadge')}
+                              ✓ {t('contribute.hiredBadge')}
                             </span>
                           )}
                         </>
@@ -1154,7 +1201,23 @@ function CommunityAgentsCard({ refreshKey = 0, circles = [], scope = 'all', onSc
                       sub={blurb || t('contribute.noAgentDesc')}
                       subClass={blurb ? undefined : 'text-zinc-400 dark:text-zinc-500 italic'}
                     />
-                    <div className="hidden md:block text-[11px] text-zinc-500 dark:text-zinc-400 truncate">{a.runtime || '—'}</div>
+                    <div className="hidden md:flex items-center gap-1.5 min-w-0 text-[11px] text-zinc-600 dark:text-zinc-300">
+                      {a.runtime ? (
+                        <>
+                          <ServiceIcon id={a.runtime} name={a.runtime} boxClass="w-5 h-5" imgClass="w-3 h-3" className="!rounded-md shrink-0" />
+                          <span className="truncate">{runtimeLabel(a.runtime)}</span>
+                        </>
+                      ) : '—'}
+                    </div>
+                    <div className="hidden md:block text-[11px] tabular-nums text-zinc-600 dark:text-zinc-300">
+                      {hires > 0
+                        ? <span>🔥 {t('contribute.hiresN', { n: hires })}</span>
+                        : <span className="text-[10px] px-1.5 py-px rounded bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-300">{t('contribute.newListing')}</span>}
+                    </div>
+                    <div className="hidden md:flex items-center gap-1.5 text-[11px] text-zinc-600 dark:text-zinc-300">
+                      <span className={`w-1.5 h-1.5 rounded-full ${busyNow ? 'bg-amber-500' : 'bg-green-500'}`} aria-hidden />
+                      {busyNow ? t('network.busy') : t('network.idle')}
+                    </div>
                     <div className="flex justify-end md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
                       {!hired && (
                         <button
@@ -1177,13 +1240,23 @@ function CommunityAgentsCard({ refreshKey = 0, circles = [], scope = 'all', onSc
           <LibraryInspector
             logo={<CommunityAgentIcon name={selected.display_name || selected.id} />}
             title={selectedFull}
-            chips={selectedHired ? (
-              <span className="text-[10px] px-1.5 py-px rounded font-medium bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300">{t('contribute.hiredBadge')}</span>
-            ) : null}
+            chips={(
+              <>
+                {selectedHired && (
+                  <span className="text-[10px] px-1.5 py-px rounded font-medium bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-300">✓ {t('contribute.hiredBadge')}</span>
+                )}
+                {selectedRow && (selectedRow.visibility || 'public') !== 'public' && (
+                  <span className="text-[10px] px-1.5 py-px rounded font-medium bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300">
+                    ◎ {(selectedRow.circle_ids || []).map(circleName).filter(Boolean).join('、') || t('contribute.scope.circleTag')}
+                  </span>
+                )}
+              </>
+            )}
             desc={String(selected.description || '').trim() || t('contribute.noAgentDesc')}
             stats={[
-              [t('contribute.col.runtime'), selected.runtime || '—'],
+              [t('contribute.col.runtime'), selected.runtime ? runtimeLabel(selected.runtime) : '—'],
               [t('contribute.col.cost'), credits != null ? t('contribute.creditsN', { n: credits }) : '—'],
+              [t('contribute.col.popularity'), selectedRow && Number(selectedRow.hire_count) > 0 ? t('contribute.hiresN', { n: selectedRow.hire_count }) : t('contribute.newListing')],
             ]}
             onClose={() => setSelected(null)}
             closeLabel={t('circles.inviteClose')}
@@ -1193,7 +1266,7 @@ function CommunityAgentsCard({ refreshKey = 0, circles = [], scope = 'all', onSc
                   type="button"
                   onClick={hireSelected}
                   disabled={!!busy}
-                  className="tb-press text-xs font-medium px-3.5 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50"
+                  className="tb-press flex-1 text-xs font-medium px-3.5 py-2 rounded-lg bg-blue-600 text-white shadow-sm shadow-blue-600/25 hover:bg-blue-500 disabled:opacity-50"
                 >
                   {busy === 'hire' ? t('contribute.hiring') : (selectedHired ? t('contribute.hiredAgain') : t('contribute.hireBtn'))}
                 </button>
@@ -1202,7 +1275,7 @@ function CommunityAgentsCard({ refreshKey = 0, circles = [], scope = 'all', onSc
                     type="button"
                     onClick={unhireSelected}
                     disabled={!!busy}
-                    className="text-xs px-3.5 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50"
+                    className="text-xs px-3.5 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50"
                   >
                     {busy === 'unhire' ? t('contribute.unhiring') : t('contribute.unhireBtn')}
                   </button>
@@ -1211,13 +1284,29 @@ function CommunityAgentsCard({ refreshKey = 0, circles = [], scope = 'all', onSc
             )}
           >
             <InspectorSection title={t('contribute.hireHowTitle')}>
-              <p className="text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400">{t('contribute.hireHint')}</p>
+              <ol className="space-y-2.5">
+                {[t('contribute.step1'), t('contribute.step2'), t('contribute.step3')].map((txt, i) => (
+                  <li key={i} className="flex gap-2.5">
+                    <span className="w-5 h-5 rounded-full bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-300 text-[10px] font-semibold flex items-center justify-center shrink-0">{i + 1}</span>
+                    <span className="text-[11px] leading-relaxed text-zinc-600 dark:text-zinc-300 pt-0.5">{txt}</span>
+                  </li>
+                ))}
+              </ol>
+            </InspectorSection>
+            <InspectorSection title={t('contribute.safetyTitle')}>
+              <p className="text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400">🔒 {t('contribute.hireHint')}</p>
             </InspectorSection>
           </LibraryInspector>
         )}
       </div>
     </div>
   );
+}
+
+/** 运行时展示名 */
+function runtimeLabel(rt) {
+  const map = { 'claude-code': 'Claude Code', codex: 'Codex', cursor: 'Cursor', 'kimi-code': 'Kimi Code', workbuddy: 'WorkBuddy', gemini: 'Gemini CLI' };
+  return map[String(rt || '').toLowerCase()] || rt;
 }
 
 export default function Contribute() {
