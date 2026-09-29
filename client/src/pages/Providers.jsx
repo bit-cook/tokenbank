@@ -4860,10 +4860,13 @@ export default function Providers() {
             />
           )}
           name={sm.name}
-          sub={sm.cooldown
-            ? t('providers.list.coolingHint')
-            : (sm.usageProvider && sm.enabled ? <UsageInline provider={sm.usageProvider} /> : undefined)}
-          subClass={sm.cooldown ? 'text-amber-600 dark:text-amber-400' : undefined}
+          chips={!sm.cooldown && sm.usageProvider && sm.enabled ? (
+            <span className="ml-1.5 shrink-0 text-[11px] text-zinc-500 dark:text-zinc-400 empty:hidden">
+              <UsageInline provider={sm.usageProvider} />
+            </span>
+          ) : undefined}
+          sub={sm.cooldown ? t('providers.list.coolingHint') : undefined}
+          subClass="text-amber-600 dark:text-amber-400"
         />
         <div className="hidden md:flex items-center gap-1.5 min-w-0 text-[11px] text-zinc-600 dark:text-zinc-300">
           <PersonalTypeIcon tag={sm.tag} />
