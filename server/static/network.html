@@ -50,7 +50,6 @@ a.rk:hover{background:var(--bg-soft,#fafafa)}
       <a class="brand" href="/"><img src="/static/logo.svg" alt=""><span class="bt">Token Bank</span></a>
       <div class="navlinks">
         <a class="on" href="/network">{{ T.navNetwork }}</a>
-        <a href="/circles">{{ T.navCircles }}</a>
       </div>
       <div class="nav-right">
         <button class="btn ghost sm" type="button" @click="toggleLang">{{ lang === 'zh' ? 'EN' : '中文' }}</button>
@@ -235,7 +234,7 @@ a.rk:hover{background:var(--bg-soft,#fafafa)}
   </main>
 
   <footer class="footer">
-    <span>Token Bank · {{ T.footer }}</span><a href="/">{{ T.home }}</a><a href="/circles">{{ T.navCircles }}</a>
+    <span>Token Bank · {{ T.footer }}</span><a href="/">{{ T.home }}</a>
   </footer>
 </div>
 
