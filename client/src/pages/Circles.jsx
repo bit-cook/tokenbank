@@ -10,7 +10,7 @@ import {
 import { getServerUrl } from '../config';
 import UserAvatar, { userDisplayName, avatarColor } from '../components/UserAvatar';
 import {
-  SplitButton, LIB_LIST_CLS, libRowCls, LibrarySectionHead, LibraryRowTitle,
+  SplitButton, LIB_LIST_CLS, LibrarySectionHead,
 } from '../components/LibraryControls';
 import { AssetMoreMenu } from '../components/ResourceAssetCard';
 import CircleBrowse from './CircleBrowse';
@@ -191,75 +191,117 @@ export default function Circles({ view: viewProp = 'mine', circleResult = null, 
   const openCreate = () => { setShowJoin(false); setShowCreate(true); };
   const openJoin = () => { setShowCreate(false); setShowJoin(true); };
 
-  function renderRow(c) {
+  function renderCard(c) {
     const pending = c._owner ? (requestCounts[c.id] || 0) : 0;
+    const n = c.member_count ?? 0;
+    const cap = c.max_members || 0;
+    const pct = cap ? Math.min(100, Math.round((n / cap) * 100)) : 0;
+    const open = () => navigate(`/circles/${c.id}`);
     return (
       <li
         key={c.id}
         role="button"
         tabIndex={0}
-        onClick={() => navigate(`/circles/${c.id}`)}
-        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate(`/circles/${c.id}`); } }}
-        className={`${libRowCls(false)} grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[minmax(0,1fr)_9rem_6.5rem_7.5rem]`}
+        onClick={open}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); } }}
+        className="group relative flex flex-col rounded-2xl border border-zinc-200/70 dark:border-white/[0.07] bg-white/60 dark:bg-zinc-900/40 p-4 cursor-pointer transition-all hover:-translate-y-px hover:shadow-md hover:shadow-zinc-900/5 hover:border-zinc-300/80 dark:hover:border-white/[0.12]"
       >
-        <LibraryRowTitle
-          logo={<CircleLogo name={c.name} />}
-          name={c.name}
-          chips={(
-            <>
+        <div className="flex items-start gap-3">
+          <div className={`w-10 h-10 rounded-xl ${avatarColor(c.name)} flex items-center justify-center text-base font-semibold text-white shrink-0 shadow-sm`} aria-hidden>
+            {(c.name || '?')[0].toUpperCase()}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="text-[13px] font-semibold text-zinc-900 dark:text-zinc-50 truncate">{c.name}</span>
               {c._owner && (
                 <span className="shrink-0 text-[10px] px-1.5 py-px rounded font-medium bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-300">{t('circles.isOwner')}</span>
               )}
-              {pending > 0 && (
-                <span className="shrink-0 text-[10px] px-1.5 py-px rounded font-medium bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300">
-                  {t('circles.pendingRequests', { n: pending })}
-                </span>
-              )}
-            </>
-          )}
-          sub={c.description || t('circles.noDesc')}
-        />
-        <div className="hidden md:block min-w-0"><MemberStack members={c.members || []} /></div>
-        <div className="hidden md:block text-[11px] tabular-nums whitespace-nowrap text-zinc-600 dark:text-zinc-300">
-          {c.max_members ? t('circles.memberSlots', { current: c.member_count ?? 0, max: c.max_members }) : t('circles.members', { n: c.member_count ?? 0 })}
+            </div>
+            <p className="mt-0.5 text-[11px] leading-relaxed text-zinc-500 dark:text-zinc-400 line-clamp-2 min-h-[2.1rem]">
+              {c.description || t('circles.noDesc')}
+            </p>
+          </div>
         </div>
-        <div className="flex items-center justify-end gap-1.5 md:opacity-0 md:group-hover:opacity-100 md:focus-within:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
-          <button type="button" onClick={() => openInvite(c)}
-            className="tb-press text-[11px] px-2.5 py-1 rounded-lg bg-blue-600 text-white hover:bg-blue-500">
-            {t('circles.inviteBtn')}
-          </button>
-          <AssetMoreMenu
-            label={t('circles.moreActions')}
-            items={[
-              { key: 'open', label: t('circles.browse.view'), onClick: () => navigate(`/circles/${c.id}`) },
-              c._owner
-                ? { key: 'dissolve', label: t('circles.dissolve'), danger: true, onClick: () => handleDissolve(c) }
-                : { key: 'leave', label: t('circles.leave'), danger: true, onClick: () => handleLeave(c) },
-            ]}
-          />
+
+        <div className="mt-3 flex items-center gap-3">
+          <MemberStack members={c.members || []} />
+          <div className="ml-auto text-[11px] tabular-nums text-zinc-500 dark:text-zinc-400 whitespace-nowrap">
+            {cap ? t('circles.memberSlots', { current: n, max: cap }) : t('circles.members', { n })}
+          </div>
+        </div>
+        {cap > 0 && (
+          <div className="mt-2 h-1 rounded-full bg-zinc-100 dark:bg-zinc-800 overflow-hidden" aria-hidden>
+            <div className={`h-full rounded-full ${pct >= 90 ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{ width: `${Math.max(pct, 3)}%` }} />
+          </div>
+        )}
+
+        <div className="mt-3 pt-3 border-t border-zinc-100 dark:border-white/[0.06] flex items-center gap-2" onClick={e => e.stopPropagation()}>
+          {pending > 0 ? (
+            <button type="button" onClick={open}
+              className="inline-flex items-center gap-1.5 text-[11px] font-medium text-amber-700 dark:text-amber-300">
+              <span className="relative flex w-1.5 h-1.5"><span className="absolute inline-flex w-full h-full rounded-full bg-amber-400 opacity-70 animate-ping" /><span className="relative inline-flex w-1.5 h-1.5 rounded-full bg-amber-500" /></span>
+              {t('circles.reviewRequests', { n: pending })}
+            </button>
+          ) : (
+            <span className="text-[11px] text-zinc-400">{c._owner ? t('circles.roleOwner') : t('circles.roleMember')}</span>
+          )}
+          <div className="ml-auto flex items-center gap-1.5">
+            <button type="button" onClick={() => openInvite(c)}
+              className="tb-press text-[11px] px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800">
+              + {t('circles.inviteBtn')}
+            </button>
+            <AssetMoreMenu
+              label={t('circles.moreActions')}
+              items={[
+                { key: 'open', label: t('circles.browse.view'), onClick: open },
+                c._owner
+                  ? { key: 'dissolve', label: t('circles.dissolve'), danger: true, onClick: () => handleDissolve(c) }
+                  : { key: 'leave', label: t('circles.leave'), danger: true, onClick: () => handleLeave(c) },
+              ]}
+            />
+          </div>
         </div>
       </li>
     );
   }
 
+  const totalMembers = all.reduce((n, c) => n + (c.member_count || 0), 0);
+  const totalPending = owned.reduce((n, c) => n + (requestCounts[c.id] || 0), 0);
+  const GRID = 'grid gap-3 sm:grid-cols-2 xl:grid-cols-3';
+
   const fieldCls = 'tb-soft-field w-full text-xs px-3 py-2 rounded-lg text-zinc-900 dark:text-zinc-100';
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2">
-        <p className="flex-1 min-w-[12rem] text-[11px] text-zinc-500 dark:text-zinc-400">{t('circles.scopeHint')}</p>
-        <button type="button" onClick={scrollToDiscover}
-          className="tb-press inline-flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg border border-violet-200 dark:border-violet-900 bg-violet-50/80 dark:bg-violet-950/30 text-violet-700 dark:text-violet-300 hover:bg-violet-100 dark:hover:bg-violet-900/40">
-          <span aria-hidden>✦</span>{t('circles.menu.discover')}
-        </button>
-        <SplitButton
-          label={t('circles.createBtn')}
-          onClick={openCreate}
-          menuLabel={t('circles.moreActions')}
-          items={[
-            { key: 'join', label: t('circles.menu.join'), hint: t('circles.menu.joinHint'), onClick: openJoin },
-          ]}
-        />
+      {/* 概况头：圈子即交易范围 */}
+      <div className="relative overflow-hidden rounded-2xl border border-zinc-200/70 dark:border-white/[0.07] bg-gradient-to-br from-emerald-50/80 via-white/70 to-teal-50/60 dark:from-emerald-950/30 dark:via-zinc-900/40 dark:to-teal-950/20 px-5 py-4">
+        <div className="flex flex-wrap items-center gap-4">
+          <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-500 text-white flex items-center justify-center text-lg shadow-md shadow-emerald-500/25 shrink-0" aria-hidden>◎</div>
+          <div className="min-w-0 flex-1">
+            <div className="text-[15px] font-semibold text-zinc-900 dark:text-zinc-50">{t('circles.bannerTitle')}</div>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 flex flex-wrap items-center gap-x-2">
+              <span>{t('circles.bannerCircles', { n: all.length })}</span>
+              <span className="text-zinc-300 dark:text-zinc-600">·</span>
+              <span>{t('circles.bannerMembers', { n: totalMembers })}</span>
+              {totalPending > 0 && (<><span className="text-zinc-300 dark:text-zinc-600">·</span><span className="text-amber-600 dark:text-amber-400">{t('circles.bannerPending', { n: totalPending })}</span></>)}
+            </p>
+            <p className="text-[11px] text-zinc-400 mt-1">{t('circles.scopeHint')}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={scrollToDiscover}
+              className="tb-press inline-flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-lg border border-violet-200 dark:border-violet-900 bg-white/80 dark:bg-violet-950/30 text-violet-700 dark:text-violet-300 hover:bg-violet-50 dark:hover:bg-violet-900/40">
+              <span aria-hidden>✦</span>{t('circles.menu.discover')}
+            </button>
+            <SplitButton
+              label={t('circles.createBtn')}
+              onClick={openCreate}
+              menuLabel={t('circles.moreActions')}
+              items={[
+                { key: 'join', label: t('circles.menu.join'), hint: t('circles.menu.joinHint'), onClick: openJoin },
+              ]}
+            />
+          </div>
+        </div>
       </div>
 
       {/* 入圈结果横幅 */}
@@ -349,7 +391,7 @@ export default function Circles({ view: viewProp = 'mine', circleResult = null, 
           {owned.length > 0 && (
             <section>
               <LibrarySectionHead title={t('circles.myCircles')} count={owned.length} />
-              <ul className={LIB_LIST_CLS}>{all.filter(c => c._owner).map(renderRow)}</ul>
+              <ul className={GRID}>{all.filter(c => c._owner).map(renderCard)}</ul>
             </section>
           )}
           <section>
@@ -363,14 +405,14 @@ export default function Circles({ view: viewProp = 'mine', circleResult = null, 
               )}
             />
             {joined.length === 0 ? (
-              <div className={`${LIB_LIST_CLS} px-4 py-5 text-xs text-zinc-500 dark:text-zinc-400`}>
+              <div className="rounded-2xl border border-dashed border-zinc-300/80 dark:border-zinc-700 px-4 py-5 text-xs text-zinc-500 dark:text-zinc-400">
                 {t('circles.noJoined')}，
                 <button type="button" onClick={scrollToDiscover} className="text-blue-600 dark:text-blue-400 hover:underline">
                   {t('circles.menu.discover')}
                 </button>
               </div>
             ) : (
-              <ul className={LIB_LIST_CLS}>{all.filter(c => !c._owner).map(renderRow)}</ul>
+              <ul className={GRID}>{all.filter(c => !c._owner).map(renderCard)}</ul>
             )}
           </section>
         </>
@@ -378,7 +420,7 @@ export default function Circles({ view: viewProp = 'mine', circleResult = null, 
 
       {/* 发现公开圈子：常驻在「我的圈子」下方，不用切换 */}
       <section ref={discoverRef} className="scroll-mt-4">
-        <LibrarySectionHead title={t('circles.menu.discover')} />
+        <LibrarySectionHead title={<span><span className="text-violet-500 mr-1" aria-hidden>✦</span>{t('circles.menu.discover')}</span>} extra={t('circles.browse.subtitle')} />
         <CircleBrowse onJoined={load} />
       </section>
 
@@ -454,14 +496,6 @@ export default function Circles({ view: viewProp = 'mine', circleResult = null, 
         </div>,
         document.body,
       )}
-    </div>
-  );
-}
-
-function CircleLogo({ name }) {
-  return (
-    <div className={`w-9 h-9 rounded-xl ${avatarColor(name)} flex items-center justify-center text-sm font-semibold text-white shrink-0`} aria-hidden>
-      {(name || '?')[0].toUpperCase()}
     </div>
   );
 }
