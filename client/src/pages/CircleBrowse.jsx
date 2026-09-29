@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLang } from '../store/lang';
 import { browseCircles, applyJoinCircle } from '../api/client';
+import { LIB_LIST_CLS, libRowCls, LibraryRowTitle } from '../components/LibraryControls';
+import CirclesTabs from '../components/CirclesTabs';
 
 const AVATAR_COLORS = [
   'bg-blue-600', 'bg-violet-600', 'bg-emerald-600',
@@ -35,8 +37,6 @@ export default function CircleBrowse() {
     }
   }, []);
 
-  useEffect(() => { load(); }, [load]);
-
   function handleSearch(e) {
     e.preventDefault();
     load(query.trim());
@@ -67,133 +67,105 @@ export default function CircleBrowse() {
     }
   }
 
-  return (
-    <div className="px-5 py-5 space-y-5">
-      {/* 页头 */}
-      <div>
-        <div className="mb-1">
-          <button
-            type="button"
-            onClick={() => navigate('/circles')}
-            className="electron-no-drag relative z-50 text-xs text-zinc-400 hover:text-zinc-600 dark:text-zinc-400 transition-colors"
-          >
-            {t('circles.browse.back')}
-          </button>
-        </div>
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">{t('circles.browse.title')}</h1>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{t('circles.browse.subtitle')}</p>
-          </div>
-        </div>
-      </div>
+  // 输入即搜（防抖），不必再点「搜索」
+  useEffect(() => {
+    const id = setTimeout(() => load(query.trim()), 300);
+    return () => clearTimeout(id);
+  }, [query, load]);
 
-      {banner && (
-        <div className={`flex items-center justify-between rounded-xl px-4 py-3 text-sm
-          ${banner.type === 'success' ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300' :
-            banner.type === 'warning' ? 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300' :
-            'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'}`}>
-          <span>{banner.text}</span>
-          <button type="button" onClick={() => setBanner(null)} className="ml-3 opacity-60 hover:opacity-100 text-lg leading-none">×</button>
-        </div>
-      )}
-
-      {/* 搜索 */}
-      <form onSubmit={handleSearch} className="flex gap-2">
-        <input
-          className="flex-1 border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-          placeholder={t('circles.browse.searchPh')}
-          value={query}
-          onChange={e => setQuery(e.target.value)}
-        />
-        <button
-          type="submit"
-          className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shrink-0"
-        >
-          {t('circles.browse.search')}
+  function renderAction(c) {
+    const isMember = c.join_status === 'member';
+    if (isMember) {
+      return (
+        <button type="button" onClick={() => navigate(`/circles/${c.id}`)}
+          className="text-[11px] px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-white dark:hover:bg-zinc-800">
+          {t('circles.browse.view')}
         </button>
-      </form>
-
-      {/* 列表 */}
-      {loading ? (
-        <p className="text-sm text-gray-400">{t('circles.browse.loading')}</p>
-      ) : circles.length === 0 ? (
-        <div className="tb-soft-card rounded-xl px-4 py-8 text-center">
-          <p className="text-sm text-gray-400">{t('circles.browse.empty')}</p>
-        </div>
-      ) : (
-        <div className="space-y-3">
-          {circles.map(c => (
-            <BrowseCard
-              key={c.id}
-              circle={c}
-              applying={applying === c.id}
-              onApply={() => handleApply(c)}
-              onOpen={() => {
-                if (c.join_status === 'member') navigate(`/circles/${c.id}`);
-              }}
-              t={t}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function BrowseCard({ circle, applying, onApply, onOpen, t }) {
-  const initial = (circle.name || '?')[0].toUpperCase();
-  const color   = circleColor(circle.name);
-  const isMember  = circle.join_status === 'member';
-  const isPending = circle.join_status === 'pending';
-  const isFull    = circle.full && !isMember;
-
-  let actionBtn;
-  if (isMember) {
-    actionBtn = (
-      <button type="button" onClick={onOpen}
-        className="text-xs px-3 py-1.5 rounded-lg bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 hover:bg-blue-200 dark:hover:bg-blue-900/60 transition-colors shrink-0">
-        {t('circles.browse.view')}
-      </button>
-    );
-  } else if (isPending) {
-    actionBtn = (
-      <span className="text-xs px-3 py-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400 shrink-0">
-        {t('circles.browse.pending')}
-      </span>
-    );
-  } else if (isFull) {
-    actionBtn = (
-      <span className="text-xs px-3 py-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-700 text-zinc-400 shrink-0">
-        {t('circles.browse.full')}
-      </span>
-    );
-  } else {
-    actionBtn = (
-      <button type="button" onClick={onApply} disabled={applying}
-        className="text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 transition-colors shrink-0">
-        {applying ? t('circles.browse.applying') : t('circles.browse.apply')}
+      );
+    }
+    if (c.join_status === 'pending') {
+      return <span className="text-[11px] text-zinc-400">{t('circles.browse.pending')}</span>;
+    }
+    if (c.full) return <span className="text-[11px] text-zinc-400">{t('circles.browse.full')}</span>;
+    return (
+      <button type="button" onClick={() => handleApply(c)} disabled={applying === c.id}
+        className="tb-press text-[11px] px-2.5 py-1 rounded-lg bg-blue-600 text-white hover:bg-blue-500 disabled:opacity-50">
+        {applying === c.id ? t('circles.browse.applying') : t('circles.browse.apply')}
       </button>
     );
   }
 
   return (
-    <div className="tb-soft-tile rounded-xl px-4 py-4">
-      <div className="flex items-center gap-4">
-        <div className={`w-11 h-11 rounded-full ${color} flex items-center justify-center text-lg font-bold text-white shrink-0`}>
-          {initial}
+    <div className="flex flex-col h-full min-h-0">
+      <header className="shrink-0 px-5 pt-5">
+        <div className="flex flex-wrap items-start gap-3">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">{t('circles.pageTitle')}</h1>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">{t('circles.browse.subtitle')}</p>
+          </div>
+          <form onSubmit={handleSearch} className="electron-no-drag relative z-50 w-64 max-w-[45vw]">
+            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400 pointer-events-none" aria-hidden>
+              <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8" className="w-3.5 h-3.5"><circle cx="9" cy="9" r="5.5" /><path d="M13.5 13.5 17 17" strokeLinecap="round" /></svg>
+            </span>
+            <input
+              className="tb-soft-field w-full text-xs pl-8 pr-3 py-1.5 rounded-lg text-zinc-900 dark:text-zinc-100"
+              placeholder={t('circles.browse.searchPh')}
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+            />
+          </form>
         </div>
-        <div className="flex-1 min-w-0">
-          <div className="font-semibold text-gray-900 dark:text-gray-100 truncate">{circle.name}</div>
-          {circle.description && (
-            <p className="text-sm text-gray-500 dark:text-gray-400 truncate mt-0.5">{circle.description}</p>
-          )}
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-            {t('circles.members').replace('{n}', circle.member_count)}
-            {circle.max_members ? ` / ${circle.max_members}` : ''}
-          </p>
+        <CirclesTabs active="discover" />
+      </header>
+
+      <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4">
+      {banner && (
+        <div className={`flex items-center justify-between rounded-xl px-4 py-2.5 text-xs
+          ${banner.type === 'success' ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300' :
+            banner.type === 'warning' ? 'bg-yellow-50 dark:bg-yellow-900/20 text-yellow-700 dark:text-yellow-300' :
+            'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'}`}>
+          <span>{banner.text}</span>
+          <button type="button" onClick={() => setBanner(null)} className="ml-3 opacity-60 hover:opacity-100 text-base leading-none">×</button>
         </div>
-        {actionBtn}
+      )}
+
+      {loading && circles.length === 0 ? (
+        <p className="text-xs text-zinc-400 px-1">{t('circles.browse.loading')}</p>
+      ) : circles.length === 0 ? (
+        <div className={`${LIB_LIST_CLS} px-4 py-10 text-center text-xs text-zinc-400`}>{t('circles.browse.empty')}</div>
+      ) : (
+        <ul className={LIB_LIST_CLS}>
+          {circles.map(c => {
+            const isMember = c.join_status === 'member';
+            return (
+              <li
+                key={c.id}
+                onClick={() => { if (isMember) navigate(`/circles/${c.id}`); }}
+                className={`${libRowCls(false)} ${isMember ? '' : '!cursor-default'} grid-cols-[minmax(0,1fr)_auto] md:grid-cols-[minmax(0,1fr)_7rem_6.5rem]`}
+              >
+                <LibraryRowTitle
+                  logo={(
+                    <div className={`w-9 h-9 rounded-xl ${circleColor(c.name)} flex items-center justify-center text-sm font-semibold text-white shrink-0`} aria-hidden>
+                      {(c.name || '?')[0].toUpperCase()}
+                    </div>
+                  )}
+                  name={c.name}
+                  chips={isMember ? (
+                    <span className="shrink-0 text-[10px] px-1.5 py-px rounded font-medium bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300">{t('circles.joinedBadge')}</span>
+                  ) : null}
+                  sub={c.description || t('circles.noDesc')}
+                />
+                <div className="hidden md:block text-[11px] tabular-nums whitespace-nowrap text-zinc-600 dark:text-zinc-300">
+                  {c.max_members
+                    ? t('circles.memberSlots', { current: c.member_count ?? 0, max: c.max_members })
+                    : t('circles.members', { n: c.member_count ?? 0 })}
+                </div>
+                <div className="flex justify-end" onClick={e => e.stopPropagation()}>{renderAction(c)}</div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
       </div>
     </div>
   );

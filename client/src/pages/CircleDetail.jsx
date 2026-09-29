@@ -14,10 +14,17 @@ import {
   listCircleJoinRequests,
   approveCircleJoinRequest,
   rejectCircleJoinRequest,
+  dissolveCircle,
+  leaveCircle,
 } from '../api/client';
 import RichMediaInput from '../components/RichMediaInput';
 import RichMediaContent from '../components/RichMediaContent';
 import UserAvatar, { userDisplayName, avatarColor } from '../components/UserAvatar';
+import { AssetMoreMenu } from '../components/ResourceAssetCard';
+import { getServerUrl } from '../config';
+
+/** 侧栏卡片：与资产 / 模型列表容器同款描边 */
+const SIDE_CARD = 'rounded-2xl border border-zinc-200/70 dark:border-white/[0.07] bg-white/55 dark:bg-zinc-900/40 px-4 py-3.5 space-y-2.5';
 
 function authorName(a) {
   return userDisplayName(a);
@@ -153,6 +160,26 @@ export default function CircleDetail({ routeParams }) {
   const [requestBusy, setRequestBusy] = useState(null); // request id
 
   const isAuthor = (item) => myId != null && item?.author_id === myId;
+  const [inviteCopied, setInviteCopied] = useState(false);
+
+  function copyInvite() {
+    if (!circle?.code) return;
+    const base = getServerUrl() || window.location.origin;
+    navigator.clipboard?.writeText(`${base}/app?c=${circle.code}`).then(() => {
+      setInviteCopied(true);
+      setTimeout(() => setInviteCopied(false), 2000);
+    }).catch(() => {});
+  }
+
+  async function handleDissolve() {
+    if (!circle || !window.confirm(t('circles.dissolveConfirm').replace('{name}', circle.name))) return;
+    try { await dissolveCircle(id); navigate('/circles'); } catch (err) { setError(err?.response?.data?.detail || err.message); }
+  }
+
+  async function handleLeave() {
+    if (!circle || !window.confirm(t('circles.leaveConfirm').replace('{name}', circle.name))) return;
+    try { await leaveCircle(id); navigate('/circles'); } catch (err) { setError(err?.response?.data?.detail || err.message); }
+  }
 
   const load = useCallback(async () => {
     // 无效 id：必须结束 loading，否则会永远停在「加载中…」
@@ -344,166 +371,62 @@ export default function CircleDetail({ routeParams }) {
 
   const color = avatarColor(circle?.name);
 
+  const memberLabel = circle?.max_members
+    ? t('circles.memberSlots', { current: circle?.member_count ?? 0, max: circle.max_members })
+    : t('circles.members', { n: circle?.member_count ?? 0 });
+
   return (
-    <div className="px-5 py-5 space-y-5">
-      {/* 页头：与 Network「← 供给源」同位置 */}
+    <div className="px-5 py-5 space-y-4">
       <div>
-        <div className="mb-1">
-          <button type="button" onClick={() => navigate('/circles')}
-            className="electron-no-drag relative z-50 text-xs text-zinc-400 hover:text-zinc-600 dark:text-zinc-400 transition-colors">
-            {t('circles.detail.back')}
-          </button>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className={`w-12 h-12 rounded-full ${color} flex items-center justify-center text-xl font-bold text-white shrink-0`}>
+        <button type="button" onClick={() => navigate('/circles')}
+          className="electron-no-drag relative z-50 mb-2 text-xs text-zinc-400 hover:text-zinc-600 dark:text-zinc-400 transition-colors">
+          {t('circles.detail.back')}
+        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className={`w-11 h-11 rounded-xl ${color} flex items-center justify-center text-lg font-semibold text-white shrink-0`} aria-hidden>
             {(circle?.name || '?')[0].toUpperCase()}
           </div>
-          <div className="min-w-0">
-            <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">{circle?.name}</h1>
-            {circle?.description && (
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{circle.description}</p>
-            )}
-            <p className="text-xs text-gray-400 mt-0.5">
-              {t('circles.members').replace('{n}', circle?.member_count ?? 0)}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 min-w-0">
+              <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 truncate">{circle?.name}</h1>
               {circle?.is_owner && (
-                <span className="ml-2 px-1.5 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300">
-                  {t('circles.isOwner')}
-                </span>
+                <span className="shrink-0 text-[10px] px-1.5 py-px rounded font-medium bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-300">{t('circles.isOwner')}</span>
               )}
+            </div>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 truncate">
+              {circle?.description ? `${circle.description} · ` : ''}{memberLabel}
+              {' · '}{t('circles.detail.statModels', { n: models.length })}
+              {' · '}{t('circles.detail.statAgents', { n: agents.length })}
             </p>
+          </div>
+          <div className="electron-no-drag relative z-50 flex items-center gap-1.5">
+            {circle?.code && (
+              <button type="button" onClick={copyInvite}
+                className="tb-press text-xs font-medium px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-500">
+                {inviteCopied ? `${t('circles.linkCopied')} ✓` : t('circles.copyInviteLink')}
+              </button>
+            )}
+            <AssetMoreMenu
+              label={t('circles.moreActions')}
+              items={[
+                circle?.is_owner
+                  ? { key: 'dissolve', label: t('circles.dissolve'), danger: true, onClick: handleDissolve }
+                  : { key: 'leave', label: t('circles.leave'), danger: true, onClick: handleLeave },
+              ]}
+            />
           </div>
         </div>
       </div>
 
       {error && <p className="text-xs text-red-500">{error}</p>}
 
-      {/* 圈主：待审批入圈申请 */}
-      {circle?.is_owner && (
-        <section className="tb-soft-card rounded-xl px-4 py-4 space-y-3">
-          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-200">
-            {t('circles.browse.requestsTitle')}
-            {joinRequests.length > 0 && (
-              <span className="ml-2 text-xs font-normal text-amber-600 dark:text-amber-400">
-                {joinRequests.length}
-              </span>
-            )}
-          </h2>
-          {joinRequests.length === 0 ? (
-            <p className="text-xs text-gray-400">{t('circles.browse.noRequests')}</p>
-          ) : (
-            <div className="space-y-2">
-              {joinRequests.map(req => {
-                const name = req.nickname || req.email?.split('@')[0] || '?';
-                return (
-                  <div key={req.id} className="flex items-center gap-3 py-2 border-t border-gray-100 dark:border-gray-700 first:border-0 first:pt-0">
-                    <AuthorAvatar author={req} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{name}</p>
-                      {req.message && (
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">{req.message}</p>
-                      )}
-                    </div>
-                    <div className="flex gap-2 shrink-0">
-                      <button
-                        type="button"
-                        disabled={requestBusy === req.id}
-                        onClick={() => handleApproveRequest(req)}
-                        className="text-xs px-2.5 py-1 rounded-lg bg-green-600 text-white hover:bg-green-500 disabled:opacity-50"
-                      >
-                        {t('circles.browse.approve')}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={requestBusy === req.id}
-                        onClick={() => handleRejectRequest(req)}
-                        className="text-xs px-2.5 py-1 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
-                      >
-                        {t('circles.browse.reject')}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
-      )}
-
-      {/* 圈友 */}
-      <section className="tb-soft-card rounded-xl px-4 py-4 space-y-2">
-        <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-200">{t('circles.detail.friends')}</h2>
-        <CircleMembers
-          members={members}
-          expanded={membersExpanded}
-          onToggle={() => setMembersExpanded(v => !v)}
-        />
-      </section>
-
-      {/* 共享模型 */}
-      <section className="tb-soft-card rounded-xl px-4 py-4 space-y-2">
-        <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-200">{t('circles.detail.models')}</h2>
-        {models.length === 0
-          ? <p className="text-xs text-gray-400">{t('circles.detail.noModels')}</p>
-          : (
-            <div className="flex flex-wrap gap-2">
-              {models.map(m => (
-                <span key={m.id}
-                  className="text-xs px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-mono">
-                  {m.id}
-                  {m.model_type && m.model_type !== 'chat' && (
-                    <span className="ml-1 text-gray-400">({m.model_type})</span>
-                  )}
-                </span>
-              ))}
-            </div>
-          )}
-      </section>
-
-      {/* 共享智能体：与交易页社区智能体同款卡片（图标 + 标题 + runtime + 简介） */}
-      <section className="tb-soft-card rounded-xl px-4 py-4 space-y-2.5">
-        <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-200">{t('circles.detail.agents')}</h2>
-        {agents.length === 0
-          ? <p className="text-xs text-gray-400">{t('circles.detail.noAgents')}</p>
-          : (
-            <div className="space-y-2.5">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                {agents.map((a) => {
-                  const title = a.display_name || a.name || a.id;
-                  const blurb = String(a.description || '').trim();
-                  return (
-                    <div
-                      key={`${a.worker_id}:${a.id}`}
-                      className="tb-soft-tile flex gap-3 p-3 rounded-2xl"
-                    >
-                      <CircleAgentIcon name={title} />
-                      <div className="min-w-0 flex-1">
-                        <span className="text-sm font-semibold leading-snug text-gray-900 dark:text-gray-100 truncate block">
-                          {title}
-                        </span>
-                        {a.runtime && (
-                          <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 truncate">
-                            {a.runtime}
-                          </p>
-                        )}
-                        <p className={`text-[11px] mt-1.5 line-clamp-2 leading-relaxed ${
-                          blurb ? 'text-gray-500 dark:text-gray-400' : 'text-gray-400 italic'
-                        }`}>
-                          {blurb || '—'}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <p className="text-[11px] text-gray-400">{t('circles.detail.agentsHint')}</p>
-            </div>
-          )}
-      </section>
-
+      {/* 动态为主栏；成员 / 共享资源 / 入圈申请收进侧栏 */}
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px] items-start">
+        <div className="min-w-0">
       {/* 消息：卡片列表，正文无气泡；回复有气泡 */}
       <div className="space-y-3">
         <div className="flex items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-200">{t('circles.detail.announcements')}</h2>
+          <h2 className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-100">{t('circles.detail.announcements')}</h2>
           {!showComposer && (
             <button type="button" onClick={() => setShowComposer(true)}
               className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shrink-0">
@@ -681,6 +604,136 @@ export default function CircleDetail({ routeParams }) {
             )}
           </article>
         ))}
+      </div>
+        </div>
+        <aside className="space-y-3 lg:sticky lg:top-0">
+      {/* 圈主：待审批入圈申请 */}
+      {circle?.is_owner && joinRequests.length > 0 && (
+        <section className={`${SIDE_CARD} ring-1 ring-amber-200/70 dark:ring-amber-900/50`}>
+          <h2 className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-100">
+            {t('circles.browse.requestsTitle')}
+            {joinRequests.length > 0 && (
+              <span className="ml-2 text-xs font-normal text-amber-600 dark:text-amber-400">
+                {joinRequests.length}
+              </span>
+            )}
+          </h2>
+          {joinRequests.length === 0 ? (
+            <p className="text-xs text-gray-400">{t('circles.browse.noRequests')}</p>
+          ) : (
+            <div className="space-y-2">
+              {joinRequests.map(req => {
+                const name = req.nickname || req.email?.split('@')[0] || '?';
+                return (
+                  <div key={req.id} className="flex items-center gap-3 py-2 border-t border-gray-100 dark:border-gray-700 first:border-0 first:pt-0">
+                    <AuthorAvatar author={req} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-800 dark:text-gray-200 truncate">{name}</p>
+                      {req.message && (
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5 truncate">{req.message}</p>
+                      )}
+                    </div>
+                    <div className="flex gap-2 shrink-0">
+                      <button
+                        type="button"
+                        disabled={requestBusy === req.id}
+                        onClick={() => handleApproveRequest(req)}
+                        className="text-xs px-2.5 py-1 rounded-lg bg-green-600 text-white hover:bg-green-500 disabled:opacity-50"
+                      >
+                        {t('circles.browse.approve')}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={requestBusy === req.id}
+                        onClick={() => handleRejectRequest(req)}
+                        className="text-xs px-2.5 py-1 rounded-lg border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50"
+                      >
+                        {t('circles.browse.reject')}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* 圈友 */}
+      <section className={SIDE_CARD}>
+        <h2 className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-100">{t('circles.detail.friends')}</h2>
+        <CircleMembers
+          members={members}
+          expanded={membersExpanded}
+          onToggle={() => setMembersExpanded(v => !v)}
+        />
+      </section>
+
+      {/* 共享模型 */}
+      <section className={SIDE_CARD}>
+        <h2 className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-100">{t('circles.detail.models')}</h2>
+        {models.length === 0
+          ? <p className="text-xs text-gray-400">{t('circles.detail.noModels')}</p>
+          : (
+            <div className="flex flex-wrap gap-2">
+              {models.map(m => (
+                <span key={m.id}
+                  className="text-xs px-2.5 py-1 rounded-lg bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 font-mono">
+                  {m.id}
+                  {m.model_type && m.model_type !== 'chat' && (
+                    <span className="ml-1 text-gray-400">({m.model_type})</span>
+                  )}
+                </span>
+              ))}
+            </div>
+          )}
+      </section>
+
+      {/* 共享智能体：与交易页社区智能体同款卡片（图标 + 标题 + runtime + 简介） */}
+      <section className={SIDE_CARD}>
+        <h2 className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-100">{t('circles.detail.agents')}</h2>
+        {agents.length === 0
+          ? <p className="text-xs text-gray-400">{t('circles.detail.noAgents')}</p>
+          : (
+            <div className="space-y-2.5">
+              <div className="grid grid-cols-1 gap-2">
+                {agents.map((a) => {
+                  const title = a.display_name || a.name || a.id;
+                  const blurb = String(a.description || '').trim();
+                  return (
+                    <div
+                      key={`${a.worker_id}:${a.id}`}
+                      className="tb-soft-tile flex gap-3 p-3 rounded-2xl"
+                    >
+                      <CircleAgentIcon name={title} />
+                      <div className="min-w-0 flex-1">
+                        <span className="text-sm font-semibold leading-snug text-gray-900 dark:text-gray-100 truncate block">
+                          {title}
+                        </span>
+                        {a.runtime && (
+                          <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-0.5 truncate">
+                            {a.runtime}
+                          </p>
+                        )}
+                        <p className={`text-[11px] mt-1.5 line-clamp-2 leading-relaxed ${
+                          blurb ? 'text-gray-500 dark:text-gray-400' : 'text-gray-400 italic'
+                        }`}>
+                          {blurb || '—'}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <button type="button" onClick={() => navigate('/contribute')}
+                className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline text-left">
+                {t('circles.detail.goHire')}
+              </button>
+            </div>
+          )}
+      </section>
+
+        </aside>
       </div>
     </div>
   );
