@@ -1,6 +1,6 @@
 // client/src/pages/Contribute.jsx
 import React, { useCallback, useEffect, useState, useRef } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { getStats, getSettlements, getContributeSummary, listJoinedCircles, listMyCircles, listCommunityAgents, listPublicCommunityAgents } from '../api/client';
 import { getConfig, getGateway, getLocalConfig } from '../api/adapter';
 import { resolveLocalGatewayBase } from '../api/gatewayModels';
@@ -1462,7 +1462,6 @@ function runtimeLabel(rt) {
 export default function Contribute() {
   const { t, lang } = useLang();
   const { user } = useAuth();
-  const navigate = useNavigate();
   const [running,     setRunning]     = useState(false);
   const [stats,       setStats]       = useState(null);
   const [settlements, setSettlements] = useState([]);
@@ -1668,13 +1667,6 @@ export default function Contribute() {
                 <span className={`relative inline-flex w-2 h-2 rounded-full ${running ? 'bg-green-500' : 'bg-zinc-300 dark:bg-zinc-600'}`} />
               </span>
               {running ? t('contribute.statusSupplying') : t('contribute.statusIdle')}
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate('/network')}
-              className="text-xs px-2.5 py-1.5 rounded-lg text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-white/70 dark:hover:bg-zinc-800"
-            >
-              {t('providers.p2p.globalNetwork')}
             </button>
           </div>
         </div>

@@ -1325,6 +1325,7 @@ export default {
 
   // ── 网络 ──
   'network.backProviders': '← 返回',
+  'network.goHire': '雇佣智能体',
   'network.title': '🌐 社区网络',
   'network.running': '● 运行中',
   'network.subtitle': '由社区节点共同构成的分布式推理网络',
@@ -1659,6 +1660,7 @@ export default {
   'circles.reviewRequests': '处理 {n} 条申请',
   'circles.roleOwner': '你是圈主',
   'circles.roleMember': '你是成员',
+  'circles.networkLink': '社区网络',
   'circles.pageTitle': '圈子',
   'circles.pageSubtitle': '和信任的人共享模型额度与智能体，私密、可控',
   'circles.tab.mine': '我的圈子',

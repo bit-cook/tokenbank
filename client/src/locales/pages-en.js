@@ -1321,6 +1321,7 @@ export default {
   'contribute.settlementCny': '≈',
 
   'network.backProviders': '← Back',
+  'network.goHire': 'Hire agents',
   'network.title': '🌐 Community network',
   'network.running': '● Running',
   'network.subtitle': 'Distributed inference network powered by community nodes',
@@ -1653,6 +1654,7 @@ export default {
   'circles.reviewRequests': 'Review {n} requests',
   'circles.roleOwner': 'You own this',
   'circles.roleMember': 'Member',
+  'circles.networkLink': 'Community network',
   'circles.pageTitle': 'Circles',
   'circles.pageSubtitle': 'Share model quota and agents with people you trust — private and under your control',
   'circles.tab.mine': 'My circles',

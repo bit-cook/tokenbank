@@ -6,6 +6,7 @@ import { fetchServerCommunityModels } from '../lib/communityModels';
 import { useLang } from '../store/lang';
 import P2pWorldMap from '../components/P2pWorldMap';
 import TruncTip from '../components/TruncTip';
+import { avatarColor } from '../components/UserAvatar';
 
 /** 贡献 Token 大数展示（M/K） */
 function fmtContribTokens(n) {
@@ -127,17 +128,6 @@ function parseSize(name) {
   return null;
 }
 
-// 可用模型指示：实心点（无 ping）
-function PingDot({ color = 'green' }) {
-  const colors = {
-    green:  'bg-green-500',
-    amber:  'bg-amber-500',
-    gray:   'bg-zinc-800',
-  };
-  const dot = colors[color] || colors.green;
-  return <span className={`w-2 h-2 rounded-full shrink-0 ${dot}`} />;
-}
-
 /**
  * 展示用被雇人数 = 真实 hire_count + [10,50] 稳定偏移（同一聚合键刷新不变）。
  */
@@ -217,6 +207,7 @@ export default function Network() {
   const [circleModelMap, setCircleModelMap] = useState({});
   const [communityIds,   setCommunityIds]   = useState([]);
   const [circles,        setCircles]        = useState([]);
+  const [listTab,        setListTab]        = useState('models');
 
   useEffect(() => {
     let cancelled = false;
@@ -293,80 +284,76 @@ export default function Network() {
   }
 
   // ── Render ────────────────────────────────────────────────────────────────
+  const circleCount = network?.summary?.circle_count ?? circles.length;
+  const kpis = [
+    { k: 'nodes', label: t('network.globalNodes'), value: totalNodes, sub: t('network.onlineWorkers'), tone: 'text-blue-600 dark:text-blue-400' },
+    { k: 'models', label: t('network.availableModels'), value: totalModels, sub: t('network.dedupModels') },
+    { k: 'agents', label: t('network.availableAgents'), value: totalAgents, sub: t('network.availableAgentsHint'), tone: 'text-amber-600 dark:text-amber-400' },
+    { k: 'circles', label: t('network.circlesStat'), value: circleCount, sub: t('network.circlesStatHint'), tone: 'text-emerald-600 dark:text-emerald-400' },
+    { k: 'tokens', label: t('network.contribTokens'), value: fmtContribTokens(totalTokens), sub: t('network.thisPeriod') },
+    { k: 'users', label: t('network.activeUsers'), value: network?.summary?.active_users ?? 0, sub: t('network.contributing'), tone: 'text-green-600 dark:text-green-400' },
+  ];
+  const LISTS = [
+    { id: 'models', label: t('network.modelsTitle'), n: modelStats.length },
+    { id: 'agents', label: t('network.agentsTitle'), n: totalAgents },
+    { id: 'circles', label: t('network.circlesTitle'), n: circles.length },
+  ];
+  const medal = (rank) => (rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : null);
+  const myOnline = !!(myStats && myStats.active_workers > 0);
+  const card = 'rounded-2xl border border-zinc-200/70 dark:border-white/[0.07] bg-white/55 dark:bg-zinc-900/40';
+  const rowCls = 'flex items-center gap-3 px-4 py-2.5 border-b last:border-b-0 border-zinc-100/90 dark:border-white/[0.05]';
 
   return (
-    <div className="px-4 py-4 space-y-4">
-
-      {/* Header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="mb-1">
-            <button onClick={() => navigate(-1)}
-              className="text-xs text-zinc-400 hover:text-zinc-600 dark:text-zinc-400 transition-colors">
-              {t('network.backProviders')}
+    <div className="px-5 py-5 space-y-4">
+      {/* 页头 */}
+      <div>
+        <button onClick={() => navigate(-1)}
+          className="electron-no-drag relative z-50 mb-2 text-xs text-zinc-400 hover:text-zinc-600 dark:text-zinc-400 transition-colors">
+          {t('network.backProviders')}
+        </button>
+        <div className="flex flex-wrap items-start gap-3">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
+              {t('network.title')}
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-normal px-2 py-0.5 rounded-full border border-green-200 dark:border-green-900 bg-green-50/80 dark:bg-green-950/30 text-green-700 dark:text-green-300">
+                <span className="relative flex w-1.5 h-1.5"><span className="absolute inline-flex w-full h-full rounded-full bg-green-400 opacity-70 animate-ping" /><span className="relative inline-flex w-1.5 h-1.5 rounded-full bg-green-500" /></span>
+                {t('network.running').replace(/^[●○]\s*/, '')}
+              </span>
+            </h1>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">{t('network.subtitle')}</p>
+          </div>
+          <div className="electron-no-drag relative z-50 flex items-center gap-2">
+            <button type="button" onClick={() => navigate('/contribute', { state: { tradeTab: 'hire' } })}
+              className="text-xs px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white/70 dark:bg-zinc-900/40 text-zinc-700 dark:text-zinc-200 hover:bg-white dark:hover:bg-zinc-800">
+              {t('network.goHire')}
+            </button>
+            <button type="button" onClick={() => navigate('/contribute', { state: { tradeTab: 'supply' } })}
+              className="tb-press text-xs font-medium px-3.5 py-1.5 rounded-lg bg-blue-600 text-white shadow-sm shadow-blue-600/25 hover:bg-blue-500">
+              {t('network.join')}
             </button>
           </div>
-          <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-            {t('network.title')}
-            <span className="text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 border border-blue-300 dark:border-blue-800/50 px-1.5 py-0.5 rounded-full font-normal">
-              {t('network.running')}
-            </span>
-          </h1>
-          <p className="text-sm text-zinc-400 mt-0.5">{t('network.subtitle')}</p>
         </div>
-        <button onClick={() => navigate('/contribute', { state: { tradeTab: 'supply' } })}
-          className="text-xs bg-blue-600 hover:bg-blue-500 dark:bg-[#3f6699] dark:hover:bg-[#4a73a8] text-white px-4 py-2 rounded-lg font-medium transition-colors flex items-center gap-2">
-          {t('network.join')}
-        </button>
       </div>
 
-      {/* Stats row */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <div className="tb-soft-card rounded-xl p-3">
-          <div className="text-xs text-zinc-400">{t('network.globalNodes')}</div>
-          <div className="text-2xl font-bold text-blue-600 dark:text-blue-400 mt-1">{loading ? '—' : totalNodes}</div>
-          <div className="text-xs text-zinc-400 mt-0.5">{t('network.onlineWorkers')}</div>
-        </div>
-        <div className="tb-soft-card rounded-xl p-3">
-          <div className="text-xs text-zinc-400">{t('network.availableModels')}</div>
-          <div className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mt-1">{loading ? '—' : totalModels}</div>
-          <div className="text-xs text-zinc-400 mt-0.5">{t('network.dedupModels')}</div>
-        </div>
-        <div className="tb-soft-card rounded-xl p-3">
-          <div className="text-xs text-zinc-400">{t('network.availableAgents')}</div>
-          <div className="text-2xl font-bold text-amber-600 dark:text-amber-400 mt-1">{loading ? '—' : totalAgents}</div>
-          <div className="text-xs text-zinc-400 mt-0.5">{t('network.availableAgentsHint')}</div>
-        </div>
-        <div className="tb-soft-card rounded-xl p-3">
-          <div className="text-xs text-zinc-400">{t('network.circlesStat')}</div>
-          <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400 mt-1">
-            {loading ? '—' : (network?.summary?.circle_count ?? circles.length)}
+      {/* 全网概况：一条 KPI 带 */}
+      <div className={`${card} overflow-hidden grid grid-cols-3 lg:grid-cols-6`}>
+        {kpis.map((m, i) => (
+          <div key={m.k} className={`px-4 py-3 min-w-0 border-zinc-100 dark:border-white/[0.06] ${i % 3 ? 'border-l' : ''} ${i >= 3 ? 'border-t lg:border-t-0' : ''} ${i === 3 ? 'lg:border-l' : ''}`}>
+            <div className="text-[11px] text-zinc-500 dark:text-zinc-400 truncate">{m.label}</div>
+            <div className={`mt-1 text-lg font-semibold tabular-nums tracking-tight ${m.tone || 'text-zinc-900 dark:text-zinc-50'}`}>{loading ? '—' : m.value}</div>
+            <div className="text-[11px] text-zinc-400 truncate mt-0.5">{m.sub}</div>
           </div>
-          <div className="text-xs text-zinc-400 mt-0.5">{t('network.circlesStatHint')}</div>
-        </div>
-        <div className="tb-soft-card rounded-xl p-3">
-          <div className="text-xs text-zinc-400">{t('network.contribTokens')}</div>
-          <div className="text-2xl font-bold text-zinc-900 dark:text-zinc-100 mt-1">
-            {loading ? '—' : fmtContribTokens(totalTokens)}
-          </div>
-          <div className="text-xs text-zinc-400 mt-0.5">{t('network.thisPeriod')}</div>
-        </div>
-        <div className="tb-soft-card rounded-xl p-3">
-          <div className="text-xs text-zinc-400">{t('network.activeUsers')}</div>
-          <div className="text-2xl font-bold text-green-600 dark:text-green-400 mt-1">
-            {loading ? '—' : network?.summary?.active_users ?? 0}
-          </div>
-          <div className="text-xs text-zinc-400 mt-0.5">{t('network.contributing')}</div>
-        </div>
+        ))}
       </div>
 
       {/* 全球节点地图 */}
       {!loading && network && (
-        <div className="tb-soft-card rounded-2xl p-4 overflow-hidden">
-          <div className="flex items-center justify-between mb-3 px-1">
-            <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">{t('network.mapTitle')}</h2>
-            <span className="text-xs text-zinc-400">{t('network.mapHint')}</span>
+        <section className={`${card} p-4 overflow-hidden`}>
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <h2 className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-100">{t('network.mapTitle')}</h2>
+            <span className="text-[11px] text-zinc-400">{t('network.mapHint')}</span>
           </div>
+          <div className="max-w-4xl mx-auto">
           <P2pWorldMap
             workers={network.workers || []}
             labels={{
@@ -378,332 +365,230 @@ export default function Network() {
               unmapped: n => t('network.mapUnmapped', { n }),
             }}
           />
-        </div>
+          </div>
+        </section>
       )}
 
       {loading ? (
-        <div className="text-sm text-zinc-400">{t('common.loading')}</div>
+        <div className="text-xs text-zinc-400">{t('common.loading')}</div>
       ) : !network ? (
-        <div className="text-sm text-zinc-400">{t('network.loadFailed')}</div>
+        <div className={`${card} px-6 py-10 text-center text-xs text-zinc-500`}>{t('network.loadFailed')}</div>
       ) : (
-        <div className="grid grid-cols-2 gap-5">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px] items-start">
+          {/* 左：模型 / 智能体 / 公开圈子 */}
+          <section className="min-w-0 space-y-3">
+            <div role="tablist" className="inline-flex p-0.5 rounded-lg bg-zinc-100/90 dark:bg-zinc-800/80">
+              {LISTS.map(l => (
+                <button key={l.id} type="button" role="tab" aria-selected={listTab === l.id} onClick={() => setListTab(l.id)}
+                  className={`text-xs px-3 py-1.5 rounded-md transition-colors ${
+                    listTab === l.id
+                      ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-50 shadow-sm font-medium'
+                      : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+                  }`}>
+                  {l.label}<span className="ml-1 text-[11px] font-normal text-zinc-400 tabular-nums">{l.n}</span>
+                </button>
+              ))}
+            </div>
 
-          {/* Left: Model list + Agents list */}
-          <div className="space-y-5">
-          <div className="space-y-2">
-            <div className="px-1 flex items-center justify-between">
-              <h2 className="text-sm font-semibold tracking-tight text-zinc-800 dark:text-zinc-100">{t('network.modelsTitle')}</h2>
-              <span className="tb-table-cell-meta">{t('network.sortByNodes')}</span>
-            </div>
-            <div className="space-y-2">
-              {modelStats.length === 0 ? (
-                <div className="px-5 py-6 text-xs text-zinc-400">{t('network.noOnlineModels')}</div>
-              ) : modelStats.map(m => {
-                const isBusy = false;
-                const dot    = m.nodes === 0 ? 'gray' : 'green';
-                const avgS   = m.latencyCount > 0
-                  ? (m.totalLatency / m.latencyCount / 1000).toFixed(1)
-                  : null;
-                const size   = parseSize(m.name);
-                return (
-                  <div key={m.name}
-                    className={`tb-soft-tile flex items-center gap-3 px-4 py-3 rounded-xl ${m.nodes === 0 ? 'opacity-50' : ''}`}
-                  >
-                    <PingDot color={dot} />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <TruncTip
-                          as="span"
-                          title={m.name}
-                          className={`text-xs font-mono font-medium min-w-0 ${m.nodes === 0 ? 'text-zinc-400' : 'text-zinc-800 dark:text-zinc-200'}`}
-                        >
-                          {m.name}
-                        </TruncTip>
-                        {size && (
-                          <span className="text-xs text-zinc-400 bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded">{size}</span>
-                        )}
-                        {circleModelMap?.[m.name] && (
-                          <span
-                            title={circleModelMap[m.name]?.circle_name || '圈子'}
-                            className="text-[10px] leading-none px-1 py-0.5 rounded bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 cursor-default"
-                          >⊙</span>
-                        )}
-                      </div>
-                      {m.nodes > 0 && !avgS && (
-                        <div className="text-xs text-green-600 mt-0.5">{t('network.idle')}</div>
-                      )}
-                    </div>
-                    <div className="text-right shrink-0">
-                      {m.nodes > 0 ? (
-                        <>
-                          <div className="text-xs font-medium text-zinc-700 dark:text-zinc-300">{t('network.nodes', { n: m.nodes })}</div>
-                          <div className="text-xs mt-0.5 text-zinc-400">
-                            {avgS ? t('network.avgSeconds', { s: avgS }) : '—'}
-                          </div>
-                        </>
-                      ) : (
-                        <>
-                          <div className="text-xs text-zinc-400">{t('network.nodesZero')}</div>
-                          <div className="text-xs text-zinc-400">{t('network.unavailable')}</div>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 可用智能体：公开在线名片 */}
-          <div className="space-y-2">
-            <div className="px-1 flex items-center justify-between">
-              <h2 className="text-sm font-semibold tracking-tight text-zinc-800 dark:text-zinc-100">{t('network.agentsTitle')}</h2>
-              <span className="tb-table-cell-meta">{t('network.agentsCount', { n: totalAgents })}</span>
-            </div>
-            <div className="space-y-2 max-h-80 overflow-y-auto">
-              {agentGroups.length === 0 ? (
-                <div className="px-5 py-6 text-xs text-zinc-400">{t('network.noOnlineAgents')}</div>
-              ) : agentGroups.map((g) => {
-                const ownersHint = g.ownersFull.length
-                  ? g.ownersFull.join('、')
-                  : '';
-                return (
-                  <div key={g.name} className="tb-soft-tile flex items-center gap-3 px-4 py-3 rounded-xl">
-                    <PingDot color="green" />
-                    <div className="flex-1 min-w-0">
-                      {/* 聚合行不展示运行时/简介：不同提供者可能不一致 */}
-                      <TruncTip
-                        as="span"
-                        title={g.name}
-                        className="text-xs font-mono font-medium text-zinc-800 dark:text-zinc-200 block"
-                      >
-                        {g.name}
-                      </TruncTip>
-                    </div>
-                    <div className="text-right shrink-0 flex flex-col items-end gap-0.5">
-                      {/* 对齐模型「n 节点」：同名智能体的提供者数量；悬浮看提供者样例 */}
-                      <TruncTip
-                        className="text-xs font-medium text-zinc-700 dark:text-zinc-300"
-                        title={ownersHint || t('network.agentProviders', { n: g.providers })}
-                      >
-                        {t('network.agentProviders', { n: g.providers })}
-                      </TruncTip>
-                      <div className="text-[10px] text-zinc-400 tabular-nums">
-                        {t('network.hiredCount', { n: displayHiredCount(g.hire_count, g.name) })}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => navigate('/contribute', { state: { tradeTab: 'hire', scope: 'all', agentQuery: g.name } })}
-                        className="text-[11px] text-blue-600 dark:text-blue-400 hover:underline"
-                      >
-                        {t('network.hireOnContribute')}
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 公开圈子列表 */}
-          <div className="space-y-2">
-            <div className="px-1 flex items-center justify-between">
-              <h2 className="text-sm font-semibold tracking-tight text-zinc-800 dark:text-zinc-100">{t('network.circlesTitle')}</h2>
-              <button
-                type="button"
-                onClick={() => navigate('/contribute', { state: { tradeTab: 'circles', circlesView: 'discover' } })}
-                className="tb-table-cell-meta text-blue-600 dark:text-blue-400 hover:underline"
-              >
-                {t('network.circlesMore')}
-              </button>
-            </div>
-            <div className="space-y-2 max-h-80 overflow-y-auto">
-              {circles.length === 0 ? (
-                <div className="px-5 py-6 text-xs text-zinc-400">{t('network.noCircles')}</div>
-              ) : circles.slice(0, 20).map((c) => {
-                const isMember = c.join_status === 'member';
-                const isPending = c.join_status === 'pending';
-                const desc = String(c.description || '').trim();
-                return (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => onCircleClick(c)}
-                    className="tb-soft-tile w-full text-left flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-zinc-50 dark:hover:bg-zinc-800/60 transition-colors disabled:opacity-60"
-                  >
-                    <span className="w-7 h-7 rounded-lg bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 text-xs font-semibold flex items-center justify-center shrink-0">
-                      {(c.name || '?')[0]}
-                    </span>
-                    <div className="flex-1 min-w-0">
-                      <TruncTip
-                        as="span"
-                        title={c.name}
-                        className="text-xs font-medium text-zinc-800 dark:text-zinc-200 block"
-                      >
-                        {c.name}
-                      </TruncTip>
-                      <TruncTip
-                        className="text-xs text-zinc-400 mt-0.5"
-                        title={desc || t('network.circleNoDesc')}
-                      >
-                        {desc || t('network.circleNoDesc')}
-                      </TruncTip>
-                    </div>
-                    <div className="text-right shrink-0">
-                      <div className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                        {t('circles.members', { n: c.member_count ?? 0 })}
-                      </div>
-                      <div className="text-[10px] text-zinc-400 mt-0.5">
-                        {isMember
-                            ? t('network.circleJoined')
-                            : isPending
-                              ? t('circles.browse.pending')
-                              : c.full
-                                ? t('circles.browse.full')
-                                : t('network.circleOpen')}
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          </div>
-
-          {/* Right column */}
-          <div className="space-y-3">
-
-            {/* Contributor ranking */}
-            <div className="space-y-2">
-              <div className="px-1 flex items-center justify-between">
-                <h2 className="text-sm font-semibold tracking-tight text-zinc-800 dark:text-zinc-100">{t('network.leaderboard')}</h2>
-                <span className="tb-table-cell-meta">{t('network.leaderboardHint')}</span>
-              </div>
-              <div className="space-y-2 max-h-[28rem] overflow-y-auto">
-                {topWorkers.length === 0 ? (
-                  <div className="px-5 py-6 text-xs text-zinc-400">{t('network.noContribData')}</div>
-                ) : topWorkers.map((w, i) => {
-                  const rank     = i + 1;
-                  const rankColor = rank === 1 ? 'text-amber-600 dark:text-amber-400' : rank === 2 ? 'text-zinc-700 dark:text-zinc-300' : rank === 3 ? 'text-amber-700' : 'text-zinc-400';
-                  const { short: offerShort, full: offerFull } = workerOfferTexts(w, t);
-                  const jobs = Number(w.period_agent_jobs) || 0;
-                  const toks = Number(w.period_tokens) || 0;
+            {listTab === 'models' && (
+              <ul className={`${card} overflow-hidden`}>
+                {modelStats.length === 0 ? (
+                  <li className="px-4 py-8 text-center text-xs text-zinc-400">{t('network.noOnlineModels')}</li>
+                ) : modelStats.map(m => {
+                  const avgS = m.latencyCount > 0 ? (m.totalLatency / m.latencyCount / 1000).toFixed(1) : null;
+                  const size = parseSize(m.name);
+                  const off = m.nodes === 0;
                   return (
-                    <div key={w.sharer || w.worker_id || w.name} className="tb-soft-tile flex items-center gap-3 px-4 py-3 rounded-xl">
-                      <span className={`text-xs font-bold w-5 shrink-0 ${rankColor}`}>#{rank}</span>
+                    <li key={m.name} className={`${rowCls} ${off ? 'opacity-50' : ''}`}>
+                      <span className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-300 flex items-center justify-center text-[11px] shrink-0" aria-hidden>◆</span>
                       <div className="flex-1 min-w-0">
-                        <TruncTip className="text-xs font-medium text-zinc-700 dark:text-zinc-300" title={w.name}>
-                          {w.name}
-                        </TruncTip>
-                        <TruncTip className="text-xs text-zinc-400 mt-0.5" title={offerFull}>
-                          {offerShort}
-                        </TruncTip>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <div className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                          {toks > 0 || jobs === 0
-                            ? `${fmtContribTokens(toks)} tok`
-                            : t('network.agentJobs', { n: jobs })}
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <TruncTip as="span" title={m.name} className="text-[13px] font-mono text-zinc-900 dark:text-zinc-100 min-w-0">{m.name}</TruncTip>
+                          {size && <span className="shrink-0 text-[10px] px-1.5 py-px rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-500">{size}</span>}
+                          {circleModelMap?.[m.name] && (
+                            <span title={circleModelMap[m.name]?.circle_name || ''} className="shrink-0 text-[10px] px-1.5 py-px rounded bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300">
+                              ◎ {circleModelMap[m.name]?.circle_name || t('contribute.scope.circleTag')}
+                            </span>
+                          )}
                         </div>
-                        <div className="text-xs text-zinc-400">
-                          {toks > 0 && jobs > 0
-                            ? t('network.agentJobs', { n: jobs })
-                            : `${w.avg_latency_ms ?? 0} ms`}
-                        </div>
+                        <div className="text-[11px] text-zinc-400 mt-0.5">{off ? t('network.unavailable') : (avgS ? t('network.avgSeconds', { s: avgS }) : t('network.idle'))}</div>
                       </div>
-                    </div>
+                      <div className="shrink-0 flex items-center gap-1.5 text-[11px] tabular-nums text-zinc-600 dark:text-zinc-300">
+                        <span className={`w-1.5 h-1.5 rounded-full ${off ? 'bg-zinc-300' : 'bg-green-500'}`} aria-hidden />
+                        {off ? t('network.nodesZero') : t('network.nodes', { n: m.nodes })}
+                      </div>
+                    </li>
                   );
                 })}
-              </div>
-            </div>
+              </ul>
+            )}
 
-            {/* My node status */}
-            <div className="tb-soft-card rounded-2xl p-4 space-y-3">
+            {listTab === 'agents' && (
+              <ul className={`${card} overflow-hidden`}>
+                {agentGroups.length === 0 ? (
+                  <li className="px-4 py-8 text-center text-xs text-zinc-400">{t('network.noOnlineAgents')}</li>
+                ) : agentGroups.map((g) => (
+                  <li key={g.name} className={`${rowCls} group`}>
+                    <span className={`w-8 h-8 rounded-lg ${avatarColor(g.name)} text-white flex items-center justify-center text-xs font-semibold shrink-0`} aria-hidden>
+                      {(g.name || '?')[0].toUpperCase()}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <TruncTip as="span" title={g.name} className="text-[13px] text-zinc-900 dark:text-zinc-100 block">{g.name}</TruncTip>
+                      <TruncTip className="text-[11px] text-zinc-400 mt-0.5" title={g.ownersFull.join('、') || t('network.agentProviders', { n: g.providers })}>
+                        {t('network.agentProviders', { n: g.providers })} · {t('network.hiredCount', { n: displayHiredCount(g.hire_count, g.name) })}
+                      </TruncTip>
+                    </div>
+                    <button type="button"
+                      onClick={() => navigate('/contribute', { state: { tradeTab: 'hire', scope: 'all', agentQuery: g.name } })}
+                      className="tb-press shrink-0 whitespace-nowrap text-[11px] px-2.5 py-1 rounded-lg bg-blue-600 text-white hover:bg-blue-500">
+                      {t('contribute.hireShort')}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {listTab === 'circles' && (
+              <ul className={`${card} overflow-hidden`}>
+                {circles.length === 0 ? (
+                  <li className="px-4 py-8 text-center text-xs text-zinc-400">{t('network.noCircles')}</li>
+                ) : circles.slice(0, 30).map((c) => {
+                  const isMember = c.join_status === 'member';
+                  const isPending = c.join_status === 'pending';
+                  const desc = String(c.description || '').trim();
+                  return (
+                    <li key={c.id}>
+                      <button type="button" onClick={() => onCircleClick(c)}
+                        className={`${rowCls} w-full text-left hover:bg-zinc-50/80 dark:hover:bg-white/[0.03] transition-colors`}>
+                        <span className={`w-8 h-8 rounded-lg ${avatarColor(c.name || '')} text-white flex items-center justify-center text-xs font-semibold shrink-0`} aria-hidden>
+                          {(c.name || '?')[0]}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <TruncTip as="span" title={c.name} className="text-[13px] text-zinc-900 dark:text-zinc-100 block">{c.name}</TruncTip>
+                          <TruncTip className="text-[11px] text-zinc-400 mt-0.5" title={desc || t('network.circleNoDesc')}>{desc || t('network.circleNoDesc')}</TruncTip>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <div className="text-[11px] tabular-nums text-zinc-600 dark:text-zinc-300">{t('circles.members', { n: c.member_count ?? 0 })}</div>
+                          <div className={`text-[10px] mt-0.5 ${isMember ? 'text-emerald-600 dark:text-emerald-400' : 'text-zinc-400'}`}>
+                            {isMember ? t('network.circleJoined') : isPending ? t('circles.browse.pending') : c.full ? t('circles.browse.full') : t('network.circleOpen')}
+                          </div>
+                        </div>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+
+          {/* 右：我的节点 / 贡献排行 / 在线节点 */}
+          <aside className="space-y-3">
+            <section className={`${card} p-4 space-y-3`}>
               <div className="flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-zinc-800 dark:text-zinc-200">{t('network.myNode')}</h2>
-                {myStats && myStats.active_workers > 0 ? (
-                  <span className="text-xs bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400 border border-green-300 dark:border-green-800/30 px-1.5 py-0.5 rounded-full">
-                    {t('network.online')}
-                  </span>
-                ) : (
-                  <span className="text-xs bg-zinc-100 dark:bg-zinc-800 text-zinc-400 border border-zinc-200 dark:border-zinc-700 px-1.5 py-0.5 rounded-full">
-                    {t('network.offline')}
-                  </span>
-                )}
+                <h2 className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-100">{t('network.myNode')}</h2>
+                <span className={`inline-flex items-center gap-1.5 text-[11px] px-2 py-0.5 rounded-full border ${
+                  myOnline
+                    ? 'border-green-200 dark:border-green-900 bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-300'
+                    : 'border-zinc-200 dark:border-zinc-700 text-zinc-500'
+                }`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${myOnline ? 'bg-green-500' : 'bg-zinc-300'}`} aria-hidden />
+                  {(myOnline ? t('network.online') : t('network.offline')).replace(/^[●○]\s*/, '')}
+                </span>
               </div>
               {myStats ? (
                 <>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="tb-soft-card rounded-lg p-3">
-                      <div className="text-xs text-zinc-400">{t('network.activeNodes')}</div>
-                      <div className="text-lg font-bold mt-0.5 text-zinc-900 dark:text-zinc-100">{myStats.active_workers ?? 0}</div>
-                    </div>
-                    <div className="tb-soft-card rounded-lg p-3">
-                      <div className="text-xs text-zinc-400">{t('network.activeRequests')}</div>
-                      <div className="text-lg font-bold mt-0.5 text-zinc-900 dark:text-zinc-100">{myStats.active_requests ?? 0}</div>
-                    </div>
-                    <div className="tb-soft-card rounded-lg p-3 col-span-2">
-                      <div className="text-xs text-zinc-400">{t('network.contribRate')}</div>
-                      <div className="text-lg font-bold mt-0.5 text-blue-600 dark:text-blue-400">
-                        {myStats.contribute_req_per_min ?? 0}
-                        <span className="text-xs font-normal text-zinc-400 ml-1">req/min</span>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      [t('network.activeNodes'), myStats.active_workers ?? 0],
+                      [t('network.activeRequests'), myStats.active_requests ?? 0],
+                      [t('network.contribRate'), `${myStats.contribute_req_per_min ?? 0}`],
+                    ].map(([k, v]) => (
+                      <div key={k} className="rounded-xl bg-zinc-50/80 dark:bg-zinc-900/50 px-3 py-2">
+                        <div className="text-[10px] text-zinc-400 truncate">{k}</div>
+                        <div className="text-[15px] font-semibold tabular-nums text-zinc-900 dark:text-zinc-50 mt-0.5">{v}</div>
                       </div>
-                    </div>
+                    ))}
                   </div>
-                  <button onClick={() => navigate('/contribute')}
-                    className="flex items-center justify-center gap-2 w-full py-2 text-xs text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 border border-zinc-200 dark:border-zinc-700 hover:border-zinc-300 dark:hover:border-zinc-600 rounded-lg transition-colors">
+                  <button onClick={() => navigate('/contribute', { state: { tradeTab: 'supply' } })}
+                    className="w-full py-1.5 text-xs rounded-lg border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-white dark:hover:bg-zinc-800">
                     {t('network.manageContrib')}
                   </button>
                 </>
               ) : (
                 <p className="text-xs text-zinc-400">{t('network.loginRequired')}</p>
               )}
-            </div>
+            </section>
 
-            {/* All workers list */}
+            <section className={`${card} overflow-hidden`}>
+              <div className="flex items-baseline justify-between px-4 pt-3.5 pb-2">
+                <h2 className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-100">{t('network.leaderboard')}</h2>
+                <span className="text-[11px] text-zinc-400">{t('network.leaderboardHint')}</span>
+              </div>
+              <ul className="max-h-[26rem] overflow-y-auto">
+                {topWorkers.length === 0 ? (
+                  <li className="px-4 pb-4 text-xs text-zinc-400">{t('network.noContribData')}</li>
+                ) : topWorkers.map((w, i) => {
+                  const rank = i + 1;
+                  const { short: offerShort, full: offerFull } = workerOfferTexts(w, t);
+                  const jobs = Number(w.period_agent_jobs) || 0;
+                  const toks = Number(w.period_tokens) || 0;
+                  return (
+                    <li key={w.sharer || w.worker_id || w.name} className={`${rowCls} ${rank <= 3 ? 'bg-amber-50/30 dark:bg-amber-950/10' : ''}`}>
+                      <span className="w-6 text-center shrink-0 text-sm tabular-nums">
+                        {medal(rank) || <span className="text-[11px] font-semibold text-zinc-400">{rank}</span>}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <TruncTip className="text-xs font-medium text-zinc-800 dark:text-zinc-100" title={w.name}>{w.name}</TruncTip>
+                        <TruncTip className="text-[11px] text-zinc-400 mt-0.5" title={offerFull}>{offerShort}</TruncTip>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="text-xs font-semibold tabular-nums text-zinc-800 dark:text-zinc-100">
+                          {toks > 0 || jobs === 0 ? `${fmtContribTokens(toks)} tok` : t('network.agentJobs', { n: jobs })}
+                        </div>
+                        <div className="text-[10px] text-zinc-400 tabular-nums">
+                          {toks > 0 && jobs > 0 ? t('network.agentJobs', { n: jobs }) : `${w.avg_latency_ms ?? 0} ms`}
+                        </div>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+
             {(network?.workers?.length ?? 0) > 0 && (
-              <div className="space-y-2">
-                <div className="px-1 flex items-center justify-between">
-                  <h2 className="text-sm font-semibold tracking-tight text-zinc-800 dark:text-zinc-100">{t('network.workersTitle')}</h2>
-                  <span className="tb-table-cell-meta">{t('network.workersCount', { n: network.workers.length })}</span>
-                </div>
-                <div className="space-y-2 max-h-56 overflow-y-auto">
+              <details className={`${card} overflow-hidden group`}>
+                <summary className="flex items-center justify-between px-4 py-3 cursor-pointer select-none list-none">
+                  <span className="text-[13px] font-semibold text-zinc-800 dark:text-zinc-100">
+                    <span className="inline-block mr-1 text-zinc-400 transition-transform group-open:rotate-90">›</span>
+                    {t('network.workersTitle')}
+                  </span>
+                  <span className="text-[11px] text-zinc-400">{t('network.workersCount', { n: network.workers.length })}</span>
+                </summary>
+                <ul className="max-h-64 overflow-y-auto border-t border-zinc-100 dark:border-white/[0.05]">
                   {network.workers.map(w => {
                     const { short: offerShort, full: offerFull } = workerOfferTexts(w, t);
                     const geo = w.geo?.city || w.geo?.country || '';
-                    const lineShort = geo ? `${offerShort} · ${geo}` : offerShort;
-                    const lineFull = geo ? `${offerFull} · ${geo}` : offerFull;
+                    const isAgentOnly = w.has_agents && !(w.models || []).length;
                     return (
-                    <div key={w.worker_id || w.name}
-                      className="tb-soft-tile flex items-center gap-3 px-4 py-2.5 rounded-xl">
-                      <span className="relative flex h-1.5 w-1.5 shrink-0">
-                        {w.status === 'busy' ? (
-                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-500" />
-                        ) : w.has_agents && !(w.models || []).length ? (
-                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-400" title={t('network.mapAgent')} />
-                        ) : (
-                          <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500" />
-                        )}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <TruncTip as="span" className="text-xs font-medium text-zinc-700 dark:text-zinc-300" title={w.name}>
-                          {w.name}
-                        </TruncTip>
-                        <TruncTip className="text-xs text-zinc-400 mt-0.5" title={lineFull}>
-                          {lineShort}
-                        </TruncTip>
-                      </div>
-                      <div className="text-right shrink-0 text-xs text-zinc-400">
-                        <div>{w.avg_latency_ms ?? 0} ms</div>
-                        <div>{Math.round(w.online_mins ?? 0)} min</div>
-                      </div>
-                    </div>
+                      <li key={w.worker_id || w.name} className={rowCls}>
+                        <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${w.status === 'busy' ? 'bg-amber-500' : isAgentOnly ? 'bg-yellow-500' : 'bg-green-500'}`} aria-hidden />
+                        <div className="flex-1 min-w-0">
+                          <TruncTip as="span" className="text-xs text-zinc-800 dark:text-zinc-100" title={w.name}>{w.name}</TruncTip>
+                          <TruncTip className="text-[11px] text-zinc-400 mt-0.5" title={geo ? `${offerFull} · ${geo}` : offerFull}>
+                            {geo ? `${offerShort} · ${geo}` : offerShort}
+                          </TruncTip>
+                        </div>
+                        <div className="text-right shrink-0 text-[10px] tabular-nums text-zinc-400">
+                          <div>{w.avg_latency_ms ?? 0} ms</div>
+                          <div>{Math.round(w.online_mins ?? 0)} min</div>
+                        </div>
+                      </li>
                     );
                   })}
-                </div>
-              </div>
+                </ul>
+              </details>
             )}
-          </div>
+          </aside>
         </div>
       )}
     </div>
