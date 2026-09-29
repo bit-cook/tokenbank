@@ -388,73 +388,73 @@ docker compose up gateway -d
 
 ## 界面预览
 
-### 网关 · 一键纳管与工具箱
+### 网关 · 一键纳管与场景路由
 
-应用列表、今日用量，以及 App toolbox 一键安装 / 卸载 Claude Code、Kimi Code、Cursor、Codex 等。
+所有 AI 应用一个列表：今日请求、Token 与最近使用一目了然，每个应用可绑定场景路由（编程主力 / 速度优先 / 免费源…）；应用百宝箱一键安装 / 卸载 Claude Code、Kimi Code、Cursor、Codex 等。
 
-![网关 · 应用与工具箱](server/static/screenshots/gateway-apps.webp)
+![网关 · 应用与路由](server/static/screenshots/zh/gateway-apps.webp)
 
 ### 会话 · 跨应用统一追溯
 
 按 Claude Desktop / Cursor / Kimi Code / Codex 等过滤，查看会话 Token、费用，支持交接与导出。
 
-![网关 · 会话列表](server/static/screenshots/gateway-sessions.webp)
+![网关 · 会话列表](server/static/screenshots/zh/gateway-sessions.webp)
 
 ### Session Trace · 步骤级可观测
 
 单次会话的步骤、工具调用、Skill 使用与 Token 明细（含推理密封展示）。
 
-![Session Trace](server/static/screenshots/session-trace.webp)
+![Session Trace](server/static/screenshots/zh/session-trace.webp)
 
 ### 模型 · 个人算力 + 社区分享
 
 个人账户模型测速与状态灯；社区共享模型按积分调用。
 
-![模型](server/static/screenshots/providers.webp)
+![模型](server/static/screenshots/zh/providers.webp)
 
 ### 资产 · Agent / Skill / Prompt / MCP
 
-纳管智能体、投射到运行时 Agent；社区「为你推荐」与工作画像。
+提示词、技能、智能体与 MCP 工具统一纳管，一键投射到各运行时；「发现」基于会话挖掘工作画像，给出为你推荐与社区精选。
 
-![资产 · 智能体](server/static/screenshots/assets-agents.webp)
+![资产 · 全部](server/static/screenshots/zh/assets-agents.webp)
 
-![资产 · 发现与画像](server/static/screenshots/assets-for-you.webp)
+![资产 · 发现与画像](server/static/screenshots/zh/assets-for-you.webp)
 
 ### 游乐场 · Agent 聚合编排
 
-主 Agent 接任务、工具流与终端协同；左侧可选 Claude Code / Codex / Cursor / Kimi Code 等运行时。
+主 Agent 接任务、跑工具，并把子任务并行派发给 Codex / Kimi Code 等其他智能体；左侧可选运行时与已纳管智能体。
 
-![游乐场 · Agent 模式](server/static/screenshots/playground.webp)
+![游乐场 · Agent 模式](server/static/screenshots/zh/playground.webp)
 
 ### 盘点 · 用量与费用
 
-请求 / Token / 免费命中率 / 费用估算；按应用分布与今日趋势。
+请求 / Token / 免费命中率 / 费用估算（订阅按日分摊 + 按量计费）；按应用分布与近 7 天趋势。
 
-![盘点](server/static/screenshots/usage.webp)
+![盘点](server/static/screenshots/zh/usage.webp)
 
 ### 圈子 · 只和信任的人交易
 
 圈子是交易的范围：在「交易 → 圈子」创建或加入圈子，上架时选择只给哪些圈子，雇佣时可只看圈内；邀请好友入圈双方得积分。
 
-![圈子](server/static/screenshots/circles.webp)
+![圈子](server/static/screenshots/zh/circles.webp)
 
-### 交易 · 闲置额度生息
+### 交易 · 雇佣智能体与闲置额度生息
 
-把本地模型贡献到社区网络赚积分；密钥不上云。也可上架智能体供他人 **雇佣**——只公开名片，配置与 Key 留在本机。
+按次用积分雇佣社区或圈内智能体（任务在对方设备执行）；也可把本地模型与智能体上架赚积分——只公开名片，配置与 Key 留在本机。
 
-![贡献](server/static/screenshots/contribute.webp)
+![交易](server/static/screenshots/zh/contribute.webp)
 
-### 全球网络 · 节点地图
+### 社区网络 · 节点地图
 
-在线节点、可用模型与地理分布一览。
+在「交易 → 社区网络」查看在线节点、可用模型与智能体、地理分布与供给排行。
 
-![全球社区网络](server/static/screenshots/network.webp)
+![社区网络](server/static/screenshots/zh/network.webp)
 
 ### 托盘 · 常驻速览
 
-网关状态、各应用 TTFT / 今日用量，一键打开主面板。
+网关状态、上下行 Token、各应用路由 / TTFT / 今日用量，一键打开主面板。
 
-![托盘悬浮窗](server/static/screenshots/tray.webp)
+<img src="server/static/screenshots/zh/tray.webp" alt="托盘悬浮窗" width="360">
 
 | 页面 | 功能 |
 |---|---|
