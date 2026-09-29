@@ -11,236 +11,191 @@
 <script src="/static/vue.global.prod.js"></script>
 <script src="/static/marked.min.js"></script>
 <script src="/static/purifier.min.js"></script>
-<style>
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --bg:#fff;--bg-muted:#f5f2f0;--bg-subtle:#faf9f5;
-  --text:#000;--text-muted:#7b7b7b;--text-faint:#bcbcbc;
-  --border:#e7e4e1;--accent:#f1ccff;--primary:#000;--primary-fg:#fff;
-  --success:#16a34a;--danger:#dc2626;
-  --radius:10px;--radius-lg:18px;
-  --font:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;
-  --mono:'Space Mono',ui-monospace,monospace;
-}
-body{font-family:var(--font);background:var(--bg-subtle);color:var(--text);font-size:14px;min-height:100vh;-webkit-font-smoothing:antialiased}
-a{color:inherit;text-decoration:none}
-.shell{max-width:720px;margin:0 auto;padding:24px 16px 48px;min-height:100vh;display:flex;flex-direction:column}
-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px}
-.brand{display:flex;align-items:center;gap:10px;font-weight:600}
-.brand-mark{width:28px;height:28px;border-radius:8px;object-fit:contain;display:block;flex-shrink:0}
-.lang-btn,.ghost-btn{background:transparent;border:1px solid var(--border);border-radius:8px;padding:6px 10px;font-size:12px;cursor:pointer;font-family:inherit;color:var(--text-muted)}
-.lang-btn:hover,.ghost-btn:hover{color:var(--text);border-color:var(--text-muted)}
-.user-chip{font-size:13px;color:var(--text);font-weight:500;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.card{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:28px 24px;box-shadow:0 8px 24px rgba(0,0,0,.03)}
-.h1{font-size:22px;font-weight:700;letter-spacing:-.02em;margin-bottom:6px;font-family:var(--mono)}
-.model-pick{display:flex;flex-direction:column;gap:6px;margin-bottom:10px}
-.model-pick label{margin:0}
-.model-select{
-  width:100%;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);
-  color:var(--text);font-size:16px;font-weight:600;font-family:var(--mono);outline:none;cursor:pointer;
-  appearance:auto;
-}
-.model-select:focus{border-color:var(--text)}
-.model-select:disabled{opacity:.6;cursor:not-allowed}
-.gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin:4px 0 14px;height:360px;overflow:auto;align-content:start;padding:12px;background:var(--bg-muted);border:1px solid #f0eeec;border-radius:var(--radius)}
-.gallery img{width:100%;border-radius:12px;border:1px solid var(--border);background:#fff;display:block}
-.gallery-empty{grid-column:1/-1;color:var(--text-muted);font-size:13px;text-align:center;padding:36px 12px;margin:auto;line-height:1.5}
-.meta{color:var(--text-muted);font-size:13px;line-height:1.5;margin-bottom:16px}
-.badge.img{color:#7c3aed;border-color:#ddd6fe;background:#f5f3ff}
-.badge.txt{color:#0369a1;border-color:#bae6fd;background:#f0f9ff}
-.badge.vision{color:#0f766e;border-color:#99f6e4;background:#f0fdfa}
-.badge.embed{color:#64748b;border-color:#e2e8f0;background:#f8fafc}
-.badges{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px}
-.badge{font-size:11px;padding:4px 8px;border-radius:999px;border:1px solid var(--border);color:var(--text-muted);background:var(--bg-muted)}
-.field{margin-bottom:12px}
-label{display:block;color:var(--text-muted);font-size:12px;margin-bottom:5px}
-textarea,input{
-  width:100%;padding:10px 12px;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);
-  color:var(--text);font-size:14px;outline:none;font-family:inherit;resize:none
-}
-textarea:focus,input:focus{border-color:var(--text)}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:10px 18px;background:var(--primary);color:var(--primary-fg);border:none;border-radius:var(--radius);cursor:pointer;font-size:14px;font-family:inherit;font-weight:500}
-.btn:disabled{opacity:.45;cursor:not-allowed}
-.btn-block{width:100%}
-.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
-.err{color:var(--danger);font-size:13px;margin-top:10px}
-.hint{color:var(--text-muted);font-size:12px;line-height:1.5}
-.chat{display:flex;flex-direction:column;gap:10px;margin:4px 0 14px;height:360px;overflow:auto;padding:12px;background:var(--bg-muted);border:1px solid #f0eeec;border-radius:var(--radius)}
-.chat-empty{color:var(--text-muted);font-size:13px;text-align:center;padding:36px 12px;line-height:1.5;margin:auto}
-.bubble{max-width:88%;padding:10px 12px;border-radius:14px;font-size:13px;line-height:1.55;word-break:break-word}
-.bubble.user{align-self:flex-end;background:var(--primary);color:var(--primary-fg);border-bottom-right-radius:4px;white-space:pre-wrap}
-.bubble.assistant{align-self:flex-start;background:#fff;border:1px solid var(--border);color:var(--text);border-bottom-left-radius:4px}
-.bubble.pending{opacity:.85}
-.bubble.pending .md-body{font-style:italic}
-.bubble-imgs{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-.bubble-imgs img{max-width:160px;max-height:120px;border-radius:8px;object-fit:cover;display:block;background:rgba(255,255,255,.15)}
-.bubble.assistant .bubble-imgs img{background:#f0eeec}
-/* Markdown 助手气泡 */
-.md-body{line-height:1.6}
-.md-body>:first-child{margin-top:0}
-.md-body>:last-child{margin-bottom:0}
-.md-body p{margin:.45em 0}
-.md-body h1,.md-body h2,.md-body h3,.md-body h4{font-weight:700;letter-spacing:-.02em;margin:.7em 0 .35em;line-height:1.3}
-.md-body h1{font-size:1.2em}.md-body h2{font-size:1.1em}.md-body h3{font-size:1.05em}
-.md-body ul,.md-body ol{margin:.4em 0;padding-left:1.35em}
-.md-body li{margin:.15em 0}
-.md-body strong{font-weight:700}
-.md-body em{font-style:italic}
-.md-body a{color:#2563eb;text-decoration:underline}
-.md-body code{font-family:var(--mono);font-size:11.5px;background:var(--bg-muted);border:1px solid #f0eeec;border-radius:5px;padding:.1em .35em}
-.md-body pre{margin:.55em 0;padding:10px 12px;background:#1e1e1e;color:#f3f3f3;border-radius:8px;overflow:auto}
-.md-body pre code{background:transparent;border:none;padding:0;color:inherit;font-size:11.5px}
-.md-body blockquote{margin:.5em 0;padding:.35em .8em;border-left:3px solid var(--border);color:var(--text-muted);background:var(--bg-subtle)}
-.md-body hr{border:none;border-top:1px solid var(--border);margin:.8em 0}
-.md-body table{border-collapse:collapse;width:100%;margin:.55em 0;font-size:12px;display:block;overflow-x:auto;max-width:100%}
-.md-body th,.md-body td{border:1px solid var(--border);padding:6px 8px;text-align:left;vertical-align:top}
-.md-body th{background:var(--bg-muted);font-weight:600;white-space:nowrap}
-.md-body tr:nth-child(even) td{background:#fafafa}
-.composer{display:flex;flex-direction:column;gap:8px}
-.composer-row{display:flex;gap:8px;align-items:flex-end}
-.composer-row textarea{flex:1;height:44px;min-height:44px;max-height:44px;resize:none}
-.composer-row .btn{flex-shrink:0;height:44px}
-.attach-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-.attach-thumb{position:relative;width:56px;height:56px;border-radius:8px;overflow:hidden;border:1px solid var(--border);background:var(--bg-muted)}
-.attach-thumb img{width:100%;height:100%;object-fit:cover;display:block}
-.attach-thumb button{position:absolute;top:2px;right:2px;width:18px;height:18px;border:none;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;font-size:11px;line-height:18px;cursor:pointer;padding:0}
-.attach-hint{font-size:11px;color:var(--text-muted)}
-.toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;flex-wrap:wrap}
-.ghost-link{background:transparent;border:none;color:var(--text-muted);font-size:12px;cursor:pointer;font-family:inherit;padding:0;text-decoration:underline}
-.auth-box{margin-top:16px;padding-top:16px;border-top:1px solid #f0eeec}
-.auth-tabs{display:flex;margin-bottom:14px;border-bottom:1px solid #f0eeec}
-.auth-tabs button{flex:1;padding:10px;background:transparent;border:none;color:var(--text-muted);cursor:pointer;font-size:14px;border-bottom:2px solid transparent;margin-bottom:-1px;font-family:inherit}
-.auth-tabs button.active{color:var(--text);border-bottom-color:var(--text);font-weight:600}
-.footer{margin-top:auto;padding-top:28px;color:var(--text-faint);font-size:12px;text-align:center}
-</style>
+<link rel="stylesheet" href="/static/chat.css">
+<script src="/static/chat-ui.js"></script>
 </head>
 <body>
-<div id="app" class="shell">
-  <header>
-    <a class="brand" href="/network">
-      <img class="brand-mark" src="/static/logo.svg" alt="Token Bank" width="28" height="28">
-      <span>Token Bank</span>
-    </a>
-    <div class="row">
-      <a class="ghost-btn" href="/network">{{ T.backNetwork }}</a>
-      <span v-if="loggedIn && currentUserLabel" class="user-chip" :title="currentUserLabel">{{ currentUserLabel }}</span>
-      <button class="lang-btn" type="button" @click="toggleLang">{{ lang === 'zh' ? 'EN' : '中文' }}</button>
-      <button v-if="loggedIn" class="ghost-btn" type="button" @click="logout">{{ T.logout }}</button>
-      <a v-else class="ghost-btn" href="/app">{{ T.openApp }}</a>
+<div id="app" class="chat-app" v-cloak>
+  <nav class="cnav">
+    <div class="cnav-in">
+      <a class="brand" href="/"><img src="/static/logo.svg" alt="Token Bank"><span>Token Bank</span></a>
+      <a class="nav-back" href="/network">{{ T.backNetwork }}</a>
+      <div class="nav-right">
+        <span v-if="loggedIn && profile" class="credit">💎 {{ Number(profile.credits_balance || 0).toFixed(1) }}</span>
+        <span v-if="loggedIn && currentUserLabel" class="who" :title="currentUserLabel">{{ currentUserLabel }}</span>
+        <button class="nbtn plain" type="button" @click="toggleLang">{{ lang === 'zh' ? 'EN' : '中文' }}</button>
+        <button v-if="loggedIn" class="nbtn" type="button" @click="logout">{{ T.logout }}</button>
+        <button v-else class="nbtn dark" type="button" @click="openAuth('login')">{{ T.login }}</button>
+      </div>
     </div>
-  </header>
+  </nav>
 
-  <div v-if="!model && !modelOptions.length" class="card">
-    <div class="h1">{{ T.unavailable }}</div>
-    <p class="meta">{{ T.badModel }}</p>
-    <a class="btn" href="/network" style="margin-top:8px">{{ T.backNet }}</a>
+  <div v-if="!model && !modelOptions.length" class="state">
+    <div class="av lg" style="background:#0a0a0a;margin:0 auto">?</div>
+    <h2>{{ T.unavailable }}</h2>
+    <p>{{ T.badModel }}</p>
+    <a class="btn" href="/network">{{ T.backNet }}</a>
   </div>
 
-  <div v-else class="card">
-    <div class="model-pick">
-      <label>{{ T.pickModel }}</label>
-      <select class="model-select" :value="model" :disabled="running || !modelOptions.length" @change="onModelChange($event)">
-        <optgroup v-if="chatModels.length" :label="T.groupChat">
-          <option v-for="m in chatModels" :key="'c-'+m" :value="m">{{ m }}</option>
-        </optgroup>
-        <optgroup v-if="visionModels.length" :label="T.groupVision">
-          <option v-for="m in visionModels" :key="'v-'+m" :value="m">{{ m }}</option>
-        </optgroup>
-        <optgroup v-if="imageModels.length" :label="T.groupImage">
-          <option v-for="m in imageModels" :key="'i-'+m" :value="m">{{ m }}</option>
-        </optgroup>
-        <optgroup v-if="embedModels.length" :label="T.groupEmbed">
-          <option v-for="m in embedModels" :key="'e-'+m" :value="m">{{ m }}</option>
-        </optgroup>
-        <option v-if="model && !modelOptions.includes(model)" :value="model">{{ model }}</option>
-      </select>
-    </div>
-    <p class="meta">{{ isEmbed ? T.metaEmbed : (isImage ? T.metaImage : T.meta) }}</p>
-    <div class="badges">
-      <span class="badge">{{ T.publicTry }}</span>
-      <span class="badge" :class="typeBadgeClass">{{ typeBadge }}</span>
-      <!-- 与智能体页「每次 n 积分」同款徽章，展示模型消费率 -->
-      <span v-if="!isEmbed && consumeRate != null" class="badge">{{ T.creditsRate.replace('{n}', formatRate(consumeRate)) }}</span>
-      <span v-if="sharer" class="badge" style="font-family:var(--mono)">{{ T.pinned }} {{ sharer }}</span>
-      <a v-if="sharer" class="badge" :href="'/u/' + encodeURIComponent(sharer)">{{ T.viewSharer }}</a>
-    </div>
-
-    <div class="toolbar">
-      <span class="hint" style="margin:0">{{ loggedIn && profile ? T.balance.replace('{n}', Number(profile.credits_balance || 0).toFixed(1)) : (isEmbed ? T.embedHint : (isImage ? T.imageHint : T.chatHint)) }}</span>
-      <button v-if="(isImage ? images.length : messages.length)" type="button" class="ghost-link" @click="clearAll" :disabled="running">{{ T.clear }}</button>
-    </div>
-
-    <!-- 嵌入：网页不支持 -->
-    <template v-if="isEmbed">
-      <div class="chat-empty" style="padding:24px;text-align:center;color:var(--muted,#888)">{{ T.embedEmpty }}</div>
-    </template>
-
-    <!-- 文本/图文：多轮对话 -->
-    <template v-else-if="!isImage">
-      <div class="chat" ref="chatEl">
-        <div v-if="!messages.length" class="chat-empty">{{ isVision ? T.visionEmpty : T.chatEmpty }}</div>
-        <div v-for="(m, i) in messages" :key="i" class="bubble" :class="[m.role, { pending: m.pending }]">
-          <div
-            v-if="m.role === 'assistant'"
-            class="md-body"
-            v-html="renderMarkdown(m.content || (m.pending ? T.thinking : ''))"
-          ></div>
-          <template v-else>
-            <div v-if="m.content">{{ m.content }}</div>
-            <div v-if="m.images && m.images.length" class="bubble-imgs">
-              <img v-for="(src, j) in m.images" :key="j" :src="src" alt="">
-            </div>
-          </template>
+  <main v-else class="cmain">
+    <!-- 模型身份 + 切换 -->
+    <header class="chead">
+      <div class="cinner">
+        <div class="av" :style="{ background: avatarColor(model) }">{{ (model || '?').slice(0, 1).toUpperCase() }}</div>
+        <div class="id">
+          <div class="id-t">
+            <label class="picker" :title="T.pickModel">
+              <span class="pk-name">{{ model }}</span><span class="pk-caret"></span>
+              <select :value="model" :disabled="running || !modelOptions.length" @change="onModelChange($event)" :aria-label="T.pickModel">
+                <optgroup v-if="chatModels.length" :label="T.groupChat">
+                  <option v-for="m in chatModels" :key="'c-'+m" :value="m">{{ m }}</option>
+                </optgroup>
+                <optgroup v-if="visionModels.length" :label="T.groupVision">
+                  <option v-for="m in visionModels" :key="'v-'+m" :value="m">{{ m }}</option>
+                </optgroup>
+                <optgroup v-if="imageModels.length" :label="T.groupImage">
+                  <option v-for="m in imageModels" :key="'i-'+m" :value="m">{{ m }}</option>
+                </optgroup>
+                <optgroup v-if="embedModels.length" :label="T.groupEmbed">
+                  <option v-for="m in embedModels" :key="'e-'+m" :value="m">{{ m }}</option>
+                </optgroup>
+                <option v-if="model && !modelOptions.includes(model)" :value="model">{{ model }}</option>
+              </select>
+            </label>
+          </div>
+          <div class="id-sub">
+            <span><span class="dot"></span>&nbsp; {{ T.online }}</span>
+            <span class="tag" :class="typeBadgeClass">{{ typeBadge }}</span>
+            <span v-if="!isEmbed && consumeRate != null">{{ T.creditsRate.replace('{n}', formatRate(consumeRate)) }}</span>
+            <template v-if="sharer">
+              <span class="sep">·</span>
+              <a :href="'/u/' + encodeURIComponent(sharer)" style="text-decoration:underline">{{ T.pinned }} @{{ sharer }}</a>
+            </template>
+          </div>
+        </div>
+        <div class="head-actions">
+          <button v-if="isImage ? images.length : messages.length" type="button" class="nbtn" :disabled="running" @click="clearAll" :title="T.clear">
+            <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 4v12M4 10h12" stroke-linecap="round"/></svg><span>{{ T.newChat }}</span>
+          </button>
         </div>
       </div>
-      <div class="composer">
-        <div v-if="isVision && pendingImages.length" class="attach-bar">
-          <div v-for="(p, i) in pendingImages" :key="p.id" class="attach-thumb">
-            <img :src="p.dataUrl" alt="">
-            <button type="button" :disabled="running" @click="removePendingImage(i)" title="×">×</button>
-          </div>
-          <span class="attach-hint">{{ T.attachHint }}</span>
+    </header>
+
+    <!-- 消息 / 画廊 -->
+    <div class="cscroll" ref="chatEl" @click="onChatClick">
+      <div class="cinner">
+        <!-- 嵌入：网页不支持 -->
+        <div v-if="isEmbed" class="empty">
+          <div class="av lg" :style="{ background: avatarColor(model) }">{{ (model || '?').slice(0, 1).toUpperCase() }}</div>
+          <h2 class="mono">{{ model }}</h2>
+          <p>{{ T.embedEmpty }}</p>
         </div>
-        <div class="composer-row">
+
+        <!-- 生图 -->
+        <template v-else-if="isImage">
+          <div v-if="!images.length" class="empty">
+            <div class="av lg" :style="{ background: avatarColor(model) }">{{ (model || '?').slice(0, 1).toUpperCase() }}</div>
+            <h2 class="mono">{{ model }}</h2>
+            <p>{{ T.metaImage }}</p>
+            <div class="sugs">
+              <button v-for="sg in suggestions" :key="sg.t" type="button" class="sug" @click="useSuggestion(sg)"><b>{{ sg.t }}</b><span>{{ sg.d }}</span></button>
+            </div>
+          </div>
+          <div v-else class="gallery">
+            <a v-for="(src, i) in images" :key="i" :href="src" target="_blank" rel="noopener"><img :src="src" alt="generated"></a>
+          </div>
+        </template>
+
+        <!-- 文本 / 图文对话 -->
+        <template v-else>
+          <div v-if="!messages.length" class="empty">
+            <div class="av lg" :style="{ background: avatarColor(model) }">{{ (model || '?').slice(0, 1).toUpperCase() }}</div>
+            <h2 class="mono">{{ model }}</h2>
+            <p>{{ isVision ? T.visionEmpty : T.chatEmpty }}</p>
+            <div class="sugs">
+              <button v-for="sg in suggestions" :key="sg.t" type="button" class="sug" @click="useSuggestion(sg)"><b>{{ sg.t }}</b><span>{{ sg.d }}</span></button>
+            </div>
+          </div>
+          <div v-for="(m, i) in messages" :key="i" class="msg" :class="[m.role, { pending: m.pending }]">
+            <template v-if="m.role === 'assistant'">
+              <div class="av sm" :style="{ background: avatarColor(model) }">{{ (model || '?').slice(0, 1).toUpperCase() }}</div>
+              <div class="abody">
+                <span v-if="m.pending && !m.content" class="typing"><i></i><i></i><i></i></span>
+                <div v-else class="md-body" v-html="renderRich(m.content)"></div>
+                <div v-if="!m.pending && m.content" class="msg-tools">
+                  <button type="button" class="mini" @click="copyMsg(m, $event)">{{ T.copy }}</button>
+                </div>
+              </div>
+            </template>
+            <div v-else style="display:flex;flex-direction:column;align-items:flex-end;max-width:100%">
+              <div v-if="m.content" class="ubub">{{ m.content }}</div>
+              <div v-if="m.images && m.images.length" class="uimgs"><img v-for="(src, j) in m.images" :key="j" :src="src" alt=""></div>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- 输入区 -->
+    <footer v-if="!isEmbed" class="cfoot">
+      <div class="cinner">
+        <p v-if="err" class="err">{{ err }}</p>
+        <div v-if="!loggedIn && (guestLocked || isImage)" class="gate">
+          <span class="g-ic">🔒</span>
+          <div class="g-t"><b>{{ guestLocked ? T.trialDone : T.needLoginShort }}</b>{{ guestLocked ? T.gateSub : T.needLogin }}</div>
+          <button type="button" class="btn sm" @click="openAuth('login')">{{ T.login }}</button>
+        </div>
+        <div v-else class="box">
+          <div v-if="isVision && pendingImages.length" class="attach">
+            <div v-for="(p, i) in pendingImages" :key="p.id" class="thumb">
+              <img :src="p.dataUrl" alt="">
+              <button type="button" :disabled="running" @click="removePendingImage(i)" title="×">×</button>
+            </div>
+          </div>
           <textarea
+            ref="composerEl"
             v-model="prompt"
             rows="1"
-            :placeholder="isVision ? T.promptPhVision : T.promptPh"
-            :disabled="running || guestLocked"
-            @keydown.enter.exact.prevent="sendMessage"
+            :placeholder="isImage ? T.imagePh : (isVision ? T.promptPhVision : T.promptPh)"
+            :disabled="running"
+            @input="autoGrow($event.target)"
+            @keydown.enter.exact.prevent="isImage ? genImage() : sendMessage()"
             @paste="onComposerPaste"
           ></textarea>
-          <button class="btn" type="button" :disabled="running || guestLocked || (!prompt.trim() && !(isVision && pendingImages.length))" @click="sendMessage">
-            {{ running ? ((messages.length && messages[messages.length - 1].pending && messages[messages.length - 1].content) ? T.streaming : T.running) : T.send }}
-          </button>
+          <div class="box-row">
+            <template v-if="isVision">
+              <input ref="fileEl" type="file" accept="image/*" multiple hidden @change="onPickFiles">
+              <button type="button" class="icon-btn" :disabled="running" :title="T.attach" @click="fileEl && fileEl.click()">
+                <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M14.5 9.5 9.6 14.4a3.2 3.2 0 0 1-4.5-4.5l5.6-5.6a2.1 2.1 0 0 1 3 3l-5.5 5.5a1 1 0 0 1-1.5-1.5L11.6 6.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+            </template>
+            <span class="box-meta">{{ T.enterHint }}</span>
+            <button type="button" class="send"
+                    :disabled="running || (!prompt.trim() && !(isVision && pendingImages.length))"
+                    :title="isImage ? T.gen : T.send"
+                    @click="isImage ? genImage() : sendMessage()">
+              <svg v-if="!running" width="16" height="16" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M10 16V4M5 9l5-5 5 5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <span v-else class="typing" style="height:auto"><i style="background:#fff"></i><i style="background:#fff"></i><i style="background:#fff"></i></span>
+            </button>
+          </div>
+        </div>
+        <div v-if="loggedIn || !(guestLocked || isImage)" class="foot-hint">
+          <template v-if="loggedIn && profile">{{ T.balance.replace('{n}', Number(profile.credits_balance || 0).toFixed(1)) }} · {{ T.aiDisclaimer }}</template>
+          <template v-else>{{ isImage ? T.imageHint : T.chatHint }} · <button type="button" @click="openAuth('register')">{{ T.register }}</button></template>
         </div>
       </div>
-    </template>
+    </footer>
+  </main>
 
-    <!-- 图片：文生图 -->
-    <template v-else>
-      <div class="gallery">
-        <div v-if="!images.length" class="gallery-empty">{{ T.imageEmpty }}</div>
-        <a v-for="(src, i) in images" :key="i" :href="src" target="_blank" rel="noopener">
-          <img :src="src" alt="generated">
-        </a>
-      </div>
-      <div class="composer">
-        <div class="composer-row">
-          <textarea v-model="prompt" rows="1" :placeholder="T.imagePh" :disabled="running" @keydown.enter.exact.prevent="genImage"></textarea>
-          <button class="btn" type="button" :disabled="running || !prompt.trim()" @click="genImage">
-            {{ running ? T.running : T.gen }}
-          </button>
-        </div>
-      </div>
-    </template>
-    <p v-if="err" class="err">{{ err }}</p>
-
-    <div v-if="!loggedIn && (isImage || guestUsed)" class="auth-box">
-      <p class="hint" style="margin-bottom:12px">{{ guestUsed ? T.loginToContinue : T.needLogin }}</p>
-      <div class="auth-tabs">
-        <button type="button" :class="{ active: authTab === 'login' }" @click="authTab='login'">{{ T.login }}</button>
-        <button type="button" :class="{ active: authTab === 'register' }" @click="authTab='register'">{{ T.register }}</button>
+  <!-- 登录 / 注册弹窗 -->
+  <div v-if="authOpen && !loggedIn" class="mask" @click.self="authOpen = false">
+    <div class="modal" role="dialog" aria-modal="true">
+      <button type="button" class="x" @click="authOpen = false" aria-label="close">×</button>
+      <h3>{{ authTab === 'login' ? T.authTitleLogin : T.authTitleRegister }}</h3>
+      <p class="sub">{{ guestUsed ? T.loginToContinue : T.authSub }}</p>
+      <div class="seg">
+        <button type="button" :class="{ on: authTab === 'login' }" @click="authTab='login'">{{ T.login }}</button>
+        <button type="button" :class="{ on: authTab === 'register' }" @click="authTab='register'">{{ T.register }}</button>
       </div>
       <div class="field" v-if="authTab === 'register'">
         <label>{{ T.nickname }}</label>
@@ -252,16 +207,14 @@ textarea:focus,input:focus{border-color:var(--text)}
       </div>
       <div class="field">
         <label>{{ T.password }}</label>
-        <input type="password" v-model="form.password" autocomplete="current-password">
+        <input type="password" v-model="form.password" :autocomplete="authTab === 'login' ? 'current-password' : 'new-password'" @keydown.enter="authTab==='login' ? doLogin() : doRegister()">
       </div>
-      <button class="btn btn-block" type="button" :disabled="authLoading" @click="authTab==='login' ? doLogin() : doRegister()">
+      <button class="btn block" type="button" :disabled="authLoading" @click="authTab==='login' ? doLogin() : doRegister()">
         {{ authLoading ? (authTab==='login' ? T.loggingIn : T.registering) : (authTab==='login' ? T.login : T.register) }}
       </button>
-      <p v-if="authErr" class="err">{{ authErr }}</p>
+      <p v-if="authErr" class="m-err">{{ authErr }}</p>
     </div>
   </div>
-
-  <div class="footer">Token Bank · {{ T.footer }} · <a href="/network">{{ T.backNet }}</a></div>
 </div>
 
 <script>
@@ -308,9 +261,32 @@ createApp({
         imageEmpty: '输入画面描述后点击生成。',
         embedEmpty: '嵌入模型请在客户端 / API 中使用，网页暂不支持试用。',
         clear: '清空', thinking: '…',
+        online: '在线', newChat: '新对话', copy: '复制', copied: '已复制', attach: '添加图片',
+        enterHint: 'Enter 发送 · Shift+Enter 换行', trialDone: '免费试用已用完', gateSub: '登录后继续对话，按正常积分扣费。',
+        needLoginShort: '需要登录', aiDisclaimer: '内容由 AI 生成，请注意甄别',
+        authTitleLogin: '登录 Token Bank', authTitleRegister: '注册 Token Bank',
+        authSub: '登录后可多轮对话、切换模型，按积分计费。',
+        sugChat: [
+          { t: '解释一个概念', d: '用通俗的话讲讲什么是向量数据库' },
+          { t: '写一段代码', d: '用 Python 写一个带重试的 HTTP 请求函数' },
+          { t: '帮我改写', d: '把这段话改得更简洁专业：……' },
+          { t: '头脑风暴', d: '给一个 AI 周末项目出 5 个点子' },
+        ],
+        sugVision: [
+          { t: '看图说话', d: '粘贴一张截图，让它描述要点' },
+          { t: '识别表格', d: '把图片里的表格转成 Markdown' },
+          { t: '找 UI 问题', d: '贴一张页面截图，指出可改进之处' },
+          { t: '解释图表', d: '贴一张图表，总结其中的趋势' },
+        ],
+        sugImage: [
+          { t: '产品海报', d: '极简风格的耳机产品海报，柔和光影，白色背景' },
+          { t: '插画', d: '赛博朋克城市夜景，霓虹灯，雨夜，16:9' },
+          { t: '头像', d: '可爱的柴犬卡通头像，扁平风格' },
+          { t: '场景', d: '清晨的湖边小木屋，薄雾，写实摄影' },
+        ],
       },
       en: {
-        unavailable: 'Unavailable', badModel: 'No models available', backNet: 'Back to network', backNetwork: '← Global Network',
+        unavailable: 'Unavailable', badModel: 'No models available', backNet: 'Back to network', backNetwork: '← Network',
         meta: 'Guests get one free turn; sign in for multi-turn chat with normal credits.',
         metaImage: 'Image models require sign-in and use normal credit billing.',
         creditsRate: '{n} credits / 1K tokens',
@@ -339,6 +315,29 @@ createApp({
         imageEmpty: 'Describe a scene, then generate.',
         embedEmpty: 'Embedding models are not available in the web trial.',
         clear: 'Clear', thinking: '…',
+        online: 'Online', newChat: 'New chat', copy: 'Copy', copied: 'Copied', attach: 'Add image',
+        enterHint: 'Enter to send · Shift+Enter for newline', trialDone: 'Free trial used', gateSub: 'Sign in to keep chatting, billed in credits.',
+        needLoginShort: 'Sign-in required', aiDisclaimer: 'AI-generated content may be inaccurate',
+        authTitleLogin: 'Sign in to Token Bank', authTitleRegister: 'Create your account',
+        authSub: 'Sign in for multi-turn chat and model switching, billed in credits.',
+        sugChat: [
+          { t: 'Explain a concept', d: 'What is a vector database, in plain words?' },
+          { t: 'Write some code', d: 'A Python HTTP request helper with retries' },
+          { t: 'Rewrite this', d: 'Make this paragraph concise and professional: …' },
+          { t: 'Brainstorm', d: '5 ideas for a weekend AI side project' },
+        ],
+        sugVision: [
+          { t: 'Describe an image', d: 'Paste a screenshot and get the key points' },
+          { t: 'Read a table', d: 'Turn the table in an image into Markdown' },
+          { t: 'Review a UI', d: 'Paste a page screenshot and find issues' },
+          { t: 'Explain a chart', d: 'Paste a chart and summarize the trend' },
+        ],
+        sugImage: [
+          { t: 'Product poster', d: 'Minimal headphone poster, soft light, white background' },
+          { t: 'Illustration', d: 'Cyberpunk city at night, neon, rain, 16:9' },
+          { t: 'Avatar', d: 'Cute cartoon shiba inu avatar, flat style' },
+          { t: 'Scene', d: 'Lakeside cabin at dawn, mist, photorealistic' },
+        ],
       },
     }
     const T = computed(() => i18n[lang.value] || i18n.zh)
@@ -1208,7 +1207,38 @@ createApp({
       else storageRemove(guestUsedStorageKey())
     })
 
+    // ── 新版对话 UI ──
+    const authOpen = ref(false)
+    const composerEl = ref(null)
+    const fileEl = ref(null)
+    function openAuth(tab) { authTab.value = tab || 'login'; authErr.value = ''; authOpen.value = true }
+    watch(loggedIn, (v) => { if (v) authOpen.value = false })
+    watch(prompt, (v) => { if (!v) nextTick(() => ChatUI.autoGrow(composerEl.value)) })
+    const suggestions = computed(() => (isImage.value ? T.value.sugImage : (isVision.value ? T.value.sugVision : T.value.sugChat)) || [])
+    function useSuggestion(sg) {
+      prompt.value = sg.d
+      nextTick(() => { const el = composerEl.value; if (el) { el.focus(); ChatUI.autoGrow(el) } })
+    }
+    function onPickFiles(e) {
+      const files = Array.from(e.target.files || [])
+      if (files.length) addAttachFiles(files)
+      e.target.value = ''
+    }
+    const autoGrow = (el) => ChatUI.autoGrow(el)
+    const avatarColor = (n) => ChatUI.avatarColor(n)
+    const renderRich = (raw) => ChatUI.wrapCode(renderMarkdown(raw), T.value.copy)
+    const onChatClick = (e) => ChatUI.onCopyClick(e, T.value.copied, T.value.copy)
+    function copyMsg(m, e) {
+      const btn = e.currentTarget
+      ChatUI.copyText(String(m.content || '')).then(() => {
+        btn.textContent = T.value.copied
+        setTimeout(() => { btn.textContent = T.value.copy }, 1400)
+      })
+    }
+
     return {
+      authOpen, openAuth, composerEl, fileEl, suggestions, useSuggestion, onPickFiles, autoGrow, avatarColor,
+      renderRich, onChatClick, copyMsg,
       lang, T, toggleLang, model, modelOptions, chatModels, visionModels, imageModels, embedModels,
       isImage, isEmbed, isVision, typeBadge, typeBadgeClass, sharer, consumeRate, formatRate,
       loggedIn, profile, currentUserLabel, prompt, messages, images, pendingImages, chatEl,
